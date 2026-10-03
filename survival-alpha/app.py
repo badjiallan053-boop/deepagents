@@ -460,13 +460,13 @@ def _fetch_wallet(wallet, days, page_limit, max_pages):
 
 @app.get("/profit-team/manifest")
 def profit_team_manifest(x_paper_token: Optional[str] = Header(default=None)):
-    require_admin(x_paper_token)
+    require_reader(x_paper_token)
     return profit_team.manifest()
 
 
 @app.get("/profit-team/dashboard")
 def profit_team_dashboard(x_paper_token: Optional[str] = Header(default=None)):
-    require_admin(x_paper_token)
+    require_reader(x_paper_token)
     return profit_team.dashboard()
 
 
@@ -506,14 +506,14 @@ def create_profit_hypothesis(req: ProfitHypothesisRequest,
 @app.get("/profit-team/hypotheses")
 def list_profit_hypotheses(limit: int = 200, status: Optional[str] = None,
                            x_paper_token: Optional[str] = Header(default=None)):
-    require_admin(x_paper_token)
+    require_reader(x_paper_token)
     return {"hypotheses": profit_team.list(limit=limit, status=status)}
 
 
 @app.get("/profit-team/hypotheses/{hypothesis_id}")
 def get_profit_hypothesis(hypothesis_id: int,
                           x_paper_token: Optional[str] = Header(default=None)):
-    require_admin(x_paper_token)
+    require_reader(x_paper_token)
     h = profit_team.get(hypothesis_id)
     if not h:
         raise HTTPException(404, "hypothesis not found")

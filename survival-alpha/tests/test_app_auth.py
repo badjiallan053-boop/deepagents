@@ -108,6 +108,17 @@ class AppAuthTests(unittest.TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertTrue(r.json()["horizons"]["300"]["accepted"]["profit_factor_capped"])
 
+    def test_profit_team_reads_allow_read_token_but_writes_need_admin(self):
+        h = {"X-Paper-Token": "read-secret"}
+        self.assertEqual(self.client.get("/profit-team/dashboard", headers=h).status_code, 200)
+        self.assertEqual(self.client.get("/profit-team/manifest", headers=h).status_code, 200)
+        body = {
+            "title": "test hypothesis", "desk": "SOLANA_ONCHAIN", "asset_class": "crypto",
+            "instruments": ["SOL"], "mechanism": "mechanism text here",
+            "horizon": "5m", "falsification_test": "falsify it",
+        }
+        self.assertEqual(self.client.post("/profit-team/hypotheses", headers=h, json=body).status_code, 401)
+
 
 if __name__ == "__main__":
     unittest.main()
