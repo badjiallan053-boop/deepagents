@@ -451,7 +451,7 @@ def realtime_candidates(limit: int = 100, decision: Optional[str] = None,
                source_signature, source_wallet, source_slot, notional_lamports,
                buy_out_amount, sellback_out_lamports, roundtrip_bps,
                drift_500_bps, price_impact, organic_score, decision, reason,
-               paper_entered
+               paper_entered, outcome_5m_bps, outcome_checked_at_utc
         FROM realtime_candidate
     """
     params = {"limit": limit}
@@ -462,6 +462,52 @@ def realtime_candidates(limit: int = 100, decision: Optional[str] = None,
     with engine.begin() as cx:
         rows = cx.execute(text(query), params).mappings().all()
     return {"mode": "paper-only", "candidates": [dict(r) for r in rows]}
+
+
+
+@app.get("/realtime/evaluation")
+def realtime_evaluation(x_paper_token: Optional[str] = Header(default=None)):
+    require_admin(x_paper_token)
+    with engine.begin() as cx:
+        rows = cx.execute(text("""
+            SELECT decision, outcome_5m_bps
+            FROM realtime_candidate
+            WHERE outcome_5m_bps IS NOT NULL
+        """)).mappings().all()
+
+    groups = {}
+    for r in rows:
+        key = str(r["decision"])
+        groups.setdefault(key, []).append(float(r["outcome_5m_bps"]))
+
+    def summarize(values):
+        if not values:
+            return {"n": 0}
+        xs = sorted(values)
+        n = len(xs)
+        median = xs[n // 2] if n % 2 else (xs[n//2 - 1] + xs[n//2]) / 2
+        return {
+            "n": n,
+            "mean_5m_bps": sum(xs) / n,
+            "median_5m_bps": median,
+            "positive_rate": sum(1 for x in xs if x > 0) / n,
+            "large_loss_rate": sum(1 for x in xs if x <= -2000) / n,
+        }
+
+    summary = {k: summarize(v) for k, v in groups.items()}
+    accepted = groups.get("ACTIONABLE_PAPER", [])
+    rejected = groups.get("REJECT", [])
+    edge_bps = None
+    if accepted and rejected:
+        edge_bps = (sum(accepted)/len(accepted)) - (sum(rejected)/len(rejected))
+
+    return {
+        "mode": "paper-only",
+        "horizon": "5m",
+        "summary": summary,
+        "accepted_minus_rejected_mean_bps": edge_bps,
+        "live_execution_available": False,
+    }
 
 
 @app.get("/realtime/positions")
