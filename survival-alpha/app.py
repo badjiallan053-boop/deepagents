@@ -452,6 +452,60 @@ def team_diagnostics(x_paper_token: Optional[str] = Header(default=None)):
     }
 
 
+
+@app.get("/firm/status")
+def firm_status(x_paper_token: Optional[str] = Header(default=None)):
+    require_admin(x_paper_token)
+    return {
+        "mode": "paper-only",
+        "portfolio": realtime.firm_book.summary(),
+        "risk": realtime.firm_risk.snapshot(),
+        "risk_limits": {
+            "paper_nav_lamports": realtime.firm_risk.nav_lamports,
+            "max_open_positions": realtime.firm_risk.max_open_positions,
+            "max_gross_exposure_bps": realtime.firm_risk.max_gross_exposure_bps,
+            "max_single_position_bps": realtime.firm_risk.max_single_position_bps,
+            "max_source_exposure_bps": realtime.firm_risk.max_source_exposure_bps,
+            "daily_loss_limit_bps": realtime.firm_risk.daily_loss_limit_bps,
+        },
+        "live_execution_available": False,
+    }
+
+
+@app.get("/firm/positions")
+def firm_positions(limit: int = 200,
+                   x_paper_token: Optional[str] = Header(default=None)):
+    require_admin(x_paper_token)
+    limit = min(max(limit, 1), 1000)
+    with engine.begin() as cx:
+        rows = cx.execute(text("""
+            SELECT * FROM firm_portfolio_position
+            ORDER BY id DESC LIMIT :limit
+        """), {"limit": limit}).mappings().all()
+    return {"mode": "paper-only", "positions": [dict(r) for r in rows]}
+
+
+@app.get("/firm/markouts")
+def firm_markouts(horizon_seconds: Optional[int] = None, limit: int = 1000,
+                  x_paper_token: Optional[str] = Header(default=None)):
+    require_admin(x_paper_token)
+    limit = min(max(limit, 1), 5000)
+    query = """
+        SELECT m.*, c.mint, c.source, c.source_detail, c.decision,
+               c.strategy_votes_json, c.market_phase
+        FROM candidate_markout m
+        JOIN realtime_candidate c ON c.id=m.candidate_id
+    """
+    params = {"limit": limit}
+    if horizon_seconds is not None:
+        query += " WHERE m.horizon_seconds=:h"
+        params["h"] = int(horizon_seconds)
+    query += " ORDER BY m.id DESC LIMIT :limit"
+    with engine.begin() as cx:
+        rows = cx.execute(text(query), params).mappings().all()
+    return {"mode": "paper-only", "markouts": [dict(r) for r in rows]}
+
+
 @app.get("/realtime/status")
 def realtime_status(x_paper_token: Optional[str] = Header(default=None)):
     require_admin(x_paper_token)
