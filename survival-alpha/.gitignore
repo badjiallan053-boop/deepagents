@@ -1,0 +1,8 @@
+.env
+.env.*
+arena.db
+*.db
+__pycache__/
+*.pyc
+.venv/
+runs/
