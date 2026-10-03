@@ -72,6 +72,8 @@ def ensure_realtime_tables(engine) -> None:
             decision TEXT NOT NULL,
             reason TEXT,
             paper_entered {bool_type} NOT NULL DEFAULT 0,
+            outcome_5m_bps DOUBLE PRECISION,
+            outcome_checked_at_utc TEXT,
             UNIQUE(source, source_signature, mint)
         )
         """))
@@ -100,6 +102,15 @@ def ensure_realtime_tables(engine) -> None:
             created_at_utc TEXT NOT NULL
         )
         """))
+        # Lightweight forward-compatible migrations for already-created paper DBs.
+        for ddl in (
+            "ALTER TABLE realtime_candidate ADD COLUMN outcome_5m_bps DOUBLE PRECISION",
+            "ALTER TABLE realtime_candidate ADD COLUMN outcome_checked_at_utc TEXT",
+        ):
+            try:
+                cx.execute(text(ddl))
+            except Exception:
+                pass
 
 
 @dataclass
@@ -164,6 +175,7 @@ class RealtimeEngine:
         self._tasks = [
             asyncio.create_task(self._organic_loop(), name="jupiter-organic"),
             asyncio.create_task(self._position_loop(), name="paper-positions"),
+            asyncio.create_task(self._counterfactual_loop(), name="counterfactuals"),
         ]
         if self.helius_key:
             self._tasks.append(asyncio.create_task(self._helius_loop(), name="helius-wallets"))
@@ -485,6 +497,54 @@ class RealtimeEngine:
             except Exception:
                 log.exception("paper position loop error")
             await asyncio.sleep(self.position_poll_secs)
+
+    async def _counterfactual_loop(self) -> None:
+        """
+        Mark every candidate, accepted or rejected, at the same 5-minute horizon.
+        This is the anti-self-deception loop: filters are judged against what they rejected.
+        """
+        from datetime import datetime, timezone
+        while not self._stop.is_set():
+            try:
+                with self.engine.begin() as cx:
+                    rows = cx.execute(text("""
+                        SELECT id, created_at_utc, mint, notional_lamports, buy_out_amount
+                        FROM realtime_candidate
+                        WHERE buy_out_amount IS NOT NULL
+                          AND outcome_checked_at_utc IS NULL
+                        ORDER BY id
+                        LIMIT 200
+                    """)).mappings().all()
+
+                for row in rows:
+                    created = str(row["created_at_utc"])
+                    if created.endswith("Z"):
+                        created = created[:-1] + "+00:00"
+                    dt = datetime.fromisoformat(created)
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=timezone.utc)
+                    age = (datetime.now(timezone.utc) - dt).total_seconds()
+                    if age < 300:
+                        continue
+                    try:
+                        q = await self._jupiter_quote(
+                            row["mint"], WSOL_MINT, int(row["buy_out_amount"])
+                        )
+                        value = int(q.get("outAmount") or 0)
+                        cost = int(row["notional_lamports"])
+                        outcome_bps = ((value / cost) - 1.0) * 10_000 if value else -10_000.0
+                        with self.engine.begin() as cx:
+                            cx.execute(text("""
+                                UPDATE realtime_candidate
+                                SET outcome_5m_bps=:o, outcome_checked_at_utc=:u,
+                                    updated_at_utc=:u
+                                WHERE id=:id
+                            """), {"o": outcome_bps, "u": _now_utc(), "id": row["id"]})
+                    except Exception:
+                        log.exception("counterfactual mark failed candidate=%s", row["id"])
+            except Exception:
+                log.exception("counterfactual loop error")
+            await asyncio.sleep(10)
 
     async def _organic_loop(self) -> None:
         while not self._stop.is_set():
