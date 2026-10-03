@@ -14,4 +14,4 @@ COPY app.py realtime_engine.py social_signal.py elite_signals.py strategy_tourna
 ENV PYTHONUNBUFFERED=1
 ENV PUMP_QUOTER_PORT=10001
 
-CMD ["sh", "-c", "node pump_quote_service.mjs & uvicorn app:app --host 0.0.0.0 --port ${PORT:-10000}"]
+CMD ["sh", "-c", "if [ -n \"$SOLANA_RPC_URL\" ] || [ -n \"$HELIUS_API_KEY\" ]; then node pump_quote_service.mjs & fi; exec uvicorn app:app --host 0.0.0.0 --port ${PORT:-10000}"]
