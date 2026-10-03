@@ -167,3 +167,55 @@ The branch CI compiles every Python agent, runs deterministic unit tests for the
 Telegram parser, channel-evidence gate and strategy tournament, syntax-checks the
 Pump quote sidecar, and fails if a Python private-key/send path or a Pump SDK
 transaction-builder primitive is introduced.
+
+
+## Simulated firm book
+
+The project now keeps two separate books:
+
+1. **Research book** — fixed-notional forward measurement. It exists to answer
+   whether a signal/strategy contains information. It keeps counterfactuals and
+   does not allocate capital based on confidence.
+2. **Firm book** — capital-allocation simulation. It can open only when a
+   currently-passing strategy has already earned promotion from prior forward
+   outcomes. Telegram sources must independently earn channel promotion too.
+
+The firm book has an independent veto-only risk governor:
+
+- daily realized-loss kill switch
+- maximum open positions
+- maximum gross exposure
+- maximum position size
+- maximum source/channel concentration
+- no duplicate open mint
+
+Multi-horizon markouts are collected at 30s, 2m, 5m and 15m by default. This
+lets the desk discover where each signal source actually has edge rather than
+hard-coding a five-minute exit.
+
+### Firm endpoints
+
+- `GET /firm/status`
+- `GET /firm/positions`
+- `GET /firm/markouts`
+- `GET /team/horizon-scorecards`
+
+### Persistence
+
+The Render Blueprint now provisions a Singapore Postgres database and injects
+its private connection string into `DATABASE_URL`. The forward tape therefore
+survives service redeploys; SQLite is only a local-development fallback.
+
+### Capital promotion defaults
+
+- minimum 30 prior forward samples
+- profit factor > 1.30
+- positive 95% bootstrap lower bound
+- 2.5% simulated NAV base allocation
+- 10% hard single-position ceiling
+- 50% gross-exposure ceiling
+- 25% per-source/channel ceiling
+- 5% daily-loss kill switch
+
+These are conservative experimental defaults, not optimal parameters and not
+claims of expected returns.
