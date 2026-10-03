@@ -110,3 +110,29 @@ Every candidate with an executable entry quote is marked again at the same
 5-minute horizon, including candidates that were rejected. `/realtime/evaluation`
 compares accepted versus rejected outcomes so the filter must prove that it
 improves the base rate rather than merely generating attractive alerts.
+
+
+## Strategy tournament
+
+Every candidate is now scored by independent hypotheses rather than one opaque
+model:
+
+- `TRENCHER_ORGANIC`: mint/freeze authority off, no same-slot/buyer concentration,
+  buyer diversity, two-sided flow, executable quote.
+- `INDEPENDENT_WALLET_CONSENSUS`: at least two independently watched wallets plus
+  sellability/latency gates.
+- `POST_MIGRATION_SURVIVOR`: migration signal + organic activity + buyer diversity
+  + executable quote.
+- `ORGANIC_MIND_SHARE`: high Jupiter organic score confirmed by another source,
+  while bundle and execution gates remain healthy.
+
+The thresholds are hypotheses. They are not assumed to be profitable.
+
+`GET /realtime/strategy-evaluation` compares each strategy's 5-minute forward
+outcomes when it passed versus when it failed. A strategy earns promotion only
+from forward evidence.
+
+Each candidate also stores a Helius microstructure snapshot containing recent
+buy/sell counts, unique buyers/sellers, same-slot buy concentration, top-buyer
+concentration, fee intensity, mint/freeze authority state, and top-account
+concentration, alongside the actual Jupiter round-trip and 500ms quote drift.
