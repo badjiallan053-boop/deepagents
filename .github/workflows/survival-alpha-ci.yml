@@ -23,7 +23,7 @@ jobs:
           python-version: "3.12"
       - run: pip install -r requirements.txt
       - name: Compile
-        run: python -m py_compile app.py realtime_engine.py social_signal.py elite_signals.py strategy_tournament.py telegram_parser.py telegram_signal_agent.py channel_evaluator.py agent_team.py grok_team.py capital_allocator.py firm_risk.py firm_book.py
+        run: python -m py_compile app.py realtime_engine.py social_signal.py elite_signals.py strategy_tournament.py telegram_parser.py telegram_signal_agent.py channel_evaluator.py agent_team.py grok_team.py grok_profit_team.py capital_allocator.py firm_risk.py firm_book.py
       - name: Unit battle tests
         run: python -m unittest discover -s tests -v
       - name: Node sidecar syntax
