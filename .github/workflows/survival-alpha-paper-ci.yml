@@ -1,0 +1,21 @@
+name: survival-alpha-paper-ci
+on:
+  push:
+    branches: ["survival-alpha-paper"]
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: survival-alpha
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - run: python -m py_compile app.py
+      - name: Assert no live execution path
+        run: |
+          ! grep -E "sendTransaction|/swap/v2/execute|PRIVATE_KEY|SECRET_KEY" app.py
