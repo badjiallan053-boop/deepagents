@@ -132,6 +132,84 @@ class AgentTeam:
             }
         return out
 
+    def horizon_scorecards(
+        self,
+        *,
+        min_samples: int = 20,
+        min_profit_factor: float = 1.30,
+    ) -> dict[str, Any]:
+        """
+        Evaluate accepted vs rejected and strategy pass/fail at each fixed markout
+        horizon. This tells the desk whether an information edge is fast-decaying
+        or survives long enough to be executable.
+        """
+        with self.engine.begin() as cx:
+            rows = cx.execute(text("""
+                SELECT m.horizon_seconds, m.pnl_bps,
+                       c.decision, c.strategy_votes_json
+                FROM candidate_markout m
+                JOIN realtime_candidate c ON c.id=m.candidate_id
+            """)).mappings().all()
+
+        by_horizon: dict[int, dict[str, Any]] = {}
+        for row in rows:
+            h = int(row["horizon_seconds"])
+            rec = by_horizon.setdefault(
+                h,
+                {"accepted": [], "rejected": [], "strategy_pass": {}, "strategy_fail": {}},
+            )
+            outcome = float(row["pnl_bps"])
+            if str(row["decision"]) == "ACTIONABLE_PAPER":
+                rec["accepted"].append(outcome)
+            elif str(row["decision"]) == "REJECT":
+                rec["rejected"].append(outcome)
+
+            try:
+                votes = json.loads(row["strategy_votes_json"] or "[]")
+            except Exception:
+                votes = []
+            for vote in votes:
+                name = str(vote.get("name") or "UNKNOWN")
+                target = rec["strategy_pass"] if bool(vote.get("passed")) else rec["strategy_fail"]
+                target.setdefault(name, []).append(outcome)
+
+        out: dict[str, Any] = {}
+        for horizon, rec in sorted(by_horizon.items()):
+            accepted = evaluate_outcomes(
+                rec["accepted"],
+                min_samples=min_samples,
+                min_profit_factor=min_profit_factor,
+            ).to_dict()
+            rejected = evaluate_outcomes(
+                rec["rejected"],
+                min_samples=min_samples,
+                min_profit_factor=min_profit_factor,
+                require_positive_ci=False,
+            ).to_dict()
+            strategy_cards = {}
+            names = sorted(set(rec["strategy_pass"]) | set(rec["strategy_fail"]))
+            for name in names:
+                p = evaluate_outcomes(
+                    rec["strategy_pass"].get(name, []),
+                    min_samples=min_samples,
+                    min_profit_factor=min_profit_factor,
+                ).to_dict()
+                f = evaluate_outcomes(
+                    rec["strategy_fail"].get(name, []),
+                    min_samples=min_samples,
+                    min_profit_factor=min_profit_factor,
+                    require_positive_ci=False,
+                ).to_dict()
+                strategy_cards[name] = {"passed": p, "failed": f}
+
+            out[str(horizon)] = {
+                "accepted": accepted,
+                "rejected": rejected,
+                "strategies": strategy_cards,
+            }
+        return out
+
+
     def diagnostics(self) -> dict[str, Any]:
         with self.engine.begin() as cx:
             decisions = cx.execute(text("""
