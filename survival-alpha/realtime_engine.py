@@ -468,7 +468,6 @@ class RealtimeEngine:
             await asyncio.sleep(self.position_poll_secs)
 
     async def _organic_loop(self) -> None:
-        known: set[str] = set()
         while not self._stop.is_set():
             try:
                 assert self._http is not None
@@ -486,11 +485,10 @@ class RealtimeEngine:
                         score_f = float(score)
                     except (TypeError, ValueError):
                         score_f = None
-                    if not mint or mint in known:
+                    if not mint:
                         continue
-                    known.add(mint)
-                    if len(known) > 5000:
-                        known = set(list(known)[-2500:])
+                    # evaluate() has a per-source/mint cooldown, so rising scores
+                    # can be reconsidered without hammering Jupiter every poll.
                     if score_f is not None and score_f >= self.organic_min:
                         asyncio.create_task(self.evaluate(CandidateEvent(
                             mint=mint,
@@ -611,7 +609,12 @@ class RealtimeEngine:
 
     async def _handle_helius_tx(self, result: dict, wallets: list[str]) -> None:
         envelope = result.get("transaction") or {}
-        tx = envelope.get("transaction") if isinstance(envelope.get("transaction"), dict) else envelope
+        inner = envelope.get("transaction")
+        if isinstance(inner, dict):
+            # Helius wraps parsed message/signatures and meta separately.
+            tx = {"transaction": inner, "meta": envelope.get("meta") or {}}
+        else:
+            tx = envelope
         if not isinstance(tx, dict):
             return
         keys = self._account_keys(tx)
