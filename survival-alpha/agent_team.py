@@ -34,6 +34,9 @@ TEAM: tuple[AgentRole, ...] = (
     AgentRole("COUNTERFACTUAL_AGENT", "Mark rejected and accepted candidates at identical horizons.", False),
     AgentRole("CHANNEL_FORENSICS", "Score each Telegram source using only prior forward outcomes.", False),
     AgentRole("META_ALLOCATOR", "Promote/collect/rework channels and strategies from evidence.", False),
+    AgentRole("PORTFOLIO_MANAGER", "Allocate only promoted strategy/source combinations into the simulated fund book.", False),
+    AgentRole("FIRM_RISK", "Veto portfolio allocations on loss, exposure, duplication and concentration limits.", True),
+    AgentRole("MARKOUT_AGENT", "Measure every candidate at multiple fixed horizons for horizon-specific edge.", False),
     AgentRole("WORK_SUPERVISOR", "Research narratives, inspect failures, propose code/config changes.", False),
 )
 
