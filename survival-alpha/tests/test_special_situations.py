@@ -28,6 +28,8 @@ ZERO_FEES = {
     "SPECIAL_BUY_COMMISSION_USD": "0", "SPECIAL_TENDER_FEE_USD": "0", "SPECIAL_ODD_LOT_SHARES": "99",
     "SPECIAL_P_BASE": "0.95", "SPECIAL_HAIRCUT_FINANCING": "0.85", "SPECIAL_HAIRCUT_MINIMUM": "0.90",
     "SPECIAL_HAIRCUT_APPROVAL": "0.90", "SPECIAL_HAIRCUT_UNKNOWN": "0.95",
+    # Arithmetic tests use the bare quote; the spread haircut has its own tests.
+    "SPECIAL_ENTRY_HALF_SPREAD_BPS": "0", "SPECIAL_EXIT_HALF_SPREAD_BPS": "0",
 }
 
 
@@ -188,7 +190,11 @@ class EvTests(EnvMixin, unittest.TestCase):
         o = ss.paper_outcome(1.0, 99, 1.2, False, 0.0)
         self.assertEqual(o["result"], "COMPLETED")
         self.assertAlmostEqual(o["pnl_usd"], 19.8)
-        self.assertEqual(ss.paper_outcome(1.0, 99, None, True, 0.0)["result"], "TERMINATED_UNPRICED")
+        # Terminated with no price is still booked (flagged placeholder), never dropped.
+        o = ss.paper_outcome(1.0, 99, None, True, 0.0)
+        self.assertEqual(o["result"], "TERMINATED")
+        self.assertEqual(o["pnl_basis"], "PLACEHOLDER")
+        self.assertAlmostEqual(o["pnl_usd"], -0.15 * 99)
 
 
 class StoreTests(EnvMixin, unittest.TestCase):
@@ -830,6 +836,90 @@ class PostgresSpecialTests(EnvMixin, unittest.TestCase):
         self.assertEqual(t["status"], "COMPLETED")
         self.assertIsInstance(sc.status()["paper_book"], dict)
         engine.dispose()
+
+
+
+class RiskFollowUpTests(EnvMixin, unittest.TestCase):
+    """Red-team B2-1 (survivorship) and B2-2 (fees / entry price)."""
+
+    def setUp(self):
+        super().setUp()
+        for k in ("SPECIAL_TENDER_FEE_USD", "SPECIAL_ENTRY_HALF_SPREAD_BPS",
+                  "SPECIAL_EXIT_HALF_SPREAD_BPS", "SPECIAL_TERMINATED_LOSS_PCT"):
+            os.environ.pop(k, None)  # use the shipped defaults
+        os.environ["SPECIAL_SITUATIONS_ENABLED"] = "false"
+        self.engine = create_engine("sqlite:///:memory:")
+        self.sc = ss.SpecialSituationsScanner(self.engine)
+
+    def tearDown(self):
+        self.engine.dispose()
+        super().tearDown()
+
+    def test_default_tender_fee_and_spread_haircut(self):
+        a = ss.ev_assumptions()
+        self.assertEqual(a["tender_fee_usd"], 25.0)
+        self.assertEqual(a["entry_half_spread_bps"], 100.0)
+        # Red-team probe: $10.30 offer vs $10.00 last at 99 shares was EV $28.215 with $0 fees.
+        t = {"price_fixed": 10.30, "odd_lot_priority": 1, "expiration_date": "2026-10-30", "conditions": {}}
+        ev = ss.compute_ev(t, 10.00, today=date(2026, 10, 4))
+        self.assertAlmostEqual(ev["entry_price_used"], 10.10)
+        self.assertIn("haircut", ev["entry_price_basis"])
+        self.assertAlmostEqual(ev["ev_usd"], round(ev["p_complete"] * (10.30 - 10.10) * 99 - 25.0, 4))
+        self.assertLess(ev["ev_usd"], 0)  # the "edge" disappears after realistic costs
+
+    def test_ask_is_used_when_known(self):
+        t = {"price_fixed": 10.30, "odd_lot_priority": 1, "expiration_date": "2026-10-30", "conditions": {}}
+        ev = ss.compute_ev(t, 10.00, today=date(2026, 10, 4), ask=10.02)
+        self.assertEqual(ev["entry_price_used"], 10.02)
+        self.assertEqual(ev["entry_price_basis"], "ask")
+
+    def test_terminated_deal_keeps_a_pnl_in_the_ledger(self):
+        now = "2026-10-01T00:00:00+00:00"
+        with self.engine.begin() as cx:
+            for i, (status, final) in enumerate((("COMPLETED", 10.30), ("TERMINATED", None),
+                                                 ("TERMINATED", None))):
+                cx.execute(text("""INSERT INTO special_tender (tender_key, subject_cik, first_accession,
+                        status, final_price, paper_entry_price, paper_entry_at_utc, paper_shares,
+                        paper_would_trade, created_at_utc, updated_at_utc)
+                        VALUES (:k, '1', :a, :s, :f, 10.10, :n, 99, 1, :n, :n)"""),
+                           {"k": f"k{i}", "a": f"a{i}", "s": status, "f": final, "n": now})
+            ids = [r[0] for r in cx.execute(text("SELECT id FROM special_tender ORDER BY id")).all()]
+        self.assertEqual(self.sc.record_outcomes({ids[1]: 8.00}), 3)
+        rows = {t["id"]: t for t in self.sc.list_tenders()}
+        market, placeholder = rows[ids[1]]["paper_outcome"], rows[ids[2]]["paper_outcome"]
+        self.assertEqual(market["result"], "TERMINATED")
+        self.assertEqual(market["pnl_basis"], "MARKET")
+        self.assertAlmostEqual(market["exit_price"], 8.00 * 0.99)  # bid-side haircut
+        self.assertAlmostEqual(rows[ids[1]]["paper_pnl_usd"], round((7.92 - 10.10) * 99 - 25.0, 4))
+        self.assertEqual(placeholder["pnl_basis"], "PLACEHOLDER")
+        self.assertLess(rows[ids[2]]["paper_pnl_usd"], 0)
+        ledger = self.sc.status()["outcome_ledger"]
+        self.assertEqual(ledger["n_resolved"], 3)
+        self.assertEqual(ledger["by_result"], {"COMPLETED": 1, "TERMINATED": 2})
+        self.assertEqual(ledger["n_placeholder_pnl"], 1)
+
+    def test_stuck_awaiting_results_becomes_unresolved_not_dropped(self):
+        with self.engine.begin() as cx:
+            cx.execute(text("""INSERT INTO special_tender (tender_key, subject_cik, first_accession, status,
+                    expiration_date, paper_entry_price, paper_entry_at_utc, paper_shares, paper_would_trade,
+                    created_at_utc, updated_at_utc)
+                    VALUES ('k', '1', 'a', 'EXPIRED_AWAITING_RESULTS', '2026-09-01', 10.1, 'x', 99, 1, 'x', 'x')"""))
+        self.assertEqual(self.sc.record_outcomes(today=date(2026, 9, 5)), 0)  # still inside the window
+        self.assertEqual(self.sc.record_outcomes(today=date(2026, 9, 20)), 1)
+        ledger = self.sc.outcome_ledger()
+        self.assertEqual(ledger["by_result"], {"UNRESOLVED": 1})
+        self.assertEqual(ledger["n_resolved"], 0)
+
+    def test_stale_quote_is_unpriced(self):
+        with self.engine.begin() as cx:
+            cx.execute(text("""INSERT INTO special_tender (tender_key, subject_cik, first_accession, status,
+                    price_fixed, expiration_date, odd_lot_priority, created_at_utc, updated_at_utc)
+                    VALUES ('k', '1', 'a', 'OPEN', 10.3, '2099-01-01', 1, 'x', 'x')"""))
+            tid = cx.execute(text("SELECT id FROM special_tender")).scalar_one()
+        ev = self.sc.apply_price_and_ev(tid, {"price": 10.0, "source": "unit-test",
+                                              "as_of_utc": "2020-01-01T00:00:00+00:00"})
+        self.assertEqual(ev["status"], "UNPRICED")
+        self.assertTrue(any("old" in f for f in ev["flags"]))
 
 
 if __name__ == "__main__":

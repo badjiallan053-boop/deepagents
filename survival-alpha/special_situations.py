@@ -46,7 +46,19 @@ SPECIAL_PRICE_SOURCE         "none" (default, EV unpriced) | "yahoo_chart"
                              (unofficial public endpoint, opt-in, labeled)
 SPECIAL_ODD_LOT_SHARES       default 99 (capped at 99)
 SPECIAL_BUY_COMMISSION_USD   default 0   (set to YOUR broker's real fees)
-SPECIAL_TENDER_FEE_USD       default 0   (many brokers charge a tender/reorg fee)
+SPECIAL_TENDER_FEE_USD       default 25  (broker voluntary-reorg / tender fee; a
+                             conservative ASSUMPTION, set to your broker's fee)
+SPECIAL_ENTRY_HALF_SPREAD_BPS default 100 - when only a last trade is available,
+                             entry = last * (1 + this); an ask is used when known
+SPECIAL_EXIT_HALF_SPREAD_BPS default 100 - exit after a terminated deal is
+                             booked at last * (1 - this)
+SPECIAL_MAX_PRICE_AGE_HOURS  default 96 - older quotes are treated as unpriced
+                             (covers a weekend; tighten for intraday use)
+SPECIAL_TERMINATED_LOSS_PCT  default 0.15 - placeholder loss vs entry for a
+                             terminated deal with no post-termination price
+                             (flagged PLACEHOLDER; it still counts in n)
+SPECIAL_UNRESOLVED_AFTER_DAYS default 10 - EXPIRED_AWAITING_RESULTS older than
+                             this (days past expiry) is reported UNRESOLVED
 SPECIAL_P_BASE               default 0.95 heuristic prior, completion probability
 SPECIAL_HAIRCUT_FINANCING    default 0.85 multiplier if financing condition
 SPECIAL_HAIRCUT_MINIMUM      default 0.90 multiplier if minimum-tender condition
@@ -600,14 +612,20 @@ def ev_assumptions() -> dict[str, Any]:
     return {
         "shares": max(1, min(99, env_int("SPECIAL_ODD_LOT_SHARES", 99))),
         "buy_commission_usd": env_float("SPECIAL_BUY_COMMISSION_USD", 0.0),
-        "tender_fee_usd": env_float("SPECIAL_TENDER_FEE_USD", 0.0),
+        "tender_fee_usd": env_float("SPECIAL_TENDER_FEE_USD", 25.0),
+        "entry_half_spread_bps": max(0.0, env_float("SPECIAL_ENTRY_HALF_SPREAD_BPS", 100.0)),
+        "exit_half_spread_bps": max(0.0, env_float("SPECIAL_EXIT_HALF_SPREAD_BPS", 100.0)),
+        "max_price_age_hours": env_float("SPECIAL_MAX_PRICE_AGE_HOURS", 96.0),
+        "terminated_loss_pct": max(0.0, min(1.0, env_float("SPECIAL_TERMINATED_LOSS_PCT", 0.15))),
+        "unresolved_after_days": max(1, env_int("SPECIAL_UNRESOLVED_AFTER_DAYS", 10)),
         "p_base": env_float("SPECIAL_P_BASE", 0.95),
         "haircut_financing": env_float("SPECIAL_HAIRCUT_FINANCING", 0.85),
         "haircut_minimum": env_float("SPECIAL_HAIRCUT_MINIMUM", 0.90),
         "haircut_approval": env_float("SPECIAL_HAIRCUT_APPROVAL", 0.90),
         "haircut_unknown": env_float("SPECIAL_HAIRCUT_UNKNOWN", 0.95),
-        "note": ("heuristic priors, not estimated from data; fees default to 0 and must be set "
-                 "to the user's actual broker commission + tender/reorg fee"),
+        "note": ("heuristic priors, not estimated from data; the $25 tender fee, the spread "
+                 "haircuts and the terminated-deal placeholder are conservative assumptions, "
+                 "not sourced figures; set them to the user's actual broker costs"),
     }
 
 
@@ -638,8 +656,29 @@ def _json_list(v: Any) -> list:
         return []
 
 
+def entry_price_from_quote(market_price: Optional[float], a: dict[str, Any],
+                           ask: Optional[float] = None) -> tuple[Optional[float], str]:
+    """Executable entry estimate. Never the bare last trade: use the ask when
+    known, otherwise last * (1 + SPECIAL_ENTRY_HALF_SPREAD_BPS)."""
+    if ask is not None and ask > 0:
+        return float(ask), "ask"
+    if market_price is None or market_price <= 0:
+        return None, "unpriced"
+    hc = float(a.get("entry_half_spread_bps", 100.0))
+    return round(float(market_price) * (1.0 + hc / 10_000.0), 6), f"last + {hc:g} bps half-spread haircut"
+
+
+def exit_price_from_quote(market_price: Optional[float], a: dict[str, Any],
+                          bid: Optional[float] = None) -> Optional[float]:
+    if bid is not None and bid > 0:
+        return float(bid)
+    if market_price is None or market_price <= 0:
+        return None
+    return round(float(market_price) * (1.0 - float(a.get("exit_half_spread_bps", 100.0)) / 10_000.0), 6)
+
+
 def compute_ev(tender: dict[str, Any], market_price: Optional[float], today: Optional[date] = None,
-               assumptions: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+               assumptions: Optional[dict[str, Any]] = None, ask: Optional[float] = None) -> dict[str, Any]:
     """Paper EV for an odd-lot position.
 
     Hard blockers (record-date trap, expired, non-USD, non-cash consideration,
@@ -730,12 +769,15 @@ def compute_ev(tender: dict[str, Any], market_price: Optional[float], today: Opt
         out["status"] = "UNPRICED"
         out["ev_usd"] = None
         return out
-    gross = (offer_lo - market_price) * a["shares"]
+    entry, entry_basis = entry_price_from_quote(market_price, a, ask)
+    out["entry_price_used"] = entry
+    out["entry_price_basis"] = entry_basis
+    gross = (offer_lo - entry) * a["shares"]
     out["gross_spread_usd"] = round(gross, 4)
     out["ev_usd"] = round(p * gross * fill - fees, 4)
     out["ev_usd_full_fill"] = round(p * gross - fees, 4)
-    out["ev_usd_if_offer_high"] = round(p * (offer_hi - market_price) * a["shares"] * fill - fees, 4) if offer_hi else None
-    out["capital_usd"] = round(market_price * a["shares"] + a["buy_commission_usd"], 2)
+    out["ev_usd_if_offer_high"] = round(p * (offer_hi - entry) * a["shares"] * fill - fees, 4) if offer_hi else None
+    out["capital_usd"] = round(entry * a["shares"] + a["buy_commission_usd"], 2)
     out["status"] = "PRICED_PRORATED" if out["prorated"] else "PRICED"
     # NB: fees are paid even if the deal fails; the failure branch's P&L and the
     # market value of prorated (returned) shares depend on post-offer prices,
@@ -744,14 +786,26 @@ def compute_ev(tender: dict[str, Any], market_price: Optional[float], today: Opt
 
 
 def paper_outcome(entry_price: float, shares: int, final_price: Optional[float], terminated: bool,
-                  fees_usd: float, exit_price_if_terminated: Optional[float] = None) -> dict[str, Any]:
+                  fees_usd: float, exit_price_if_terminated: Optional[float] = None,
+                  terminated_loss_pct: Optional[float] = None) -> dict[str, Any]:
+    """Every terminated/withdrawn deal gets a P&L, so failures stay in the
+    track record (no survivorship). With a post-termination quote it is booked
+    at that (bid-side) price; without one, at a flagged conservative
+    placeholder of entry * (1 - terminated_loss_pct). Fees are charged in
+    full on every branch (conservative: brokers often bill the reorg fee on
+    the tender instruction, whether or not the deal closes)."""
     if terminated:
         if exit_price_if_terminated is None:
-            return {"result": "TERMINATED_UNPRICED", "pnl_usd": None,
-                    "note": "offer terminated; no post-termination market price recorded"}
+            loss_pct = 0.15 if terminated_loss_pct is None else float(terminated_loss_pct)
+            exit_px = round(entry_price * (1.0 - loss_pct), 6)
+            pnl = (exit_px - entry_price) * shares - fees_usd
+            return {"result": "TERMINATED", "exit_price": exit_px, "pnl_usd": round(pnl, 4),
+                    "pnl_basis": "PLACEHOLDER",
+                    "note": (f"offer terminated/withdrawn; no post-termination price, booked at a "
+                             f"conservative placeholder loss of {loss_pct:.0%} vs entry")}
         pnl = (exit_price_if_terminated - entry_price) * shares - fees_usd
         return {"result": "TERMINATED", "exit_price": exit_price_if_terminated,
-                "pnl_usd": round(pnl, 4)}
+                "pnl_usd": round(pnl, 4), "pnl_basis": "MARKET"}
     if final_price is None:
         return {"result": "PENDING", "pnl_usd": None}
     pnl = (final_price - entry_price) * shares - fees_usd
@@ -1275,8 +1329,23 @@ class SpecialSituationsScanner:
         with self.engine.begin() as cx:
             t = dict(cx.execute(text("SELECT * FROM special_tender WHERE id=:i"), {"i": tender_id}).mappings().one())
             t["conditions"] = json.loads(t.get("conditions_json") or "{}")
+            a = ev_assumptions()
             mp = price["price"] if price else None
-            ev = compute_ev(t, mp, today=today)
+            stale_note = None
+            if price and price.get("as_of_utc"):
+                try:
+                    as_of = datetime.fromisoformat(str(price["as_of_utc"]).replace("Z", "+00:00"))
+                    if as_of.tzinfo is None:
+                        as_of = as_of.replace(tzinfo=timezone.utc)
+                    age_h = (utc_now() - as_of).total_seconds() / 3600.0
+                    if age_h > a["max_price_age_hours"]:
+                        stale_note = f"quote is {age_h:.0f}h old (> {a['max_price_age_hours']:g}h): treated as unpriced"
+                        mp = None
+                except ValueError:
+                    pass
+            ev = compute_ev(t, mp, today=today, assumptions=a, ask=(price or {}).get("ask") if mp else None)
+            if stale_note:
+                ev["flags"].append(stale_note)
             cx.execute(text("""UPDATE special_tender SET market_price=:mp, price_source=:src, price_as_of_utc=:asof,
                                ev_json=:ev, ev_usd=:evu, updated_at_utc=:u WHERE id=:i"""),
                        {"mp": mp, "src": price["source"] if price else None,
@@ -1288,29 +1357,78 @@ class SpecialSituationsScanner:
                 would = bool(ev["ev_usd"] is not None and ev["ev_usd"] > 0 and not ev["blockers"])
                 cx.execute(text("""UPDATE special_tender SET paper_entry_price=:p, paper_entry_at_utc=:at,
                                    paper_shares=:s, paper_would_trade=:w, paper_entry_ev_json=:ev WHERE id=:i"""),
-                           {"p": mp, "at": now, "s": ev["shares"], "w": 1 if would else 0,
+                           {"p": ev.get("entry_price_used") or mp, "at": now, "s": ev["shares"], "w": 1 if would else 0,
                             "ev": json.dumps(ev), "i": tender_id})
         return ev
 
-    def record_outcomes(self, exit_prices: Optional[dict[int, float]] = None) -> int:
+    def record_outcomes(self, exit_prices: Optional[dict[int, float]] = None,
+                        today: Optional[date] = None) -> int:
+        """Book an outcome for every paper entry whose deal resolved, including
+        terminated/withdrawn deals (no survivorship). exit_prices are LAST
+        trades after termination (keyed by tender id); a bid-side haircut is
+        applied. Entries stuck in EXPIRED_AWAITING_RESULTS / STALE_UNKNOWN past
+        SPECIAL_UNRESOLVED_AFTER_DAYS are reported UNRESOLVED (shown in the
+        ledger, re-evaluated when results arrive)."""
         exit_prices = exit_prices or {}
+        today = today or utc_now().date()
         n = 0
         a = ev_assumptions()
+        fees = a["buy_commission_usd"] + a["tender_fee_usd"]
+        cutoff = (today - timedelta(days=a["unresolved_after_days"])).isoformat()
         with self.engine.begin() as cx:
             rows = cx.execute(text("""SELECT * FROM special_tender WHERE paper_entry_at_utc IS NOT NULL
                                       AND outcome_recorded_at_utc IS NULL
-                                      AND status IN ('COMPLETED','TERMINATED')""")).mappings().all()
+                                      AND status IN ('COMPLETED','TERMINATED',
+                                                     'EXPIRED_AWAITING_RESULTS','STALE_UNKNOWN')""")).mappings().all()
             for t in rows:
+                if t["status"] in ("EXPIRED_AWAITING_RESULTS", "STALE_UNKNOWN"):
+                    exp = t["expiration_date"]
+                    if t["status"] == "EXPIRED_AWAITING_RESULTS" and exp and exp > cutoff:
+                        continue
+                    out = {"result": "UNRESOLVED", "pnl_usd": None,
+                           "note": (f"no final results parsed {a['unresolved_after_days']}+ days after expiry "
+                                    f"({t['status']}); counted as unresolved, not dropped"),
+                           "would_trade_at_entry": bool(t["paper_would_trade"])}
+                    cx.execute(text("UPDATE special_tender SET paper_outcome_json=:o WHERE id=:i"),
+                               {"o": json.dumps(out), "i": t["id"]})
+                    n += 1
+                    continue
+                terminated = t["status"] == "TERMINATED"
+                exit_px = exit_price_from_quote(exit_prices.get(int(t["id"])), a) if terminated else None
                 out = paper_outcome(t["paper_entry_price"], int(t["paper_shares"] or 0), t["final_price"],
-                                    t["status"] == "TERMINATED", a["buy_commission_usd"] + a["tender_fee_usd"],
-                                    exit_prices.get(int(t["id"])))
+                                    terminated, fees, exit_px, a["terminated_loss_pct"])
+                if out["result"] == "PENDING":
+                    continue  # COMPLETED without a parsed final price: wait, stays visible as an entry
                 out["would_trade_at_entry"] = bool(t["paper_would_trade"])
                 out["proration_pct_reported"] = t["proration_pct"]
+                out["fees_usd"] = fees
                 cx.execute(text("""UPDATE special_tender SET paper_outcome_json=:o, paper_pnl_usd=:p,
                                    outcome_recorded_at_utc=:u WHERE id=:i"""),
                            {"o": json.dumps(out), "p": out.get("pnl_usd"), "u": utc_now_iso(), "i": t["id"]})
                 n += 1
         return n
+
+    def outcome_ledger(self) -> dict[str, Any]:
+        """Every paper entry by outcome, failures included. n_resolved counts
+        unique tenders with a booked P&L (completed AND terminated)."""
+        with self.engine.begin() as cx:
+            rows = cx.execute(text("""SELECT status, paper_outcome_json, paper_pnl_usd, paper_would_trade,
+                                             outcome_recorded_at_utc
+                                      FROM special_tender WHERE paper_entry_at_utc IS NOT NULL""")).mappings().all()
+        by_result: dict[str, int] = {}
+        pnl = []
+        placeholders = 0
+        for r in rows:
+            o = json.loads(r["paper_outcome_json"]) if r["paper_outcome_json"] else {}
+            res = o.get("result") or "OPEN_OR_PENDING"
+            by_result[res] = by_result.get(res, 0) + 1
+            if r["outcome_recorded_at_utc"] is not None and r["paper_pnl_usd"] is not None:
+                pnl.append(float(r["paper_pnl_usd"]))
+                placeholders += 1 if o.get("pnl_basis") == "PLACEHOLDER" else 0
+        return {"entries": len(rows), "by_result": by_result, "n_resolved": len(pnl),
+                "n_placeholder_pnl": placeholders,
+                "pnl_usd_total": round(sum(pnl), 4) if pnl else None,
+                "note": "terminated/withdrawn deals are booked (placeholder if unpriced), never dropped"}
 
     # -- main scan ------------------------------------------------------------------
     async def scan_once(self, lookback_days: Optional[int] = None, today: Optional[date] = None) -> dict[str, Any]:
@@ -1375,7 +1493,18 @@ class SpecialSituationsScanner:
                 if price:
                     summary["priced"] += 1
                 self.apply_price_and_ev(int(r["id"]), price, today)
-            summary["outcomes_recorded"] = self.record_outcomes()
+            # Terminated deals with a paper entry: fetch a post-termination
+            # price so the failure is booked at market (placeholder otherwise).
+            with self.engine.begin() as cx:
+                term_rows = cx.execute(text("""SELECT id, ticker FROM special_tender
+                                               WHERE status='TERMINATED' AND paper_entry_at_utc IS NOT NULL
+                                                 AND outcome_recorded_at_utc IS NULL""")).mappings().all()
+            exit_prices: dict[int, float] = {}
+            for r in term_rows:
+                px = await self.fetch_price(price_client, r["ticker"]) if r["ticker"] else None
+                if px:
+                    exit_prices[int(r["id"])] = px["price"]
+            summary["outcomes_recorded"] = self.record_outcomes(exit_prices, today)
         finally:
             summary["sec_requests"] = client.requests
             summary["http_errors"] = client.errors
@@ -1515,6 +1644,7 @@ class SpecialSituationsScanner:
             "paper_book": {k: (float(v) if k == "pnl_would_trade" and v is not None else int(v or 0))
                            for k, v in dict(book).items()},
             "ev_assumptions": ev_assumptions(),
+            "outcome_ledger": self.outcome_ledger(),
             "scans": self.scans,
             "last_scan": self.last_scan,
             "last_error": self.last_error,
