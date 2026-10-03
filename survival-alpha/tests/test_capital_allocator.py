@@ -16,7 +16,9 @@ class CapitalAllocatorTests(unittest.TestCase):
                     source TEXT,
                     source_detail TEXT,
                     strategy_votes_json TEXT,
-                    outcome_5m_bps REAL
+                    outcome_5m_bps REAL,
+                    episode_primary INTEGER NOT NULL DEFAULT 1,
+                    firm_primary INTEGER NOT NULL DEFAULT 1
                 )
             """))
         self.alloc = FirmCapitalAllocator(self.engine)

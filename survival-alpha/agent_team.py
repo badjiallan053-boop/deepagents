@@ -8,6 +8,10 @@ from sqlalchemy import text
 
 from channel_evaluator import evaluate_outcomes
 
+# Above this share of excluded marks (MARK_FAILED / MISSED / LATE) a horizon's
+# cards report DATA_QUALITY instead of a promote/reject verdict.
+MAX_EXCLUSION_RATE = 0.05
+
 
 @dataclass(frozen=True)
 class AgentRole:
@@ -63,6 +67,8 @@ class AgentTeam:
                 SELECT source_detail, outcome_5m_bps
                 FROM realtime_candidate
                 WHERE source='telegram'
+                  AND episode_primary=1
+                  AND episode_key NOT LIKE '%#accept'
                   AND outcome_5m_bps IS NOT NULL
                   AND source_detail IS NOT NULL
             """)).mappings().all()
@@ -92,6 +98,7 @@ class AgentTeam:
                 SELECT strategy_votes_json, outcome_5m_bps
                 FROM realtime_candidate
                 WHERE outcome_5m_bps IS NOT NULL
+                  AND firm_primary=1
                   AND strategy_votes_json IS NOT NULL
             """)).mappings().all()
 
@@ -149,7 +156,32 @@ class AgentTeam:
                        c.decision, c.strategy_votes_json
                 FROM candidate_markout m
                 JOIN realtime_candidate c ON c.id=m.candidate_id
+                WHERE COALESCE(m.late, 0)=0
+                  AND m.status IS NOT NULL
+                  AND c.firm_primary=1
             """)).mappings().all()
+            # Exclusions are reported with every card: they are not random
+            # (transient errors cluster on dying tokens), so a high rate fails
+            # the card instead of silently shrinking the sample.
+            excl_rows = cx.execute(text("""
+                SELECT a.horizon_seconds, a.status, COUNT(*) AS n
+                FROM markout_attempt a
+                JOIN realtime_candidate c ON c.id=a.candidate_id
+                WHERE c.firm_primary=1 AND a.status IN ('MARK_FAILED', 'MISSED')
+                GROUP BY a.horizon_seconds, a.status
+            """)).mappings().all()
+            late_rows = cx.execute(text("""
+                SELECT m.horizon_seconds, COUNT(*) AS n
+                FROM candidate_markout m
+                JOIN realtime_candidate c ON c.id=m.candidate_id
+                WHERE c.firm_primary=1 AND COALESCE(m.late, 0)=1
+                GROUP BY m.horizon_seconds
+            """)).mappings().all()
+        excluded: dict[int, dict[str, int]] = {}
+        for r in excl_rows:
+            excluded.setdefault(int(r["horizon_seconds"]), {})[str(r["status"])] = int(r["n"])
+        for r in late_rows:
+            excluded.setdefault(int(r["horizon_seconds"]), {})["LATE"] = int(r["n"])
 
         by_horizon: dict[int, dict[str, Any]] = {}
         for row in rows:
@@ -174,6 +206,11 @@ class AgentTeam:
                 target.setdefault(name, []).append(outcome)
 
         out: dict[str, Any] = {}
+        for horizon in excluded:
+            by_horizon.setdefault(
+                horizon,
+                {"accepted": [], "rejected": [], "strategy_pass": {}, "strategy_fail": {}},
+            )
         for horizon, rec in sorted(by_horizon.items()):
             accepted = evaluate_outcomes(
                 rec["accepted"],
@@ -202,10 +239,25 @@ class AgentTeam:
                 ).to_dict()
                 strategy_cards[name] = {"passed": p, "failed": f}
 
+            n_included = len(rec["accepted"]) + len(rec["rejected"])
+            n_excl = excluded.get(horizon, {})
+            n_excluded = sum(n_excl.values())
+            total = n_included + n_excluded
+            exclusion_rate = (n_excluded / total) if total else None
+            data_quality_ok = exclusion_rate is None or exclusion_rate <= MAX_EXCLUSION_RATE
+            if not data_quality_ok:
+                for card in [accepted, rejected] + [
+                    c for sc in strategy_cards.values() for c in sc.values()
+                ]:
+                    if card.get("n"):
+                        card["status"] = "DATA_QUALITY"
             out[str(horizon)] = {
                 "accepted": accepted,
                 "rejected": rejected,
                 "strategies": strategy_cards,
+                "n_excluded_by_reason": n_excl,
+                "exclusion_rate": exclusion_rate,
+                "data_quality_ok": data_quality_ok,
             }
         return out
 

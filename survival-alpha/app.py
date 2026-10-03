@@ -61,6 +61,17 @@ def require_admin(token: Optional[str]) -> None:
         raise HTTPException(401, "unauthorized")
 
 
+def require_reader(token: Optional[str]) -> None:
+    """
+    GET routes only. Accepts PAPER_ADMIN_TOKEN or, if configured, the
+    read-only PAPER_READ_TOKEN. The read token never authorizes a POST.
+    """
+    read_expected = os.getenv("PAPER_READ_TOKEN", "")
+    if read_expected and token and hmac.compare_digest(token, read_expected):
+        return
+    require_admin(token)
+
+
 def jupiter_key() -> str:
     key = os.getenv("JUPITER_API_KEY", "")
     if not key:
@@ -330,7 +341,8 @@ def quote_drift(signal: QuoteSignal, x_paper_token: Optional[str] = Header(defau
 
 
 @app.get("/paper/quote-drift/summary")
-def quote_summary(limit: int = 5000):
+def quote_summary(limit: int = 5000, x_paper_token: Optional[str] = Header(default=None)):
+    require_reader(x_paper_token)
     limit = min(max(limit, 1), 20000)
     with engine.begin() as cx:
         rows = cx.execute(text("""
@@ -448,13 +460,13 @@ def _fetch_wallet(wallet, days, page_limit, max_pages):
 
 @app.get("/profit-team/manifest")
 def profit_team_manifest(x_paper_token: Optional[str] = Header(default=None)):
-    require_admin(x_paper_token)
+    require_reader(x_paper_token)
     return profit_team.manifest()
 
 
 @app.get("/profit-team/dashboard")
 def profit_team_dashboard(x_paper_token: Optional[str] = Header(default=None)):
-    require_admin(x_paper_token)
+    require_reader(x_paper_token)
     return profit_team.dashboard()
 
 
@@ -494,14 +506,14 @@ def create_profit_hypothesis(req: ProfitHypothesisRequest,
 @app.get("/profit-team/hypotheses")
 def list_profit_hypotheses(limit: int = 200, status: Optional[str] = None,
                            x_paper_token: Optional[str] = Header(default=None)):
-    require_admin(x_paper_token)
+    require_reader(x_paper_token)
     return {"hypotheses": profit_team.list(limit=limit, status=status)}
 
 
 @app.get("/profit-team/hypotheses/{hypothesis_id}")
 def get_profit_hypothesis(hypothesis_id: int,
                           x_paper_token: Optional[str] = Header(default=None)):
-    require_admin(x_paper_token)
+    require_reader(x_paper_token)
     h = profit_team.get(hypothesis_id)
     if not h:
         raise HTTPException(404, "hypothesis not found")
@@ -524,7 +536,7 @@ async def review_profit_hypothesis(hypothesis_id: int,
 
 @app.get("/grok/status")
 def grok_status(x_paper_token: Optional[str] = Header(default=None)):
-    require_admin(x_paper_token)
+    require_reader(x_paper_token)
     return {
         "mode": "research-only",
         "grok": grok_team.status(),
@@ -534,7 +546,7 @@ def grok_status(x_paper_token: Optional[str] = Header(default=None)):
 
 @app.get("/grok/context/{role}")
 def grok_context(role: str, x_paper_token: Optional[str] = Header(default=None)):
-    require_admin(x_paper_token)
+    require_reader(x_paper_token)
     try:
         return {
             "mode": "research-only",
@@ -567,7 +579,7 @@ async def grok_run(role: str, req: GrokRunRequest,
 
 @app.get("/grok/runs")
 def grok_runs(limit: int = 50, x_paper_token: Optional[str] = Header(default=None)):
-    require_admin(x_paper_token)
+    require_reader(x_paper_token)
     return {
         "mode": "research-only",
         "runs": grok_team.recent_runs(limit),
@@ -577,7 +589,7 @@ def grok_runs(limit: int = 50, x_paper_token: Optional[str] = Header(default=Non
 
 @app.get("/team/manifest")
 def team_manifest(x_paper_token: Optional[str] = Header(default=None)):
-    require_admin(x_paper_token)
+    require_reader(x_paper_token)
     return {
         "mode": "paper-only",
         "agents": agent_team.manifest(),
@@ -587,20 +599,24 @@ def team_manifest(x_paper_token: Optional[str] = Header(default=None)):
 
 @app.get("/team/channel-scorecards")
 def team_channel_scorecards(x_paper_token: Optional[str] = Header(default=None)):
-    require_admin(x_paper_token)
+    require_reader(x_paper_token)
     return {
         "mode": "paper-only",
         "channels": agent_team.channel_scorecards(),
+        "assumptions": realtime.firm_book.assumptions(realtime.notional),
+        "review_rule": "status REVIEW = capped profit factor or zero losses: never a pass",
         "promotion_rule": "n>=20, PF>1.3, positive 95% bootstrap lower bound",
     }
 
 
 @app.get("/team/strategy-scorecards")
 def team_strategy_scorecards(x_paper_token: Optional[str] = Header(default=None)):
-    require_admin(x_paper_token)
+    require_reader(x_paper_token)
     return {
         "mode": "paper-only",
         "strategies": agent_team.strategy_scorecards(),
+        "assumptions": realtime.firm_book.assumptions(realtime.notional),
+        "review_rule": "status REVIEW = capped profit factor or zero losses: never a pass",
         "promotion_rule": "forward outcomes only",
     }
 
@@ -608,17 +624,19 @@ def team_strategy_scorecards(x_paper_token: Optional[str] = Header(default=None)
 
 @app.get("/team/horizon-scorecards")
 def team_horizon_scorecards(x_paper_token: Optional[str] = Header(default=None)):
-    require_admin(x_paper_token)
+    require_reader(x_paper_token)
     return {
         "mode": "paper-only",
         "horizons": agent_team.horizon_scorecards(),
+        "assumptions": realtime.firm_book.assumptions(realtime.notional),
+        "review_rule": "status REVIEW = capped profit factor or zero losses: never a pass",
         "principle": "promote holding horizons from forward executable markouts, not screenshots",
     }
 
 
 @app.get("/team/diagnostics")
 def team_diagnostics(x_paper_token: Optional[str] = Header(default=None)):
-    require_admin(x_paper_token)
+    require_reader(x_paper_token)
     return {
         "mode": "paper-only",
         "diagnostics": agent_team.diagnostics(),
@@ -628,7 +646,7 @@ def team_diagnostics(x_paper_token: Optional[str] = Header(default=None)):
 
 @app.get("/firm/status")
 def firm_status(x_paper_token: Optional[str] = Header(default=None)):
-    require_admin(x_paper_token)
+    require_reader(x_paper_token)
     return {
         "mode": "paper-only",
         "portfolio": realtime.firm_book.summary(),
@@ -648,7 +666,7 @@ def firm_status(x_paper_token: Optional[str] = Header(default=None)):
 @app.get("/firm/positions")
 def firm_positions(limit: int = 200,
                    x_paper_token: Optional[str] = Header(default=None)):
-    require_admin(x_paper_token)
+    require_reader(x_paper_token)
     limit = min(max(limit, 1), 1000)
     with engine.begin() as cx:
         rows = cx.execute(text("""
@@ -661,7 +679,7 @@ def firm_positions(limit: int = 200,
 @app.get("/firm/markouts")
 def firm_markouts(horizon_seconds: Optional[int] = None, limit: int = 1000,
                   x_paper_token: Optional[str] = Header(default=None)):
-    require_admin(x_paper_token)
+    require_reader(x_paper_token)
     limit = min(max(limit, 1), 5000)
     query = """
         SELECT m.*, c.mint, c.source, c.source_detail, c.decision,
@@ -681,7 +699,7 @@ def firm_markouts(horizon_seconds: Optional[int] = None, limit: int = 1000,
 
 @app.get("/realtime/status")
 def realtime_status(x_paper_token: Optional[str] = Header(default=None)):
-    require_admin(x_paper_token)
+    require_reader(x_paper_token)
     with engine.begin() as cx:
         counts = {
             "candidates": int(cx.execute(text("SELECT COUNT(*) FROM realtime_candidate")).scalar_one()),
@@ -695,9 +713,23 @@ def realtime_status(x_paper_token: Optional[str] = Header(default=None)):
                 "SELECT COUNT(*) FROM watch_wallet WHERE enabled"
             )).scalar_one()),
         }
+        counts["episode_primary"] = int(cx.execute(text(
+            "SELECT COUNT(*) FROM realtime_candidate WHERE episode_primary=1"
+        )).scalar_one())
+        # Firm-level unique decisions (one per token move across sources):
+        # the only count that may be compared with the 300-candidate gate.
+        counts["firm_primary"] = int(cx.execute(text(
+            "SELECT COUNT(*) FROM realtime_candidate WHERE firm_primary=1"
+        )).scalar_one())
+    idle_reasons = realtime.idle_reasons()
     return {
         "mode": "paper-only",
         "realtime_enabled": realtime.enabled,
+        "engine_running": realtime.running,
+        "idle_reasons": idle_reasons,
+        "degraded_reasons": realtime.degraded_reasons(),
+        "markouts": realtime.firm_book.markout_diagnostics(),
+        "assumptions": realtime.firm_book.assumptions(realtime.notional),
         "live_execution_available": False,
         "wallet_key_loaded": False,
         "sources": {
@@ -713,7 +745,7 @@ def realtime_status(x_paper_token: Optional[str] = Header(default=None)):
 @app.get("/realtime/candidates")
 def realtime_candidates(limit: int = 100, decision: Optional[str] = None,
                         x_paper_token: Optional[str] = Header(default=None)):
-    require_admin(x_paper_token)
+    require_reader(x_paper_token)
     limit = min(max(limit, 1), 1000)
     query = """
         SELECT id, created_at_utc, updated_at_utc, mint, source, source_detail,
@@ -721,7 +753,11 @@ def realtime_candidates(limit: int = 100, decision: Optional[str] = None,
                buy_out_amount, sellback_out_lamports, roundtrip_bps,
                drift_500_bps, price_impact, organic_score, strategy_score,
                microstructure_json, strategy_votes_json, decision, reason,
-               paper_entered, outcome_5m_bps, outcome_checked_at_utc
+               paper_entered, outcome_5m_bps, outcome_5m_status,
+               outcome_checked_at_utc, episode_key, episode_primary,
+               accepted_later_at_utc, firm_episode_key, firm_primary,
+               decision_at_utc, entry_quote_at_utc, entry_latency_ms,
+               pre_decision_buy_out_amount
         FROM realtime_candidate
     """
     params = {"limit": limit}
@@ -737,12 +773,13 @@ def realtime_candidates(limit: int = 100, decision: Optional[str] = None,
 
 @app.get("/realtime/evaluation")
 def realtime_evaluation(x_paper_token: Optional[str] = Header(default=None)):
-    require_admin(x_paper_token)
+    require_reader(x_paper_token)
     with engine.begin() as cx:
         rows = cx.execute(text("""
             SELECT decision, outcome_5m_bps
             FROM realtime_candidate
             WHERE outcome_5m_bps IS NOT NULL
+              AND firm_primary=1
         """)).mappings().all()
 
     groups = {}
@@ -783,12 +820,13 @@ def realtime_evaluation(x_paper_token: Optional[str] = Header(default=None)):
 
 @app.get("/realtime/strategy-evaluation")
 def realtime_strategy_evaluation(x_paper_token: Optional[str] = Header(default=None)):
-    require_admin(x_paper_token)
+    require_reader(x_paper_token)
     with engine.begin() as cx:
         rows = cx.execute(text("""
             SELECT strategy_votes_json, outcome_5m_bps
             FROM realtime_candidate
             WHERE outcome_5m_bps IS NOT NULL
+              AND firm_primary=1
               AND strategy_votes_json IS NOT NULL
         """)).mappings().all()
 
@@ -845,7 +883,7 @@ def realtime_strategy_evaluation(x_paper_token: Optional[str] = Header(default=N
 
 @app.get("/realtime/positions")
 def realtime_positions(x_paper_token: Optional[str] = Header(default=None)):
-    require_admin(x_paper_token)
+    require_reader(x_paper_token)
     with engine.begin() as cx:
         rows = cx.execute(text("""
             SELECT * FROM paper_position ORDER BY id DESC LIMIT 200
@@ -953,7 +991,7 @@ def social_ingest(event: SocialEvent, x_paper_token: Optional[str] = Header(defa
 
 @app.get("/paper/social/signal/{mint}")
 def social_signal(mint: str, x_paper_token: Optional[str] = Header(default=None)):
-    require_admin(x_paper_token)
+    require_reader(x_paper_token)
     with engine.begin() as cx:
         rows = cx.execute(text("""
             SELECT published_at_utc, source, author_id, content_fingerprint,
@@ -977,7 +1015,7 @@ def social_signal(mint: str, x_paper_token: Optional[str] = Header(default=None)
 
 @app.get("/paper/social/recent")
 def social_recent(limit: int = 100, x_paper_token: Optional[str] = Header(default=None)):
-    require_admin(x_paper_token)
+    require_reader(x_paper_token)
     limit = min(max(limit, 1), 1000)
     with engine.begin() as cx:
         rows = cx.execute(text("""
@@ -1053,7 +1091,7 @@ def backfill(req: BackfillRequest, x_paper_token: Optional[str] = Header(default
 
 @app.get("/paper/export/quote-drift.csv")
 def export_quote_csv(x_paper_token: Optional[str] = Header(default=None)):
-    require_admin(x_paper_token)
+    require_reader(x_paper_token)
     with engine.begin() as cx:
         rows = cx.execute(text("""
             SELECT observed_at_utc, signal_id, mint, input_mint, amount_lamports,

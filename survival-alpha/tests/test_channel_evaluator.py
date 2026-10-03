@@ -22,6 +22,33 @@ class ChannelEvaluatorTests(unittest.TestCase):
         card = evaluate_outcomes([100, 80, -20], min_samples=20)
         self.assertEqual(card.status, "COLLECT")
 
+    def test_no_losses_caps_profit_factor_and_stays_json_safe(self):
+        import json
+        from channel_evaluator import PROFIT_FACTOR_CAP
+        card = evaluate_outcomes([100, 200, 300] * 10, min_samples=20, min_profit_factor=1.3)
+        self.assertEqual(card.profit_factor, PROFIT_FACTOR_CAP)
+        self.assertTrue(card.profit_factor_capped)
+        self.assertEqual(card.status, "REVIEW")  # capped PF is a review flag, never a pass
+        json.dumps(card.to_dict(), allow_nan=False)
+
+    def test_normal_profit_factor_not_flagged(self):
+        card = evaluate_outcomes([100, -50, 200], min_samples=1)
+        self.assertFalse(card.profit_factor_capped)
+        self.assertAlmostEqual(card.profit_factor, 6.0)
+
+
+
+class ReviewFlagTests(unittest.TestCase):
+    def test_zero_losses_or_capped_pf_is_review_not_promote(self):
+        from channel_evaluator import evaluate_outcomes
+        card = evaluate_outcomes([100.0] * 40, min_samples=20)
+        self.assertTrue(card.profit_factor_capped)
+        self.assertEqual(card.status, "REVIEW")
+        card = evaluate_outcomes([100.0] * 39 + [0.0], min_samples=20)
+        self.assertEqual(card.status, "REVIEW")
+        card = evaluate_outcomes([100.0, -40.0, 60.0] * 10, min_samples=20)
+        self.assertEqual(card.status, "PROMOTE")
+
 
 if __name__ == "__main__":
     unittest.main()

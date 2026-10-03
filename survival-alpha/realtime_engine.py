@@ -19,7 +19,7 @@ from telegram_parser import TelegramCall, parse_telegram_message
 from telegram_signal_agent import TelegramSignalAgent
 from capital_allocator import FirmCapitalAllocator
 from firm_risk import FirmRiskGovernor
-from firm_book import FirmPortfolioBook
+from firm_book import NO_ROUTE, FirmPortfolioBook, QuoteUnavailable, classify_quote_exception
 
 log = logging.getLogger("survival-alpha.realtime")
 
@@ -91,7 +91,17 @@ def ensure_realtime_tables(engine) -> None:
             reason TEXT,
             paper_entered {bool_type} NOT NULL DEFAULT {bool_false},
             outcome_5m_bps DOUBLE PRECISION,
+            outcome_5m_status TEXT,
             outcome_checked_at_utc TEXT,
+            episode_key TEXT,
+            episode_primary INTEGER NOT NULL DEFAULT 0,
+            accepted_later_at_utc TEXT,
+            firm_episode_key TEXT,
+            firm_primary INTEGER NOT NULL DEFAULT 0,
+            decision_at_utc TEXT,
+            entry_quote_at_utc TEXT,
+            entry_latency_ms DOUBLE PRECISION,
+            pre_decision_buy_out_amount TEXT,
             UNIQUE(source, source_signature, mint)
         )
         """))
@@ -120,22 +130,44 @@ def ensure_realtime_tables(engine) -> None:
             created_at_utc TEXT NOT NULL
         )
         """))
-        # Lightweight forward-compatible migrations for already-created paper DBs.
-        for ddl in (
-            "ALTER TABLE realtime_candidate ADD COLUMN outcome_5m_bps DOUBLE PRECISION",
-            "ALTER TABLE realtime_candidate ADD COLUMN outcome_checked_at_utc TEXT",
-            "ALTER TABLE realtime_candidate ADD COLUMN strategy_score DOUBLE PRECISION",
-            "ALTER TABLE realtime_candidate ADD COLUMN microstructure_json TEXT",
-            "ALTER TABLE realtime_candidate ADD COLUMN strategy_votes_json TEXT",
-            "ALTER TABLE realtime_candidate ADD COLUMN signal_published_at_utc TEXT",
-            "ALTER TABLE realtime_candidate ADD COLUMN signal_age_ms DOUBLE PRECISION",
-            "ALTER TABLE realtime_candidate ADD COLUMN market_phase TEXT",
-            "ALTER TABLE realtime_candidate ADD COLUMN market_data_json TEXT",
-        ):
-            try:
+    # Lightweight forward-compatible migrations for already-created paper DBs.
+    # One transaction per ALTER: on Postgres a failed ALTER (column exists)
+    # aborts the transaction, which silently skipped every later migration.
+    for ddl in (
+        "ALTER TABLE realtime_candidate ADD COLUMN outcome_5m_bps DOUBLE PRECISION",
+        "ALTER TABLE realtime_candidate ADD COLUMN outcome_checked_at_utc TEXT",
+        "ALTER TABLE realtime_candidate ADD COLUMN strategy_score DOUBLE PRECISION",
+        "ALTER TABLE realtime_candidate ADD COLUMN microstructure_json TEXT",
+        "ALTER TABLE realtime_candidate ADD COLUMN strategy_votes_json TEXT",
+        "ALTER TABLE realtime_candidate ADD COLUMN signal_published_at_utc TEXT",
+        "ALTER TABLE realtime_candidate ADD COLUMN signal_age_ms DOUBLE PRECISION",
+        "ALTER TABLE realtime_candidate ADD COLUMN market_phase TEXT",
+        "ALTER TABLE realtime_candidate ADD COLUMN market_data_json TEXT",
+        "ALTER TABLE realtime_candidate ADD COLUMN outcome_5m_status TEXT",
+        "ALTER TABLE realtime_candidate ADD COLUMN episode_key TEXT",
+        "ALTER TABLE realtime_candidate ADD COLUMN episode_primary INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE realtime_candidate ADD COLUMN accepted_later_at_utc TEXT",
+        "ALTER TABLE realtime_candidate ADD COLUMN firm_episode_key TEXT",
+        "ALTER TABLE realtime_candidate ADD COLUMN firm_primary INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE realtime_candidate ADD COLUMN decision_at_utc TEXT",
+        "ALTER TABLE realtime_candidate ADD COLUMN entry_quote_at_utc TEXT",
+        "ALTER TABLE realtime_candidate ADD COLUMN entry_latency_ms DOUBLE PRECISION",
+        "ALTER TABLE realtime_candidate ADD COLUMN pre_decision_buy_out_amount TEXT",
+    ):
+        try:
+            with engine.begin() as cx:
                 cx.execute(text(ddl))
-            except Exception:
-                pass
+        except Exception:
+            pass
+
+
+def _phase_bucket(market_phase: Optional[str]) -> str:
+    phase = (market_phase or "").lower()
+    if "bonding" in phase:
+        return "bonding"
+    if phase in {"graduated_or_external", "jupiter"} or "graduat" in phase:
+        return "graduated"
+    return ""
 
 
 @dataclass
@@ -171,6 +203,9 @@ class RealtimeEngine:
         self.organic_min = _env_float("JUPITER_ORGANIC_MIN", 50.0)
         self.organic_poll_secs = _env_float("JUPITER_ORGANIC_POLL_SECS", 20.0)
         self.candidate_cooldown_secs = _env_float("CANDIDATE_COOLDOWN_SECS", 60.0)
+        # A token keeps one measured row per (source, detail, mint, market phase)
+        # episode; a new episode starts after this much silence or on migration.
+        self.episode_gap_secs = _env_float("CANDIDATE_EPISODE_GAP_SECS", 3600.0)
         self.position_poll_secs = _env_float("PAPER_POSITION_POLL_SECS", 5.0)
         self.paper_max_hold_secs = _env_float("PAPER_MAX_HOLD_SECS", 300.0)
         self.auto_paper = _env_bool("AUTO_PAPER", False)
@@ -203,19 +238,50 @@ class RealtimeEngine:
         self.capital_allocator = FirmCapitalAllocator(self.engine)
         self.firm_risk = FirmRiskGovernor(self.engine)
 
-    async def start(self) -> None:
+    def idle_reasons(self) -> list[str]:
+        """Blocking reasons: any entry here means no candidates are ingested."""
+        reasons = []
         if not self.enabled:
-            log.warning("REALTIME_ENABLED=false; realtime engine is idle")
-            return
+            reasons.append("REALTIME_ENABLED is false")
         if not self.jupiter_key:
-            log.error("JUPITER_API_KEY missing; realtime engine cannot score candidates")
+            reasons.append("JUPITER_API_KEY missing: engine cannot quote or score candidates")
+        return reasons
+
+    def degraded_reasons(self) -> list[str]:
+        """Non-blocking gaps that silently weaken or bias measurements."""
+        reasons = []
+        if not self.helius_rpc_url:
+            reasons.append("HELIUS_API_KEY/HELIUS_RPC_URL missing: no microstructure snapshot")
+        if not self.helius_key:
+            reasons.append("HELIUS_API_KEY missing: watched-wallet feed not started")
+        if not (os.getenv("SOLANA_RPC_URL", "").strip() or self.helius_rpc_url):
+            reasons.append(
+                "SOLANA_RPC_URL/HELIUS_API_KEY missing: Pump quote sidecar not started; "
+                "bonding-curve tokens fall back to Jupiter quotes"
+            )
+        if not self.pumpportal_key:
+            reasons.append("PUMPPORTAL_API_KEY missing: PumpPortal migration feed not started (POST_MIGRATION_SURVIVOR cannot pass)")
+        cfg = getattr(self.firm_book, "last_config_error", None)
+        if cfg:
+            reasons.append(f"markout quotes hit CONFIG_ERROR (401/403/bad request), marks end MARK_FAILED: {cfg}")
+        return reasons
+
+    @property
+    def running(self) -> bool:
+        return any(not t.done() for t in self._tasks)
+
+    async def start(self) -> None:
+        idle = self.idle_reasons()
+        if idle:
+            log.warning("realtime engine is idle: %s", "; ".join(idle))
             return
+        for reason in self.degraded_reasons():
+            log.warning("realtime engine degraded: %s", reason)
 
         self._http = httpx.AsyncClient(timeout=12.0)
         self._tasks = [
             asyncio.create_task(self._organic_loop(), name="jupiter-organic"),
             asyncio.create_task(self._position_loop(), name="paper-positions"),
-            asyncio.create_task(self._counterfactual_loop(), name="counterfactuals"),
             asyncio.create_task(self._firm_book_loop(), name="firm-book"),
         ]
         if self.helius_key:
@@ -285,6 +351,8 @@ class RealtimeEngine:
                 SELECT outcome_5m_bps FROM realtime_candidate
                 WHERE source='telegram'
                   AND source_detail=:channel
+                  AND episode_primary=1
+                  AND episode_key NOT LIKE '%#accept'
                   AND outcome_5m_bps IS NOT NULL
                 ORDER BY id
             """), {"channel": channel}).scalars().all()
@@ -402,8 +470,31 @@ class RealtimeEngine:
         q["phase"] = "graduated_or_external"
         return q
 
-    async def _market_sell_quote(self, mint: str, token_amount: int) -> dict[str, Any]:
+    async def _market_sell_quote(self, mint: str, token_amount: int,
+                                 entry_phase: Optional[str] = None) -> dict[str, Any]:
+        """
+        Exit on the venue the entry used: if the entry was quoted on Jupiter
+        (market_phase graduated_or_external), Jupiter IS the confirmed venue,
+        so a Jupiter no-route is a genuine NO_ROUTE even with no sidecar (a
+        graduated token cannot return to the bonding curve). Otherwise:
+
+        Sell quote on the token's actual venue. Jupiter is only the confirmed
+        venue when the sidecar says the token is graduated / unsupported, or
+        that no bonding curve exists. If the sidecar errored, timed out or is
+        down, a Jupiter "no route" is NOT evidence of an unsellable token (it
+        may just be a bonding-curve token Jupiter can't route), so it raises
+        QuoteUnavailable, which is classified TRANSIENT and never booked -100%.
+        """
         assert self._http is not None
+        if _phase_bucket(entry_phase) == "graduated":
+            q = await self._jupiter_quote(mint, WSOL_MINT, token_amount)
+            q["_market"] = "jupiter"
+            q["phase"] = "graduated_or_external"
+            q["_venue_confirmed"] = True
+            q["_venue_basis"] = "entry_venue"
+            return q
+        venue_confirmed = False
+        sidecar_err = ""
         try:
             r = await self._http.get(
                 f"{self.pump_quoter_url}/sell-quote",
@@ -421,12 +512,34 @@ class RealtimeEngine:
                             float(p.get("sellImpactBps") or 0) / 10_000.0
                         ),
                     }
-        except Exception:
+                if p.get("phase") in ("graduated", "unsupported_quote"):
+                    venue_confirmed = True
+                else:
+                    sidecar_err = f"sidecar returned unknown phase {p.get('phase')!r}"
+            elif r.status_code == 404 and "bonding curve account not found" in (r.text or "").lower():
+                venue_confirmed = True  # not a Pump bonding-curve token
+            else:
+                sidecar_err = f"sidecar HTTP {r.status_code}"
+        except Exception as exc:
+            sidecar_err = f"sidecar unavailable: {type(exc).__name__}"
             log.debug("Pump sidecar sell quote unavailable for %s", mint, exc_info=True)
 
-        q = await self._jupiter_quote(mint, WSOL_MINT, token_amount)
+        try:
+            q = await self._jupiter_quote(mint, WSOL_MINT, token_amount)
+        except Exception as exc:
+            if not venue_confirmed and classify_quote_exception(exc) == NO_ROUTE:
+                raise QuoteUnavailable(f"{sidecar_err}; Jupiter fallback no route: {exc}"[:300]) from exc
+            raise
+        if not venue_confirmed:
+            try:
+                out = int(q.get("outAmount") or 0)
+            except (TypeError, ValueError):
+                out = 0
+            if out <= 0:
+                raise QuoteUnavailable(f"{sidecar_err}; Jupiter fallback returned zero outAmount")
         q["_market"] = "jupiter"
         q["phase"] = "graduated_or_external"
+        q["_venue_confirmed"] = venue_confirmed
         return q
 
 
@@ -519,9 +632,27 @@ class RealtimeEngine:
                 if passing else "; ".join(verdict.reasons)
             )
 
+            # No look-ahead: the decision above used q500 drift and the Helius
+            # snapshot, which were not known at q0 time. The paper entry is the
+            # first executable buy quote requested AFTER the decision, and the
+            # markout clock starts when that quote arrived.
+            decision_at_utc = _now_utc()
+            t_decision = time.time()
+            entry_out = 0
+            entry_err = ""
+            try:
+                q_entry = await self._market_buy_quote(event.mint, self.notional)
+                entry_out = int(q_entry.get("outAmount") or 0)
+            except Exception as exc:
+                entry_err = f"{type(exc).__name__}: {exc}"[:200]
+            entry_quote_at_utc = _now_utc()
+            entry_latency_ms = (time.time() - t_decision) * 1000.0
+            if entry_out <= 0:
+                reason = f"{reason}; no executable entry quote after decision ({entry_err or 'zero outAmount'})"
+
             cid = self._persist_candidate(
                 event,
-                str(out0),
+                str(entry_out) if entry_out > 0 else None,
                 str(sell_lamports),
                 roundtrip_bps,
                 drift500,
@@ -540,6 +671,10 @@ class RealtimeEngine:
                     "solNeededToGraduate": q0.get("solNeededToGraduate"),
                     "channelPrior": channel_prior if event.source == "telegram" else None,
                 },
+                decision_at_utc=decision_at_utc,
+                entry_quote_at_utc=entry_quote_at_utc if entry_out > 0 else None,
+                entry_latency_ms=entry_latency_ms,
+                pre_decision_buy_out=str(out0),
             )
 
             if decision == "ACTIONABLE_PAPER":
@@ -574,6 +709,10 @@ class RealtimeEngine:
         organic_score: Optional[float] = None,
         market_phase: str = "",
         market_data: Optional[dict] = None,
+        decision_at_utc: Optional[str] = None,
+        entry_quote_at_utc: Optional[str] = None,
+        entry_latency_ms: Optional[float] = None,
+        pre_decision_buy_out: Optional[str] = None,
     ) -> int:
         row = {
             "created_at_utc": _now_utc(),
@@ -600,8 +739,18 @@ class RealtimeEngine:
             "market_data_json": json.dumps(market_data or {}, separators=(",", ":")),
             "decision": decision,
             "reason": reason,
+            "decision_at_utc": decision_at_utc,
+            "entry_quote_at_utc": entry_quote_at_utc,
+            "entry_latency_ms": entry_latency_ms,
+            "pre_decision_buy_out_amount": pre_decision_buy_out,
         }
         with self.engine.begin() as cx:
+            episode_key, primary, upgraded_from = self._assign_episode(cx, row)
+            row["episode_key"] = episode_key
+            row["episode_primary"] = 1 if primary else 0
+            firm_key, firm_primary = self._assign_firm_episode(cx, row)
+            row["firm_episode_key"] = firm_key
+            row["firm_primary"] = 1 if firm_primary else 0
             result = cx.execute(text("""
                 INSERT INTO realtime_candidate (
                     created_at_utc, updated_at_utc, mint, source, source_detail,
@@ -609,14 +758,20 @@ class RealtimeEngine:
                     buy_out_amount, sellback_out_lamports, roundtrip_bps,
                     drift_500_bps, price_impact, organic_score, strategy_score,
                     microstructure_json, strategy_votes_json, signal_published_at_utc,
-                    signal_age_ms, market_phase, market_data_json, decision, reason
+                    signal_age_ms, market_phase, market_data_json, decision, reason,
+                    episode_key, episode_primary, firm_episode_key, firm_primary,
+                    decision_at_utc, entry_quote_at_utc, entry_latency_ms,
+                    pre_decision_buy_out_amount
                 ) VALUES (
                     :created_at_utc, :updated_at_utc, :mint, :source, :source_detail,
                     :source_signature, :source_wallet, :source_slot, :notional_lamports,
                     :buy_out_amount, :sellback_out_lamports, :roundtrip_bps,
                     :drift_500_bps, :price_impact, :organic_score, :strategy_score,
                     :microstructure_json, :strategy_votes_json, :signal_published_at_utc,
-                    :signal_age_ms, :market_phase, :market_data_json, :decision, :reason
+                    :signal_age_ms, :market_phase, :market_data_json, :decision, :reason,
+                    :episode_key, :episode_primary, :firm_episode_key, :firm_primary,
+                    :decision_at_utc, :entry_quote_at_utc, :entry_latency_ms,
+                    :pre_decision_buy_out_amount
                 )
             """), row)
             cid = getattr(result, "lastrowid", None)
@@ -624,7 +779,130 @@ class RealtimeEngine:
                 cid = cx.execute(text(
                     "SELECT id FROM realtime_candidate WHERE mint=:mint ORDER BY id DESC LIMIT 1"
                 ), {"mint": event.mint}).scalar_one()
+            if upgraded_from is not None:
+                # Audit annotation only. It is written after the fact, so it
+                # must never be used to filter or relabel the rejected set.
+                cx.execute(text("""
+                    UPDATE realtime_candidate SET accepted_later_at_utc=:t
+                    WHERE id=:id AND accepted_later_at_utc IS NULL
+                """), {"t": row["created_at_utc"], "id": upgraded_from})
         return int(cid)
+
+    ACCEPT_UPGRADE_SUFFIX = "#accept"
+
+    def _assign_episode(self, cx, row: dict[str, Any]) -> tuple[str, bool, Optional[int]]:
+        """
+        De-duplicate re-polls of the same signal so a token counts once per
+        episode, not once per cooldown. Episode = (source, detail, mint,
+        market-phase bucket, first-seen time); a new one starts after
+        CANDIDATE_EPISODE_GAP_SECS without a sighting or on a phase change
+        (e.g. bonding curve -> migrated). Different sources/wallets/channels
+        stay separate per-source signals (see _assign_firm_episode for the
+        cross-source firm-level dedupe).
+
+        Only measurable rows (executable entry quote) can be the primary, and
+        the first measurable row stays the primary for life: its decision-time
+        label and its markouts are never deleted or relabelled. If a later row
+        in the same episode is ACTIONABLE_PAPER while the primary was not, the
+        acceptance is recorded as its OWN episode (key + "#accept") measured
+        from its own decision time, and the original primary gets an audit-only
+        accepted_later_at_utc. Returns (episode_key, is_primary, upgraded_from_id).
+        """
+        from datetime import datetime, timezone
+
+        bucket = _phase_bucket(row["market_phase"])
+        prev = cx.execute(text("""
+            SELECT created_at_utc, market_phase, episode_key
+            FROM realtime_candidate
+            WHERE mint=:mint AND source=:source
+              AND COALESCE(source_detail, '')=:detail
+              AND episode_key IS NOT NULL
+            ORDER BY id DESC
+            LIMIT 1
+        """), {
+            "mint": row["mint"], "source": row["source"],
+            "detail": row["source_detail"] or "",
+        }).mappings().first()
+
+        episode_key = None
+        if prev:
+            gap = self._age_secs(prev["created_at_utc"])
+            # key = source|detail|mint|bucket|first_seen[#accept]; parse from the right.
+            parts = str(prev["episode_key"]).rsplit("|", 2)
+            prev_bucket = parts[1] if len(parts) == 3 else ""
+            same_phase = not bucket or not prev_bucket or bucket == prev_bucket
+            if gap <= self.episode_gap_secs and same_phase:
+                episode_key = str(prev["episode_key"])
+                if bucket and not prev_bucket:
+                    episode_key = None  # first priced row decides the phase; restart cleanly
+        if episode_key is None:
+            episode_key = "|".join([
+                str(row["source"]), str(row["source_detail"] or ""), str(row["mint"]),
+                bucket, str(row["created_at_utc"]),
+            ])
+
+        if row["buy_out_amount"] is None:
+            return episode_key, False, None
+        current = cx.execute(text("""
+            SELECT id, decision FROM realtime_candidate
+            WHERE episode_key=:k AND episode_primary=1
+            ORDER BY id LIMIT 1
+        """), {"k": episode_key}).mappings().first()
+        if current is None:
+            return episode_key, True, None
+        if (
+            row["decision"] == "ACTIONABLE_PAPER"
+            and current["decision"] != "ACTIONABLE_PAPER"
+            and not episode_key.endswith(self.ACCEPT_UPGRADE_SUFFIX)
+        ):
+            return episode_key + self.ACCEPT_UPGRADE_SUFFIX, True, int(current["id"])
+        return episode_key, False, None
+
+    def _assign_firm_episode(self, cx, row: dict[str, Any]) -> tuple[str, bool]:
+        """
+        Firm-level dedupe across sources/wallets/channels: one token move is
+        one firm sample. Key = mint|phase bucket|first_seen (any source), reused
+        while sightings keep arriving within CANDIDATE_EPISODE_GAP_SECS. The
+        firm primary is the first measurable row and is fixed at first sight
+        (an ACCEPT_UPGRADE never takes it). Pooled scorecards and any firm
+        count toward the 300 gate use one row per firm episode.
+        """
+        bucket = _phase_bucket(row["market_phase"])
+        prev = cx.execute(text("""
+            SELECT created_at_utc, firm_episode_key
+            FROM realtime_candidate
+            WHERE mint=:mint AND firm_episode_key IS NOT NULL
+            ORDER BY id DESC
+            LIMIT 1
+        """), {"mint": row["mint"]}).mappings().first()
+        key = None
+        if prev and self._age_secs(prev["created_at_utc"]) <= self.episode_gap_secs:
+            parts = str(prev["firm_episode_key"]).rsplit("|", 2)
+            prev_bucket = parts[1] if len(parts) == 3 else ""
+            if not bucket or not prev_bucket or bucket == prev_bucket:
+                key = str(prev["firm_episode_key"])
+                if bucket and not prev_bucket:
+                    key = None
+        if key is None:
+            key = "|".join([str(row["mint"]), bucket, str(row["created_at_utc"])])
+        if row["buy_out_amount"] is None:
+            return key, False
+        has_primary = cx.execute(text("""
+            SELECT COUNT(*) FROM realtime_candidate
+            WHERE firm_episode_key=:k AND firm_primary=1
+        """), {"k": key}).scalar_one()
+        return key, not int(has_primary)
+
+    @staticmethod
+    def _age_secs(ts: Any) -> float:
+        from datetime import datetime, timezone
+        try:
+            dt = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return (datetime.now(timezone.utc) - dt).total_seconds()
+        except Exception:
+            return float("inf")
 
     async def _maybe_allocate_firm(
         self,
@@ -749,9 +1027,10 @@ class RealtimeEngine:
                 pid = cx.execute(text(
                     "SELECT id FROM paper_position WHERE candidate_id=:cid ORDER BY id DESC LIMIT 1"
                 ), {"cid": candidate_id}).scalar_one()
+            # Bound Python bool: BOOLEAN on Postgres, INTEGER 1 on SQLite.
             cx.execute(text(
-                "UPDATE realtime_candidate SET paper_entered=1, updated_at_utc=:u WHERE id=:id"
-            ), {"u": _now_utc(), "id": candidate_id})
+                "UPDATE realtime_candidate SET paper_entered=:t, updated_at_utc=:u WHERE id=:id"
+            ), {"t": True, "u": _now_utc(), "id": candidate_id})
 
         await self._telegram_send(
             f"🧪 PAPER ENTERED #{pid}\n{row['mint']}\n"
@@ -831,6 +1110,9 @@ class RealtimeEngine:
             await asyncio.sleep(self.position_poll_secs)
 
     async def _firm_book_loop(self) -> None:
+        # Also the counterfactual marker: every episode-primary candidate,
+        # accepted or rejected, is marked at identical horizons and the 300s
+        # markout is the single source of truth for outcome_5m_bps.
         while not self._stop.is_set():
             try:
                 await self.firm_book.mark_open(self._market_sell_quote)
@@ -839,54 +1121,6 @@ class RealtimeEngine:
                 log.exception("firm book loop error")
             await asyncio.sleep(5)
 
-
-    async def _counterfactual_loop(self) -> None:
-        """
-        Mark every candidate, accepted or rejected, at the same 5-minute horizon.
-        This is the anti-self-deception loop: filters are judged against what they rejected.
-        """
-        from datetime import datetime, timezone
-        while not self._stop.is_set():
-            try:
-                with self.engine.begin() as cx:
-                    rows = cx.execute(text("""
-                        SELECT id, created_at_utc, mint, notional_lamports, buy_out_amount
-                        FROM realtime_candidate
-                        WHERE buy_out_amount IS NOT NULL
-                          AND outcome_checked_at_utc IS NULL
-                        ORDER BY id
-                        LIMIT 200
-                    """)).mappings().all()
-
-                for row in rows:
-                    created = str(row["created_at_utc"])
-                    if created.endswith("Z"):
-                        created = created[:-1] + "+00:00"
-                    dt = datetime.fromisoformat(created)
-                    if dt.tzinfo is None:
-                        dt = dt.replace(tzinfo=timezone.utc)
-                    age = (datetime.now(timezone.utc) - dt).total_seconds()
-                    if age < 300:
-                        continue
-                    try:
-                        q = await self._market_sell_quote(
-                            row["mint"], int(row["buy_out_amount"])
-                        )
-                        value = int(q.get("outAmount") or 0)
-                        cost = int(row["notional_lamports"])
-                        outcome_bps = ((value / cost) - 1.0) * 10_000 if value else -10_000.0
-                        with self.engine.begin() as cx:
-                            cx.execute(text("""
-                                UPDATE realtime_candidate
-                                SET outcome_5m_bps=:o, outcome_checked_at_utc=:u,
-                                    updated_at_utc=:u
-                                WHERE id=:id
-                            """), {"o": outcome_bps, "u": _now_utc(), "id": row["id"]})
-                    except Exception:
-                        log.exception("counterfactual mark failed candidate=%s", row["id"])
-            except Exception:
-                log.exception("counterfactual loop error")
-            await asyncio.sleep(10)
 
     async def _organic_loop(self) -> None:
         while not self._stop.is_set():
