@@ -21,9 +21,11 @@ services:
       - key: PAPER_NOTIONAL_LAMPORTS
         value: "40000000"
       - key: AUTO_PAPER
-        value: "false"
+        value: "true"
       - key: MAX_OPEN_PAPER_POSITIONS
-        value: "3"
+        value: "20"
+      - key: PAPER_MAX_HOLD_SECS
+        value: "300"
       - key: MAX_ROUNDTRIP_COST_BPS
         value: "800"
       - key: MAX_ADVERSE_500_BPS
