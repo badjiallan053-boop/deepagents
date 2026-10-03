@@ -16,6 +16,7 @@ from sqlalchemy import create_engine, text
 
 from social_signal import compute_features, content_fingerprint
 from realtime_engine import RealtimeEngine
+from agent_team import AgentTeam
 
 JUPITER_ORDER_URL = "https://api.jup.ag/swap/v2/order"
 WSOL_MINT = "So11111111111111111111111111111111111111112"
@@ -30,6 +31,7 @@ elif DATABASE_URL.startswith("postgresql://") and "+psycopg" not in DATABASE_URL
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 app = FastAPI(title="Survival Alpha Paper Lab", version="0.2.0")
 realtime = RealtimeEngine(engine)
+agent_team = AgentTeam(engine)
 
 
 @app.on_event("startup")
@@ -408,6 +410,46 @@ def _fetch_wallet(wallet, days, page_limit, max_pages):
     return all_txs
 
 
+
+
+
+@app.get("/team/manifest")
+def team_manifest(x_paper_token: Optional[str] = Header(default=None)):
+    require_admin(x_paper_token)
+    return {
+        "mode": "paper-only",
+        "agents": agent_team.manifest(),
+        "live_execution_available": False,
+    }
+
+
+@app.get("/team/channel-scorecards")
+def team_channel_scorecards(x_paper_token: Optional[str] = Header(default=None)):
+    require_admin(x_paper_token)
+    return {
+        "mode": "paper-only",
+        "channels": agent_team.channel_scorecards(),
+        "promotion_rule": "n>=20, PF>1.3, positive 95% bootstrap lower bound",
+    }
+
+
+@app.get("/team/strategy-scorecards")
+def team_strategy_scorecards(x_paper_token: Optional[str] = Header(default=None)):
+    require_admin(x_paper_token)
+    return {
+        "mode": "paper-only",
+        "strategies": agent_team.strategy_scorecards(),
+        "promotion_rule": "forward outcomes only",
+    }
+
+
+@app.get("/team/diagnostics")
+def team_diagnostics(x_paper_token: Optional[str] = Header(default=None)):
+    require_admin(x_paper_token)
+    return {
+        "mode": "paper-only",
+        "diagnostics": agent_team.diagnostics(),
+    }
 
 
 @app.get("/realtime/status")
