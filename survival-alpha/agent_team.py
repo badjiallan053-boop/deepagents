@@ -68,6 +68,7 @@ class AgentTeam:
                 FROM realtime_candidate
                 WHERE source='telegram'
                   AND episode_primary=1
+                  AND episode_key NOT LIKE '%#accept'
                   AND outcome_5m_bps IS NOT NULL
                   AND source_detail IS NOT NULL
             """)).mappings().all()

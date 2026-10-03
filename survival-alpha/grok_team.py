@@ -258,6 +258,9 @@ class GrokTeam:
             "positive_rate": sum(1 for x in xs if x > 0) / n,
             "large_loss_rate": sum(1 for x in xs if x <= -2000) / n,
             "profit_factor": (gains / losses) if losses > 0 else (999.0 if gains > 0 else 0.0),
+            "profit_factor_capped": losses == 0 and gains > 0,
+            # Zero losses / capped PF means "check the model", never "edge".
+            "review_flag": "REVIEW" if losses == 0 else None,
         }
 
     def local_context(self, role: str) -> dict[str, Any]:

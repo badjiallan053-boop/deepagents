@@ -603,6 +603,8 @@ def team_channel_scorecards(x_paper_token: Optional[str] = Header(default=None))
     return {
         "mode": "paper-only",
         "channels": agent_team.channel_scorecards(),
+        "assumptions": realtime.firm_book.assumptions(realtime.notional),
+        "review_rule": "status REVIEW = capped profit factor or zero losses: never a pass",
         "promotion_rule": "n>=20, PF>1.3, positive 95% bootstrap lower bound",
     }
 
@@ -613,6 +615,8 @@ def team_strategy_scorecards(x_paper_token: Optional[str] = Header(default=None)
     return {
         "mode": "paper-only",
         "strategies": agent_team.strategy_scorecards(),
+        "assumptions": realtime.firm_book.assumptions(realtime.notional),
+        "review_rule": "status REVIEW = capped profit factor or zero losses: never a pass",
         "promotion_rule": "forward outcomes only",
     }
 
@@ -624,6 +628,8 @@ def team_horizon_scorecards(x_paper_token: Optional[str] = Header(default=None))
     return {
         "mode": "paper-only",
         "horizons": agent_team.horizon_scorecards(),
+        "assumptions": realtime.firm_book.assumptions(realtime.notional),
+        "review_rule": "status REVIEW = capped profit factor or zero losses: never a pass",
         "principle": "promote holding horizons from forward executable markouts, not screenshots",
     }
 
@@ -723,6 +729,7 @@ def realtime_status(x_paper_token: Optional[str] = Header(default=None)):
         "idle_reasons": idle_reasons,
         "degraded_reasons": realtime.degraded_reasons(),
         "markouts": realtime.firm_book.markout_diagnostics(),
+        "assumptions": realtime.firm_book.assumptions(realtime.notional),
         "live_execution_available": False,
         "wallet_key_loaded": False,
         "sources": {

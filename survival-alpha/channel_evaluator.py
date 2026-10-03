@@ -77,7 +77,12 @@ def evaluate_outcomes(
         and (not require_positive_ci or (lower is not None and lower > 0))
     )
 
-    if passed:
+    zero_losses = not any(v < 0 for v in values)
+    if passed and (pf_capped or zero_losses):
+        # A capped PF / no losses is far more likely a modelling gap (missing
+        # costs, excluded failures) than an edge: never a pass, always review.
+        status = "REVIEW"
+    elif passed:
         status = "PROMOTE"
     elif n < min_samples:
         status = "COLLECT"

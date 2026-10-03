@@ -36,6 +36,13 @@ class AppAuthTests(unittest.TestCase):
         from fastapi.testclient import TestClient
         self.client = TestClient(app_module.app)
 
+    def test_scorecards_carry_assumptions_and_review_rule(self):
+        for path in ("/team/channel-scorecards", "/team/strategy-scorecards", "/team/horizon-scorecards"):
+            r = self.client.get(path, headers={"X-Paper-Token": "read-secret"})
+            self.assertEqual(r.status_code, 200, path)
+            self.assertIn("ASSUMPTION", r.json()["assumptions"]["label"])
+            self.assertIn("REVIEW", r.json()["review_rule"])
+
     def test_read_token_works_on_get(self):
         r = self.client.get("/realtime/status", headers={"X-Paper-Token": "read-secret"})
         self.assertEqual(r.status_code, 200)
@@ -43,6 +50,9 @@ class AppAuthTests(unittest.TestCase):
         self.assertFalse(body["engine_running"])
         self.assertTrue(any("REALTIME_ENABLED" in x for x in body["idle_reasons"]))
         self.assertTrue(any("JUPITER_API_KEY" in x for x in body["idle_reasons"]))
+        # Red-team R2: fee model shown as a labeled assumption.
+        self.assertIn("ASSUMPTION", body["assumptions"]["label"])
+        self.assertIn("network_fee_lamports_per_tx", body["assumptions"])
         self.assertIn("degraded_reasons", body)
         self.assertIn("episode_primary", body["counts"])
 

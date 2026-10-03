@@ -84,13 +84,19 @@ def classify_quote_exception(exc: BaseException) -> str:
 
 
 async def classify_sell_quote(
-    quote_sell: Callable[[str, int], Awaitable[dict[str, Any]]],
+    quote_sell: Callable[..., Awaitable[dict[str, Any]]],
     mint: str,
     token_amount: int,
+    entry_phase: Optional[str] = None,
 ) -> tuple[str, int, str]:
-    """Returns (SOLD | NO_ROUTE | TRANSIENT | CONFIG_ERROR, value_lamports, error)."""
+    """Returns (SOLD | NO_ROUTE | TRANSIENT | CONFIG_ERROR, value_lamports, error).
+    entry_phase (the market phase the entry was quoted on) lets the quoter exit
+    on the same venue the entry used."""
     try:
-        q = await quote_sell(mint, int(token_amount))
+        if entry_phase:
+            q = await quote_sell(mint, int(token_amount), entry_phase=entry_phase)
+        else:
+            q = await quote_sell(mint, int(token_amount))
     except Exception as exc:  # classified, never swallowed into a fake loss
         return classify_quote_exception(exc), 0, f"{type(exc).__name__}: {exc}"[:300]
     try:
@@ -343,6 +349,21 @@ class FirmPortfolioBook:
                 # Mark failures should not mutate the position into a false exit.
                 continue
 
+    def assumptions(self, notional_lamports: Optional[int] = None) -> dict[str, Any]:
+        """Labeled cost assumptions behind every markout (shown in status and
+        scorecards so nobody reads net P&L without knowing what it assumes)."""
+        n = int(notional_lamports or int(_env_float("PAPER_NOTIONAL_LAMPORTS", 40_000_000)))
+        fee = self.network_fee_lamports_per_tx
+        return {
+            "label": "ASSUMPTION (not measured): conservative estimate, set MARKOUT_NETWORK_FEE_LAMPORTS_PER_TX",
+            "network_fee_lamports_per_tx": fee,
+            "txs_charged": {"sold": 2, "unsellable": 1},
+            "paper_notional_lamports": n,
+            "roundtrip_network_fee_bps_at_notional": round(2 * fee / n * 10_000, 2) if n > 0 else None,
+            "pnl_bps_is": "net of the network fee; gross_pnl_bps is stored per markout",
+            "pretrade_roundtrip_bps_excludes_network_fee": True,
+        }
+
     def net_pnl_bps(self, value_lamports: int, cost_lamports: int, sold: bool) -> tuple[float, float, int]:
         """
         Returns (net_pnl_bps, gross_pnl_bps, network_fee_lamports). The buy tx
@@ -383,7 +404,7 @@ class FirmPortfolioBook:
         with self.engine.begin() as cx:
             rows = cx.execute(text("""
                 SELECT c.id, c.created_at_utc, c.entry_quote_at_utc, c.mint,
-                       c.notional_lamports, c.buy_out_amount
+                       c.notional_lamports, c.buy_out_amount, c.market_phase
                 FROM realtime_candidate c
                 WHERE c.buy_out_amount IS NOT NULL
                   AND (c.episode_primary=1 OR c.firm_primary=1)
@@ -428,7 +449,8 @@ class FirmPortfolioBook:
                     continue
 
                 kind, value, err = await classify_sell_quote(
-                    quote_sell, str(row["mint"]), int(row["buy_out_amount"])
+                    quote_sell, str(row["mint"]), int(row["buy_out_amount"]),
+                    entry_phase=row.get("market_phase") or None,
                 )
                 now = clock()
                 age = now - created.timestamp()

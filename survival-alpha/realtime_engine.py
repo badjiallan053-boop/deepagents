@@ -352,6 +352,7 @@ class RealtimeEngine:
                 WHERE source='telegram'
                   AND source_detail=:channel
                   AND episode_primary=1
+                  AND episode_key NOT LIKE '%#accept'
                   AND outcome_5m_bps IS NOT NULL
                 ORDER BY id
             """), {"channel": channel}).scalars().all()
@@ -469,8 +470,14 @@ class RealtimeEngine:
         q["phase"] = "graduated_or_external"
         return q
 
-    async def _market_sell_quote(self, mint: str, token_amount: int) -> dict[str, Any]:
+    async def _market_sell_quote(self, mint: str, token_amount: int,
+                                 entry_phase: Optional[str] = None) -> dict[str, Any]:
         """
+        Exit on the venue the entry used: if the entry was quoted on Jupiter
+        (market_phase graduated_or_external), Jupiter IS the confirmed venue,
+        so a Jupiter no-route is a genuine NO_ROUTE even with no sidecar (a
+        graduated token cannot return to the bonding curve). Otherwise:
+
         Sell quote on the token's actual venue. Jupiter is only the confirmed
         venue when the sidecar says the token is graduated / unsupported, or
         that no bonding curve exists. If the sidecar errored, timed out or is
@@ -479,6 +486,13 @@ class RealtimeEngine:
         QuoteUnavailable, which is classified TRANSIENT and never booked -100%.
         """
         assert self._http is not None
+        if _phase_bucket(entry_phase) == "graduated":
+            q = await self._jupiter_quote(mint, WSOL_MINT, token_amount)
+            q["_market"] = "jupiter"
+            q["phase"] = "graduated_or_external"
+            q["_venue_confirmed"] = True
+            q["_venue_basis"] = "entry_venue"
+            return q
         venue_confirmed = False
         sidecar_err = ""
         try:

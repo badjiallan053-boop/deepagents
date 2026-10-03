@@ -82,6 +82,7 @@ class FirmCapitalAllocator:
                 WHERE source='telegram'
                   AND source_detail=:channel
                   AND episode_primary=1
+                  AND episode_key NOT LIKE '%#accept'
                   AND outcome_5m_bps IS NOT NULL
                 ORDER BY id
             """), {"channel": channel}).scalars().all()

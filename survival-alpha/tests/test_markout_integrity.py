@@ -367,6 +367,19 @@ class EpisodeDedupeTests(unittest.TestCase):
         cards = AgentTeam(self.engine).strategy_scorecards()
         self.assertEqual(cards["S"]["passed"]["n"], 2)  # MintA once + MintZ
 
+    def test_channel_cards_do_not_double_count_late_acceptance(self):
+        # Red-team R2-2: reject-then-accept is two primaries but one channel call.
+        from agent_team import AgentTeam
+        from capital_allocator import FirmCapitalAllocator
+        a = self._persist(source="telegram", detail="@chan", decision="REJECT")
+        b = self._persist(source="telegram", detail="@chan", decision="ACTIONABLE_PAPER")
+        self.assertEqual({self._row(a)["episode_primary"], self._row(b)["episode_primary"]}, {1})
+        with self.engine.begin() as cx:
+            cx.execute(text("UPDATE realtime_candidate SET outcome_5m_bps=100"))
+        self.assertEqual(AgentTeam(self.engine).channel_scorecards()["@chan"]["n"], 1)
+        self.assertEqual(FirmCapitalAllocator(self.engine)._telegram_channel_card("@chan")["n"], 1)
+        self.assertEqual(self.rt._telegram_channel_prior("@chan")["n"], 1)
+
     # (5) idle reasons
     def test_idle_and_degraded_reasons(self):
         reasons = self.rt.idle_reasons()
@@ -461,6 +474,28 @@ class MarkoutCostAndVenueTests(_MarkoutBase):
         self.assertAlmostEqual(m["first_attempt_age_seconds"], 30.0)
         self.assertAlmostEqual(m["observed_age_seconds"], 44.0)
 
+    def test_markout_loop_passes_entry_phase_to_quoter(self):
+        cid = self._candidate()
+        with self.engine.begin() as cx:
+            cx.execute(text("UPDATE realtime_candidate SET market_phase='graduated_or_external' WHERE id=:id"),
+                       {"id": cid})
+        seen = []
+
+        async def quoter(mint, amount, entry_phase=None):
+            seen.append(entry_phase)
+            raise _http_error(400, NO_ROUTE_BODY)
+        for t in range(30, 100, 3):
+            self._mark(quoter, t)
+        self.assertEqual(set(seen), {"graduated_or_external"})
+        self.assertEqual(self._markouts(cid)[30]["status"], UNSELLABLE)
+
+    def test_assumptions_are_labeled(self):
+        self.book.network_fee_lamports_per_tx = 505_000
+        a = self.book.assumptions(40_000_000)
+        self.assertIn("ASSUMPTION", a["label"])
+        self.assertEqual(a["network_fee_lamports_per_tx"], 505_000)
+        self.assertAlmostEqual(a["roundtrip_network_fee_bps_at_notional"], 252.5)
+
     def test_markout_clock_starts_at_entry_quote(self):
         cid = self._candidate()
         with self.engine.begin() as cx:
@@ -533,6 +568,37 @@ class SellVenueTests(unittest.TestCase):
         with self.assertRaises(httpx.HTTPStatusError) as ctx:
             self._sell(lambda r: httpx.Response(200, json={"phase": "graduated", "graduated": True}))
         self.assertEqual(classify_quote_exception(ctx.exception), NO_ROUTE)
+
+    def test_jupiter_entry_exits_on_jupiter_even_without_sidecar(self):
+        # Red-team R2-1: no sidecar must not hide a real rug of a Jupiter-entered token.
+        calls = []
+
+        def down(r):
+            calls.append(r.url.path)
+            raise httpx.ConnectError("refused")
+
+        async def run():
+            self.rt._http = self._client(down)
+            try:
+                return await self.rt._market_sell_quote("MintA", 1000, entry_phase="graduated_or_external")
+            finally:
+                await self.rt._http.aclose()
+        with self.assertRaises(httpx.HTTPStatusError) as ctx:
+            asyncio.run(run())
+        self.assertEqual(classify_quote_exception(ctx.exception), NO_ROUTE)
+        self.assertEqual(calls, [])  # sidecar not consulted: same venue as the entry
+
+    def test_bonding_entry_with_sidecar_down_stays_transient(self):
+        async def run():
+            def down(r):
+                raise httpx.ConnectError("refused")
+            self.rt._http = self._client(down)
+            try:
+                return await self.rt._market_sell_quote("MintA", 1000, entry_phase="bonding_curve")
+            finally:
+                await self.rt._http.aclose()
+        with self.assertRaises(QuoteUnavailable):
+            asyncio.run(run())
 
     def test_bonding_curve_quote_from_sidecar(self):
         q = self._sell(lambda r: httpx.Response(
