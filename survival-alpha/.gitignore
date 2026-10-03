@@ -9,3 +9,4 @@ runs/
 *.session
 *.session-journal
 sessions/
+node_modules/

@@ -26,12 +26,17 @@ jobs:
         run: python -m py_compile app.py realtime_engine.py social_signal.py elite_signals.py strategy_tournament.py telegram_parser.py telegram_signal_agent.py channel_evaluator.py agent_team.py grok_team.py grok_profit_team.py funding_basis.py capital_allocator.py firm_risk.py firm_book.py
       - name: Unit battle tests
         run: python -m unittest discover -s tests -v
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
       - name: Node sidecar syntax
-        run: node --check pump_quote_service.mjs
+        run: node --check pump_quote_service.mjs && node --check pump_quote_math.mjs
+      - name: Node sidecar tests (recorded fixtures, no network)
+        run: npm ci && npm test
       - name: Assert no live execution path
         run: |
           ! grep -R -E "sendTransaction|/swap/v2/execute|PRIVATE_KEY|SECRET_KEY|Keypair\(" --include="*.py" .
-          ! grep -E "sendTransaction|Keypair\(|buyInstructions|sellInstructions|routedBuyInstructions|routedSellInstructions" pump_quote_service.mjs
+          ! grep -E "sendTransaction|Keypair\(|buyInstructions|sellInstructions|routedBuyInstructions|routedSellInstructions" pump_quote_service.mjs pump_quote_math.mjs
       - name: Assert realtime stays paper-only
         run: |
           grep -q "ACTIONABLE_PAPER" realtime_engine.py

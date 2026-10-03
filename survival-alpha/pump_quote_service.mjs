@@ -1,15 +1,28 @@
 import http from "node:http";
+import { createRequire } from "node:module";
 import BN from "bn.js";
 import { Connection, PublicKey } from "@solana/web3.js";
 import {
+  buyPriceImpact,
+  sellPriceImpact,
+  graduationProgress,
+  postBuyCurve,
+  roundtripBps as computeRoundtripBps,
+} from "./pump_quote_math.mjs";
+
+// Official SDK (github.com/pump-fun/pump-sdk, MIT). Loaded via its CommonJS
+// build: under Node 20 its ESM build fails to import because a transitive
+// dependency (@pump-fun/agent-payments-sdk) uses a named ESM import from the
+// CommonJS @coral-xyz/anchor package. Only read/decode + pure math are used.
+const require = createRequire(import.meta.url);
+const {
   OnlinePumpSdk,
   getBuyTokenAmountFromSolAmount,
+  getBuySolAmountFromTokenAmount,
   getSellSolAmountFromTokenAmount,
-  calculateBuyPriceImpact,
-  calculateSellPriceImpact,
-  getGraduationProgress,
   bondingCurveMarketCap,
-} from "@nirholas/pump-sdk";
+  isSolLikeQuoteMint,
+} = require("@pump-fun/pump-sdk");
 
 const PORT = Number(process.env.PUMP_QUOTER_PORT || 10001);
 const rpcUrl =
@@ -55,12 +68,23 @@ async function readCurve(mintString) {
   return { mint, global, feeConfig, bondingCurve };
 }
 
+function quoteInfo(bondingCurve) {
+  const quoteMint = bondingCurve.quoteMint;
+  const solQuoted = !quoteMint || isSolLikeQuoteMint(quoteMint);
+  return { quoteMint: quoteMint ? quoteMint.toBase58() : null, solQuoted };
+}
+
 async function buyQuote(mintString, lamportsString) {
   const solAmount = new BN(lamportsString);
   const { global, feeConfig, bondingCurve } = await readCurve(mintString);
 
   if (bondingCurve.complete || bondingCurve.virtualTokenReserves.isZero()) {
     return { phase: "graduated", graduated: true };
+  }
+  const q = quoteInfo(bondingCurve);
+  if (!q.solQuoted) {
+    // Amounts here are lamports; a curve quoted in USDC or another mint would be mis-scaled.
+    return { phase: "unsupported_quote", graduated: false, unsupportedQuote: true, ...q };
   }
 
   const mintSupply = bondingCurve.tokenTotalSupply;
@@ -70,38 +94,28 @@ async function buyQuote(mintString, lamportsString) {
     mintSupply,
     bondingCurve,
     amount: solAmount,
+    quoteMint: bondingCurve.quoteMint,
   });
-  const impact = calculateBuyPriceImpact({
-    global,
-    feeConfig,
-    mintSupply,
-    bondingCurve,
-    solAmount,
-  });
-  const progress = getGraduationProgress(global, bondingCurve, feeConfig);
+  const impact = buyPriceImpact(bondingCurve, solAmount, tokensOut);
+  const progress = graduationProgress(global, bondingCurve, (curve) =>
+    getBuySolAmountFromTokenAmount({
+      global,
+      feeConfig,
+      mintSupply: curve.tokenTotalSupply,
+      bondingCurve: curve,
+      amount: curve.realTokenReserves,
+      quoteMint: curve.quoteMint,
+    })
+  );
   const marketCap = bondingCurveMarketCap({
     mintSupply,
     virtualQuoteReserves: bondingCurve.virtualQuoteReserves,
     virtualTokenReserves: bondingCurve.virtualTokenReserves,
   });
 
-  // Build the state that would exist immediately after our hypothetical buy.
-  // This mirrors the SDK's own price-impact reserve transition. It is used only
-  // for research/paper sellability; no transaction is constructed or sent.
-  const postCurve = {
-    ...bondingCurve,
-    virtualQuoteReserves: bondingCurve.virtualQuoteReserves.add(solAmount),
-    virtualTokenReserves: BN.max(
-      new BN(0),
-      bondingCurve.virtualTokenReserves.sub(tokensOut)
-    ),
-    realQuoteReserves: bondingCurve.realQuoteReserves.add(solAmount),
-    realTokenReserves: BN.max(
-      new BN(0),
-      bondingCurve.realTokenReserves.sub(tokensOut)
-    ),
-  };
-
+  // State immediately after our hypothetical buy, used only for research/paper
+  // sellability; no transaction is constructed or sent.
+  const postCurve = postBuyCurve(bondingCurve, solAmount, tokensOut);
   const sellbackLamports = getSellSolAmountFromTokenAmount({
     global,
     feeConfig,
@@ -110,20 +124,13 @@ async function buyQuote(mintString, lamportsString) {
     amount: tokensOut,
   });
 
-  const roundtripBps = solAmount.isZero()
-    ? 0
-    : sellbackLamports
-        .sub(solAmount)
-        .muln(10_000)
-        .div(solAmount)
-        .toNumber();
-
   return {
     phase: "bonding_curve",
     graduated: false,
+    ...q,
     tokensOut: bnString(tokensOut),
     sellbackLamports: bnString(sellbackLamports),
-    roundtripBps,
+    roundtripBps: computeRoundtripBps(solAmount, sellbackLamports),
     buyImpactBps: impact.impactBps,
     marketCapLamports: bnString(marketCap),
     graduationProgressBps: progress.progressBps,
@@ -142,6 +149,10 @@ async function sellQuote(mintString, tokenAmountString) {
   if (bondingCurve.complete || bondingCurve.virtualTokenReserves.isZero()) {
     return { phase: "graduated", graduated: true };
   }
+  const q = quoteInfo(bondingCurve);
+  if (!q.solQuoted) {
+    return { phase: "unsupported_quote", graduated: false, unsupportedQuote: true, ...q };
+  }
 
   const mintSupply = bondingCurve.tokenTotalSupply;
   const solOut = getSellSolAmountFromTokenAmount({
@@ -151,17 +162,12 @@ async function sellQuote(mintString, tokenAmountString) {
     bondingCurve,
     amount,
   });
-  const impact = calculateSellPriceImpact({
-    global,
-    feeConfig,
-    mintSupply,
-    bondingCurve,
-    tokenAmount: amount,
-  });
+  const impact = sellPriceImpact(bondingCurve, amount, solOut);
 
   return {
     phase: "bonding_curve",
     graduated: false,
+    ...q,
     solOutLamports: bnString(solOut),
     sellImpactBps: impact.impactBps,
   };
@@ -184,6 +190,7 @@ const server = http.createServer(async (req, res) => {
       return respond(res, 200, {
         ok: true,
         mode: "quote-only",
+        sdk: "@pump-fun/pump-sdk",
         transaction_builder: false,
         signing: false,
       });

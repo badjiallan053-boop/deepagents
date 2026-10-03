@@ -5,11 +5,11 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends nodejs npm \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt package.json ./
+COPY requirements.txt package.json package-lock.json ./
 RUN pip install --no-cache-dir -r requirements.txt \
-    && npm install --omit=dev
+    && npm ci --omit=dev
 
-COPY app.py realtime_engine.py social_signal.py elite_signals.py strategy_tournament.py telegram_parser.py telegram_signal_agent.py channel_evaluator.py agent_team.py grok_team.py grok_profit_team.py funding_basis.py capital_allocator.py firm_risk.py firm_book.py pump_quote_service.mjs ./
+COPY app.py realtime_engine.py social_signal.py elite_signals.py strategy_tournament.py telegram_parser.py telegram_signal_agent.py channel_evaluator.py agent_team.py grok_team.py grok_profit_team.py funding_basis.py capital_allocator.py firm_risk.py firm_book.py pump_quote_service.mjs pump_quote_math.mjs ./
 
 ENV PYTHONUNBUFFERED=1
 ENV PUMP_QUOTER_PORT=10001
