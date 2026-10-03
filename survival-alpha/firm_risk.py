@@ -69,6 +69,7 @@ class FirmRiskGovernor:
         *,
         mint: str,
         source: str,
+        source_detail: str = "",
         requested_lamports: int,
     ) -> RiskDecision:
         snap = self.snapshot()
@@ -100,8 +101,10 @@ class FirmRiskGovernor:
             source_open = int(cx.execute(text("""
                 SELECT COALESCE(SUM(allocated_lamports), 0)
                 FROM firm_portfolio_position
-                WHERE status='OPEN' AND source=:source
-            """), {"source": source}).scalar_one() or 0)
+                WHERE status='OPEN'
+                  AND source=:source
+                  AND COALESCE(source_detail,'')=:source_detail
+            """), {"source": source, "source_detail": source_detail or ""}).scalar_one() or 0)
 
         if same_mint:
             reasons.append("duplicate mint exposure")
