@@ -66,6 +66,8 @@ from typing import Any, Optional
 import httpx
 from sqlalchemy import text
 
+from gate_stats import gate_stats, iso_week
+
 log = logging.getLogger("funding_basis")
 
 HL_INFO = "https://api.hyperliquid.xyz/info"
@@ -520,6 +522,27 @@ def evaluate_candidate(strategy: str, long_leg: dict, short_leg: dict, cfg: dict
     }
 
 
+def exit_price(leg: dict, side: str, position: dict, cfg: dict) -> float:
+    """Executable exit for a leg: sell the long at the bid, buy back the short
+    at the ask. When the raw snapshot has no book (Hyperliquid spot snapshots
+    carry bid=ask=None), charge half the spread observed at entry instead of
+    exiting at mid; if that is unknown, half the max eligible spread
+    (Risk red-team B4-2)."""
+    px = leg.get("bid") if side == "long" else leg.get("ask")
+    if px:
+        return float(px)
+    sp = None
+    try:
+        detail = json.loads(position.get("entry_detail_json") or "{}")
+        sp = detail.get(f"entry_spread_bps_{side}")
+    except (TypeError, ValueError):
+        pass
+    if sp is None:
+        sp = cfg["max_spread_bps"]
+    half = float(sp) / 2 / 1e4
+    return float(leg["mark"]) * ((1 - half) if side == "long" else (1 + half))
+
+
 def build_candidates(snaps: list[dict], cfg: dict) -> list[tuple[str, dict, dict]]:
     perps: dict[str, dict[str, dict]] = {}
     spots: dict[str, dict[str, dict]] = {}
@@ -628,7 +651,8 @@ def ensure_funding_tables(engine) -> None:
             liq_distance_pct DOUBLE PRECISION,
             eligible INTEGER NOT NULL DEFAULT 0,
             entered INTEGER NOT NULL DEFAULT 0,
-            detail_json TEXT
+            detail_json TEXT,
+            opportunity_episode_id TEXT
         )""",
         f"""CREATE TABLE IF NOT EXISTS funding_position (
             id {pk},
@@ -681,6 +705,12 @@ def ensure_funding_tables(engine) -> None:
     for s in stmts:  # one transaction per statement (Postgres aborts the whole tx on any error)
         with engine.begin() as cx:
             cx.execute(text(s))
+    for ddl in ("ALTER TABLE funding_opportunity ADD COLUMN opportunity_episode_id TEXT",):
+        try:  # additive migration for tables created before this column existed
+            with engine.begin() as cx:
+                cx.execute(text(ddl))
+        except Exception:
+            pass
 
 
 # ---------------------------------------------------------------------------
@@ -946,24 +976,42 @@ class FundingBasisTracker:
         return summary
 
     def _store_opportunities(self, evaluated: list[dict], ts: str) -> None:
+        """One row per evaluated pair per scan (an audit trail, NOT samples).
+        opportunity_episode_id is stable while the same (strategy, symbol,
+        venues) pair keeps appearing in consecutive scans with the same
+        eligibility; count episodes, never rows (Risk red-team B4-3)."""
+        with self.engine.begin() as cx:
+            prev_ts = cx.execute(text("SELECT MAX(ts_utc) FROM funding_opportunity WHERE ts_utc < :ts"),
+                                 {"ts": ts}).scalar()
+            prev = {}
+            if prev_ts:
+                for r in cx.execute(text("""SELECT strategy, symbol, venue_long, venue_short, eligible,
+                                                   opportunity_episode_id FROM funding_opportunity
+                                            WHERE ts_utc=:ts"""), {"ts": prev_ts}).mappings():
+                    prev[(r["strategy"], r["symbol"], r["venue_long"], r["venue_short"])] = (
+                        int(r["eligible"]), r["opportunity_episode_id"])
         rows = []
         for e in evaluated:
+            key = (e["strategy"], e["symbol"], e["venue_long"], e["venue_short"])
+            elig = 1 if e["eligible"] else 0
+            p_elig, p_ep = prev.get(key, (None, None))
+            episode = p_ep if (p_ep and p_elig == elig) else "|".join(map(str, key)) + f"|{elig}|{ts}"
             d = {k: v for k, v in e.items() if k != "_legs"}
             rows.append({
                 "ts": ts, "strategy": e["strategy"], "symbol": e["symbol"], "vl": e["venue_long"],
                 "kl": e["kind_long"], "vs": e["venue_short"], "ks": e["kind_short"], "net": e["net_bps"],
                 "gross": e["gross_bps"], "fees": e["fees_bps"], "slip": e["slippage_bps"], "basis": e["basis_bps"],
                 "apr": e["carry_apr_pct_expected"], "flip": e["flip_rate_24h"], "liq": e["liq_distance_pct"],
-                "elig": 1 if e["eligible"] else 0, "ent": 1 if e.get("_entered") else 0,
-                "detail": json.dumps(d, default=str),
+                "elig": elig, "ent": 1 if e.get("_entered") else 0,
+                "detail": json.dumps(d, default=str), "ep": episode,
             })
         if rows:
             with self.engine.begin() as cx:
                 cx.execute(text("""INSERT INTO funding_opportunity (ts_utc, strategy, symbol, venue_long, kind_long,
                     venue_short, kind_short, net_bps, gross_bps, fees_bps, slippage_bps, basis_bps, carry_apr_pct,
-                    flip_rate_24h, liq_distance_pct, eligible, entered, detail_json)
+                    flip_rate_24h, liq_distance_pct, eligible, entered, detail_json, opportunity_episode_id)
                     VALUES (:ts, :strategy, :symbol, :vl, :kl, :vs, :ks, :net, :gross, :fees, :slip, :basis, :apr,
-                    :flip, :liq, :elig, :ent, :detail)"""), rows)
+                    :flip, :liq, :elig, :ent, :detail, :ep)"""), rows)
 
     def _enter_positions(self, evaluated: list[dict], cfg: dict, ts: str, now_ms: float) -> int:
         n = 0
@@ -988,6 +1036,10 @@ class FundingBasisTracker:
                 N = cfg["notional_usd"]
                 fees = N * (_fee(cfg, lg["venue"], lg["kind"]) + _fee(cfg, sg["venue"], sg["kind"])) / 1e4
                 detail = {k: v for k, v in e.items() if k != "_legs"}
+                # Entry spreads, so the exit can charge the half-spread when a
+                # leg's raw snapshot has no bid/ask (HL spot has none).
+                detail["entry_spread_bps_long"] = lg.get("spread_bps")
+                detail["entry_spread_bps_short"] = sg.get("spread_bps")
                 cx.execute(text("""INSERT INTO funding_position (opened_at_utc, strategy, symbol, venue_long, kind_long,
                     venue_symbol_long, venue_short, kind_short, venue_symbol_short, notional_usd, leverage,
                     entry_long_px, entry_short_px, entry_net_bps_expected, entry_detail_json, status, fees_usd,
@@ -1053,8 +1105,8 @@ class FundingBasisTracker:
                         last_funding_ms_short=:ls, stale_obs=stale_obs+1 WHERE id=:id"""),
                                {"f": funding_total, "ll": last_long, "ls": last_short, "id": p["id"]})
                 continue
-            exit_long = (ls.get("bid") or ls["mark"]) * (1 - x)
-            exit_short = (ss.get("ask") or ss["mark"]) * (1 + x)
+            exit_long = exit_price(ls, "long", p, cfg) * (1 - x)
+            exit_short = exit_price(ss, "short", p, cfg) * (1 + x)
             basis_pnl = N * (exit_long / p["entry_long_px"] - 1) + N * (1 - exit_short / p["entry_short_px"])
             exit_fees = N * (_fee(cfg, p["venue_long"], p["kind_long"]) + _fee(cfg, p["venue_short"], p["kind_short"])) / 1e4
             total_if_closed = funding_total + basis_pnl - p["fees_usd"] - exit_fees
@@ -1114,12 +1166,21 @@ class FundingBasisTracker:
                 "SELECT strategy, status, COUNT(*) AS n FROM funding_position GROUP BY strategy, status")).mappings()}
             latest = {f"{r['venue']}:{r['kind']}": int(r["n"]) for r in cx.execute(text(
                 "SELECT venue, kind, COUNT(*) AS n FROM funding_snapshot WHERE is_latest=1 GROUP BY venue, kind")).mappings()}
+            opp = cx.execute(text("""SELECT COUNT(*) AS rows_, COUNT(DISTINCT opportunity_episode_id) AS episodes,
+                    COUNT(DISTINCT CASE WHEN eligible=1 THEN opportunity_episode_id END) AS eligible_episodes
+                    FROM funding_opportunity""")).mappings().one()
         cfg = config()
         return {
             "mode": "paper-only", "live_execution_available": False, "order_code": False,
             "enabled": self.enabled(), "running": bool(self._task and not self._task.done()),
             "idle_reasons": self.idle_reasons(), "venue_status": self.venue_status,
             "latest_snapshots": latest, "positions": pos, "config": cfg,
+            "opportunities": {
+                "rows": int(opp["rows_"] or 0), "episodes": int(opp["episodes"] or 0),
+                "eligible_episodes": int(opp["eligible_episodes"] or 0),
+                "note": ("one row per pair per scan: rows are an audit trail and never count as samples; "
+                         "only closed positions (clustered by symbol-week) feed gate statistics"),
+            },
             "scans": self.scans, "last_scan": self.last_scan, "last_error": self.last_error,
         }
 
@@ -1168,16 +1229,29 @@ class FundingBasisTracker:
 
     def scorecard(self) -> dict[str, Any]:
         with self.engine.begin() as cx:
-            rows = cx.execute(text("""SELECT strategy, pnl_bps FROM funding_position
+            rows = cx.execute(text("""SELECT strategy, symbol, opened_at_utc, pnl_bps FROM funding_position
                                       WHERE status='CLOSED' AND pnl_bps IS NOT NULL ORDER BY id""")).mappings().all()
             open_n = cx.execute(text("SELECT COUNT(*) FROM funding_position WHERE status='OPEN'")).scalar_one()
         by: dict[str, list[float]] = {}
+        clusters: dict[str, list[str]] = {}
         for r in rows:
             by.setdefault(str(r["strategy"]), []).append(float(r["pnl_bps"]))
+            # Overlapping / shared-leg positions on one coin in one week are one
+            # piece of evidence, not several (Risk red-team B4-1).
+            clusters.setdefault(str(r["strategy"]), []).append(f"{r['symbol']}|{iso_week(r['opened_at_utc'])}")
+        all_vals = [float(r["pnl_bps"]) for r in rows]
+        all_ids = [f"{r['symbol']}|{iso_week(r['opened_at_utc'])}" for r in rows]
         return {
             "mode": "paper-only", "open_positions": int(open_n),
             "strategies": {k: scorecard_stats(v) for k, v in sorted(by.items())},
-            "all": scorecard_stats([p for v in by.values() for p in v]),
+            "all": scorecard_stats(all_vals),
+            "gate": {
+                "strategies": {k: gate_stats(v, clusters[k]) for k, v in sorted(by.items())},
+                "all": gate_stats(all_vals, all_ids),
+                "cluster": "symbol|ISO week of entry",
+            },
             "notes": "closed paper positions only; pnl in bps of notional after modeled fees/slippage; "
-                     f"profit factor capped at {PF_CAP:g} (profit_factor_capped flag); bootstrap: 2000 resamples, seed 7",
+                     f"profit factor capped at {PF_CAP:g} (profit_factor_capped flag); bootstrap: 2000 resamples, seed 7; "
+                     "gate: shared gate_stats (cluster bootstrap by symbol-week, min n 30/300 clusters); "
+                     "opportunity rows never count as samples",
         }

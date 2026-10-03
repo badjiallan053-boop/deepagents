@@ -282,9 +282,45 @@ class ReplayTests(EnvMixin, unittest.TestCase):
             out.extend(await t.fetch_venue(client, v))
         return out
 
+    def test_opportunity_rows_share_an_episode_across_scans(self):
+        t = fb.FundingBasisTracker(self.engine, transport=replay_transport(self.fx))
+        now = self.fx["now_ms"]
+        asyncio.run(t.scan_once(now_ms=now))
+        asyncio.run(t.scan_once(now_ms=now + 300_000))
+        with self.engine.begin() as cx:
+            rows = cx.execute(text("SELECT COUNT(*) FROM funding_opportunity")).scalar_one()
+            eps = cx.execute(text("SELECT COUNT(DISTINCT opportunity_episode_id) FROM funding_opportunity")).scalar_one()
+            nulls = cx.execute(text("SELECT COUNT(*) FROM funding_opportunity WHERE opportunity_episode_id IS NULL")
+                               ).scalar_one()
+        self.assertEqual(nulls, 0)
+        self.assertGreater(rows, eps)  # repeated scans of the same pair are one episode
+        st = t.status()["opportunities"]
+        self.assertEqual((st["rows"], st["episodes"]), (rows, eps))
+
     def test_migrations_idempotent(self):
         fb.ensure_funding_tables(self.engine)
         fb.ensure_funding_tables(self.engine)
+
+
+class ExitSpreadTests(EnvMixin, unittest.TestCase):
+    """Risk red-team B4-2: no mid exits on legs without a book."""
+
+    def test_book_used_when_present(self):
+        cfg = fb.config()
+        self.assertEqual(fb.exit_price({"bid": 99.0, "ask": 101.0, "mark": 100.0}, "long", {}, cfg), 99.0)
+        self.assertEqual(fb.exit_price({"bid": 99.0, "ask": 101.0, "mark": 100.0}, "short", {}, cfg), 101.0)
+
+    def test_hl_spot_without_book_pays_half_entry_spread(self):
+        cfg = fb.config()
+        pos = {"entry_detail_json": json.dumps({"entry_spread_bps_long": 10.0})}
+        px = fb.exit_price({"bid": None, "ask": None, "mark": 100.0}, "long", pos, cfg)
+        self.assertAlmostEqual(px, 100.0 * (1 - 5.0 / 1e4))
+
+    def test_unknown_entry_spread_falls_back_to_cap(self):
+        cfg = fb.config()
+        px = fb.exit_price({"bid": None, "mark": 100.0}, "long", {"entry_detail_json": "{}"}, cfg)
+        self.assertAlmostEqual(px, 100.0 * (1 - cfg["max_spread_bps"] / 2 / 1e4))
+        self.assertLess(px, 100.0)
 
 
 class SafetyAndApiTests(EnvMixin, unittest.TestCase):
