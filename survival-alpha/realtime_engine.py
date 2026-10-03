@@ -17,6 +17,9 @@ from strategy_tournament import evaluate_tournament
 from channel_evaluator import evaluate_outcomes
 from telegram_parser import TelegramCall, parse_telegram_message
 from telegram_signal_agent import TelegramSignalAgent
+from capital_allocator import FirmCapitalAllocator
+from firm_risk import FirmRiskGovernor
+from firm_book import FirmPortfolioBook
 
 log = logging.getLogger("survival-alpha.realtime")
 
@@ -194,6 +197,9 @@ class RealtimeEngine:
         self._watchlist_version = 0
         self._telegram_offset = 0
         self._tg_signal_agent = TelegramSignalAgent(self._handle_telegram_call)
+        self.firm_book = FirmPortfolioBook(self.engine)
+        self.capital_allocator = FirmCapitalAllocator(self.engine)
+        self.firm_risk = FirmRiskGovernor(self.engine)
 
     async def start(self) -> None:
         if not self.enabled:
@@ -208,6 +214,7 @@ class RealtimeEngine:
             asyncio.create_task(self._organic_loop(), name="jupiter-organic"),
             asyncio.create_task(self._position_loop(), name="paper-positions"),
             asyncio.create_task(self._counterfactual_loop(), name="counterfactuals"),
+            asyncio.create_task(self._firm_book_loop(), name="firm-book"),
         ]
         if self.helius_key:
             self._tasks.append(asyncio.create_task(self._helius_loop(), name="helius-wallets"))
@@ -537,6 +544,11 @@ class RealtimeEngine:
                 await self._notify_candidate(cid, event, roundtrip_bps, drift500, q0)
                 if self.auto_paper and self._open_position_count() < self.max_open_paper:
                     await self.paper_enter(cid)
+                await self._maybe_allocate_firm(
+                    cid,
+                    event,
+                    [v.to_dict() for v in votes],
+                )
             return cid
         except Exception as exc:
             log.exception("candidate evaluation failed for %s", event.mint)
@@ -611,6 +623,52 @@ class RealtimeEngine:
                     "SELECT id FROM realtime_candidate WHERE mint=:mint ORDER BY id DESC LIMIT 1"
                 ), {"mint": event.mint}).scalar_one()
         return int(cid)
+
+    async def _maybe_allocate_firm(
+        self,
+        candidate_id: int,
+        event: CandidateEvent,
+        strategy_votes: list[dict[str, Any]],
+    ) -> Optional[int]:
+        """
+        Second-book allocation. Research paper positions are for measurement;
+        this portfolio position exists only when prior forward evidence has
+        promoted the currently-passing strategy/source.
+        """
+        allocation = self.capital_allocator.decide(
+            source=event.source,
+            source_detail=event.detail,
+            strategy_votes=strategy_votes,
+        )
+        if not allocation.eligible:
+            return None
+
+        risk = self.firm_risk.check(
+            mint=event.mint,
+            source=event.source,
+            source_detail=event.detail,
+            requested_lamports=allocation.requested_lamports,
+        )
+        if not risk.allowed:
+            return None
+
+        pid = await self.firm_book.open_position(
+            candidate_id=candidate_id,
+            allocated_lamports=allocation.requested_lamports,
+            strategy_names=allocation.promoted_strategies,
+            quote_buy=self._market_buy_quote,
+        )
+        if pid:
+            await self._telegram_send(
+                "🏦 FIRM BOOK PAPER ALLOCATION\n"
+                f"position #{pid}\n"
+                f"{event.mint}\n"
+                f"allocation: {allocation.requested_lamports/1e9:.5f} SOL\n"
+                f"promoted strategies: {', '.join(allocation.promoted_strategies)}\n"
+                "Live execution remains unavailable."
+            )
+        return pid
+
 
     async def _notify_candidate(
         self, cid: int, event: CandidateEvent, rt_bps: float, drift_bps: float, quote: dict
@@ -769,6 +827,16 @@ class RealtimeEngine:
             except Exception:
                 log.exception("paper position loop error")
             await asyncio.sleep(self.position_poll_secs)
+
+    async def _firm_book_loop(self) -> None:
+        while not self._stop.is_set():
+            try:
+                await self.firm_book.mark_open(self._market_sell_quote)
+                await self.firm_book.mark_candidate_horizons(self._market_sell_quote)
+            except Exception:
+                log.exception("firm book loop error")
+            await asyncio.sleep(5)
+
 
     async def _counterfactual_loop(self) -> None:
         """
