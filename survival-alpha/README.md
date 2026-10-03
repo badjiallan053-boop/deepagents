@@ -49,3 +49,56 @@ A social candidate can only return `SAMPLE_QUOTES_ONLY`, which means the
 next step is empirical Jupiter quote-drift measurement. See
 `SOCIAL_SIGNAL_SPEC.md`.
 
+
+## Realtime action engine
+
+The service now runs an always-on event engine when `REALTIME_ENABLED=true`.
+
+Sources:
+- Helius Developer `transactionSubscribe` for watched-wallet buys
+- PumpPortal migration stream (and optionally new-token stream)
+- Jupiter `/tokens/v2/toporganicscore/5m`
+
+Hot path:
+1. candidate event arrives;
+2. Jupiter WSOL->token executable quote;
+3. immediate token->WSOL sell-back quote;
+4. 500ms WSOL->token re-quote;
+5. deterministic sellability + latency gate;
+6. passing candidates become `ACTIONABLE_PAPER`;
+7. Telegram sends `PAPER ENTER / REJECT / OPEN JUPITER`.
+
+No live transaction endpoint exists.
+
+### Realtime endpoints
+
+- `GET /realtime/status`
+- `GET /realtime/candidates`
+- `GET /realtime/positions`
+- `POST /realtime/watch-wallet`
+- `POST /realtime/paper-enter/{candidate_id}`
+- `POST /realtime/paper-exit/{position_id}`
+
+### Optional realtime secrets
+
+- `PUMPPORTAL_API_KEY`
+- `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_CHAT_ID`
+- `WATCH_WALLETS` (comma-separated; wallets can also be hot-added via API)
+
+### Research controls
+
+- `PAPER_NOTIONAL_LAMPORTS=40000000`
+- `MAX_ROUNDTRIP_COST_BPS=800`
+- `MAX_ADVERSE_500_BPS=500`
+- `JUPITER_ORGANIC_MIN=50`
+- `MAX_OPEN_PAPER_POSITIONS=3`
+- `AUTO_PAPER=false`
+
+These defaults are experiment thresholds, not claims of profitability. Change them only after forward results support doing so.
+
+### Deployment
+
+Use an always-on service in Render's Singapore region. The Blueprint uses
+`0.5c-512mb`; the free plan is intentionally not used because sleeping a realtime
+WebSocket process destroys the experiment.
