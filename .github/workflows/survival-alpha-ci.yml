@@ -36,3 +36,5 @@ jobs:
         run: |
           grep -q "ACTIONABLE_PAPER" realtime_engine.py
           grep -q "live_execution_available.*False" app.py
+      - name: Compile shared gate stats
+        run: python -m py_compile gate_stats.py

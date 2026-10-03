@@ -1,5 +1,7 @@
 FROM python:3.12-slim
 WORKDIR /app
+# Shared gate statistics (imported by funding_basis); own line to avoid merge conflicts.
+COPY gate_stats.py ./
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends nodejs npm \
