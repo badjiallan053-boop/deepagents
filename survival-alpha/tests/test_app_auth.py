@@ -89,9 +89,9 @@ class AppAuthTests(unittest.TestCase):
                 cx.execute(text("""
                     INSERT INTO realtime_candidate (created_at_utc, updated_at_utc, mint, source,
                         notional_lamports, buy_out_amount, decision, strategy_votes_json,
-                        outcome_5m_bps, episode_primary)
+                        outcome_5m_bps, episode_primary, firm_primary)
                     VALUES ('2026-10-03T00:00:00+00:00', 'x', :m, 'jupiter_organic', 40000000,
-                        '1', 'ACTIONABLE_PAPER', :v, 500.0, 1)
+                        '1', 'ACTIONABLE_PAPER', :v, 500.0, 1, 1)
                 """), {"m": f"WinMint{i}", "v": votes})
                 cid = cx.execute(text("SELECT MAX(id) FROM realtime_candidate")).scalar_one()
                 cx.execute(text("""

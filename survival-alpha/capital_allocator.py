@@ -45,6 +45,7 @@ class FirmCapitalAllocator:
                 SELECT strategy_votes_json, outcome_5m_bps
                 FROM realtime_candidate
                 WHERE outcome_5m_bps IS NOT NULL
+                  AND firm_primary=1
                   AND strategy_votes_json IS NOT NULL
             """)).mappings().all()
 
@@ -80,6 +81,7 @@ class FirmCapitalAllocator:
                 FROM realtime_candidate
                 WHERE source='telegram'
                   AND source_detail=:channel
+                  AND episode_primary=1
                   AND outcome_5m_bps IS NOT NULL
                 ORDER BY id
             """), {"channel": channel}).scalars().all()

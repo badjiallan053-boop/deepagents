@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable, Optional
@@ -20,6 +21,7 @@ NO_ROUTE = "NO_ROUTE"        # single-attempt observation, retried until the win
 TRANSIENT = "TRANSIENT"      # 429 / 5xx / timeout / transport: never a loss by itself
 MARK_FAILED = "MARK_FAILED"  # transient errors persisted past the window: excluded, not -100%
 MISSED = "MISSED"            # horizon window passed before any attempt (e.g. downtime)
+CONFIG_ERROR = "CONFIG_ERROR"  # 401/403 or a malformed-request 4xx: our problem, never a loss
 PENDING = "PENDING"
 DONE = "DONE"
 
@@ -35,17 +37,48 @@ def _env_float(name: str, default: float) -> float:
         return default
 
 
+class QuoteUnavailable(Exception):
+    """
+    The quote venue for this token could not be confirmed (e.g. the Pump sidecar
+    errored, timed out or is down, and the Jupiter fallback found no route).
+    A "no route" from the wrong venue is not evidence the token is unsellable,
+    so this is always TRANSIENT, never a -100% markout.
+    """
+
+
+# Jupiter documents "no liquidity" as HTTP 400 {"error": "No routes found"}.
+# Only an explicit no-route body counts; any other 4xx (bad params, API schema
+# change) is a CONFIG_ERROR and must never be booked as a rug.
+_NO_ROUTE_BODY = re.compile(
+    r"no route|routes? not found|could not find any route|no liquidity|"
+    r"not tradable|token_not_tradable|COULD_NOT_FIND_ANY_ROUTE",
+    re.IGNORECASE,
+)
+
+
+def _response_text(resp: httpx.Response) -> str:
+    try:
+        return resp.text or ""
+    except Exception:
+        return ""
+
+
 def classify_quote_exception(exc: BaseException) -> str:
     """
     A sell quote that errors is NOT automatically a rug. Only an explicit
-    "cannot route this sell" answer (400/404/422) counts towards UNSELLABLE.
-    Rate limits, server errors, auth problems, timeouts and transport errors
-    are infrastructure noise and are retried, never booked as -100%.
+    "cannot route this sell" answer (400/404/422 whose body says no route)
+    counts towards UNSELLABLE. 401/403 and other 4xx are CONFIG_ERROR (our
+    side is broken). Rate limits, server errors, timeouts, transport errors
+    and unconfirmed-venue fallbacks are TRANSIENT. None of those are -100%.
     """
+    if isinstance(exc, QuoteUnavailable):
+        return TRANSIENT
     if isinstance(exc, httpx.HTTPStatusError):
         code = exc.response.status_code
         if code in (400, 404, 422):
-            return NO_ROUTE
+            return NO_ROUTE if _NO_ROUTE_BODY.search(_response_text(exc.response)) else CONFIG_ERROR
+        if code in (401, 403) or (400 <= code < 500 and code not in (408, 425, 429)):
+            return CONFIG_ERROR
         return TRANSIENT
     return TRANSIENT
 
@@ -55,7 +88,7 @@ async def classify_sell_quote(
     mint: str,
     token_amount: int,
 ) -> tuple[str, int, str]:
-    """Returns (SOLD | NO_ROUTE | TRANSIENT, value_lamports, error)."""
+    """Returns (SOLD | NO_ROUTE | TRANSIENT | CONFIG_ERROR, value_lamports, error)."""
     try:
         q = await quote_sell(mint, int(token_amount))
     except Exception as exc:  # classified, never swallowed into a fake loss
@@ -120,6 +153,9 @@ def ensure_firm_tables(engine) -> None:
             lateness_seconds DOUBLE PRECISION,
             late INTEGER NOT NULL DEFAULT 0,
             status TEXT,
+            gross_pnl_bps DOUBLE PRECISION,
+            network_fee_lamports BIGINT,
+            first_attempt_age_seconds DOUBLE PRECISION,
             UNIQUE(candidate_id, horizon_seconds)
         )
         """))
@@ -144,6 +180,9 @@ def ensure_firm_tables(engine) -> None:
         "ALTER TABLE candidate_markout ADD COLUMN lateness_seconds DOUBLE PRECISION",
         "ALTER TABLE candidate_markout ADD COLUMN late INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE candidate_markout ADD COLUMN status TEXT",
+        "ALTER TABLE candidate_markout ADD COLUMN gross_pnl_bps DOUBLE PRECISION",
+        "ALTER TABLE candidate_markout ADD COLUMN network_fee_lamports BIGINT",
+        "ALTER TABLE candidate_markout ADD COLUMN first_attempt_age_seconds DOUBLE PRECISION",
     ))
 
 
@@ -173,6 +212,18 @@ class FirmPortfolioBook:
         self.retry_window_secs = _env_float("MARKOUT_RETRY_WINDOW_SECS", 60.0)
         self.retry_base_secs = _env_float("MARKOUT_RETRY_BASE_SECS", 2.0)
         self.retry_max_backoff_secs = _env_float("MARKOUT_RETRY_MAX_BACKOFF_SECS", 20.0)
+        # Estimated Solana network cost per transaction (base signature fee +
+        # priority fee / Jito tip), charged on the buy and on the sell. The
+        # default (5,000 base + 500,000 priority = 0.000505 SOL per tx, ~252 bps
+        # round trip on the 0.04 SOL paper notional) is a deliberately
+        # conservative ASSUMPTION, not a measured figure. Token-account rent is
+        # refundable on close and is not charged here.
+        self.network_fee_lamports_per_tx = int(
+            _env_float("MARKOUT_NETWORK_FEE_LAMPORTS_PER_TX", 505_000.0)
+        )
+        # Set when a quote returns 401/403 or a malformed-request 4xx: marking
+        # results would be meaningless, so it is surfaced in degraded_reasons.
+        self.last_config_error: Optional[str] = None
 
     async def open_position(
         self,
@@ -292,6 +343,18 @@ class FirmPortfolioBook:
                 # Mark failures should not mutate the position into a false exit.
                 continue
 
+    def net_pnl_bps(self, value_lamports: int, cost_lamports: int, sold: bool) -> tuple[float, float, int]:
+        """
+        Returns (net_pnl_bps, gross_pnl_bps, network_fee_lamports). The buy tx
+        fee is always paid; the sell tx fee only when there was a sell.
+        """
+        fee = self.network_fee_lamports_per_tx * (2 if sold else 1)
+        if cost_lamports <= 0:
+            return -10_000.0, -10_000.0, fee
+        gross = ((value_lamports / cost_lamports) - 1.0) * 10_000
+        net = (((value_lamports - fee) / cost_lamports) - 1.0) * 10_000
+        return net, gross, fee
+
     def late_tolerance(self, horizon: int) -> float:
         return max(self.late_tolerance_min_secs, self.late_tolerance_frac * horizon)
 
@@ -319,10 +382,11 @@ class FirmPortfolioBook:
         horizons = self.markout_horizons
         with self.engine.begin() as cx:
             rows = cx.execute(text("""
-                SELECT c.id, c.created_at_utc, c.mint, c.notional_lamports, c.buy_out_amount
+                SELECT c.id, c.created_at_utc, c.entry_quote_at_utc, c.mint,
+                       c.notional_lamports, c.buy_out_amount
                 FROM realtime_candidate c
                 WHERE c.buy_out_amount IS NOT NULL
-                  AND c.episode_primary=1
+                  AND (c.episode_primary=1 OR c.firm_primary=1)
                   AND (
                     SELECT COUNT(*) FROM markout_attempt a
                     WHERE a.candidate_id=c.id AND a.status<>'PENDING'
@@ -341,8 +405,10 @@ class FirmPortfolioBook:
 
         for row in rows:
             cid = int(row["id"])
+            # The markout clock starts at the entry quote (first executable
+            # quote after the decision), not at row insert time.
             created = datetime.fromisoformat(
-                str(row["created_at_utc"]).replace("Z", "+00:00")
+                str(row.get("entry_quote_at_utc") or row["created_at_utc"]).replace("Z", "+00:00")
             )
             if created.tzinfo is None:
                 created = created.replace(tzinfo=timezone.utc)
@@ -370,16 +436,28 @@ class FirmPortfolioBook:
                 first_no_route = st.get("first_no_route_age_seconds") if st else None
                 if kind == NO_ROUTE and first_no_route is None:
                     first_no_route = age
+                if kind == CONFIG_ERROR:
+                    self.last_config_error = f"{utc_now()} {err}"[:300]
+                first_attempt_age = (
+                    float(st["first_attempt_age_seconds"])
+                    if st and st.get("first_attempt_age_seconds") is not None else age
+                )
 
                 if kind == SOLD:
-                    pnl_bps = ((value / cost) - 1.0) * 10_000 if cost > 0 else -10_000.0
-                    self._record_markout(cid, h, SOLD, value, pnl_bps, 1, age)
+                    pnl_bps, gross, fee = self.net_pnl_bps(value, cost, True)
+                    self._record_markout(cid, h, SOLD, value, pnl_bps, 1, age,
+                                         gross_pnl_bps=gross, fee_lamports=fee,
+                                         first_attempt_age=first_attempt_age)
                     self._finish_attempt(cid, h, DONE, st, age, kind, "", first_no_route)
                 elif age >= deadline_age:
                     if first_no_route is not None:
-                        # Seen unroutable and never sold inside the window: book
-                        # -100% at the age it was first observed unsellable.
-                        self._record_markout(cid, h, UNSELLABLE, 0, -10_000.0, 0, float(first_no_route))
+                        # Confirmed unroutable on the right venue and never sold
+                        # inside the window: book -100% (plus the buy tx fee) at
+                        # the age it was first observed unsellable.
+                        pnl_bps, gross, fee = self.net_pnl_bps(0, cost, False)
+                        self._record_markout(cid, h, UNSELLABLE, 0, pnl_bps, 0, float(first_no_route),
+                                             gross_pnl_bps=gross, fee_lamports=fee,
+                                             first_attempt_age=first_attempt_age)
                         self._finish_attempt(cid, h, DONE, st, age, NO_ROUTE, err, first_no_route)
                     else:
                         self._finish_attempt(cid, h, MARK_FAILED, st, age, kind, err, first_no_route)
@@ -426,9 +504,15 @@ class FirmPortfolioBook:
             if h == OUTCOME_HORIZON_SECONDS and status in (MARK_FAILED, MISSED):
                 self._sync_outcome(cx, cid, None, status)
 
-    def _record_markout(self, cid, h, status, value, pnl_bps, sellable, observed_age) -> None:
+    def _record_markout(self, cid, h, status, value, pnl_bps, sellable, observed_age,
+                        gross_pnl_bps=None, fee_lamports=None, first_attempt_age=None) -> None:
         lateness = float(observed_age) - h
-        late = 1 if lateness > self.late_tolerance(h) else 0
+        # Lateness is judged on when we FIRST tried this horizon (scheduling
+        # delay), the same way for recoveries and for rugs; a retry that only
+        # succeeds later must not be excluded while a persistent no-route at
+        # the same horizon is included.
+        judged = float(first_attempt_age) if first_attempt_age is not None else float(observed_age)
+        late = 1 if (judged - h) > self.late_tolerance(h) else 0
         with self.engine.begin() as cx:
             exists = cx.execute(text("""
                 SELECT COUNT(*) FROM candidate_markout
@@ -440,11 +524,13 @@ class FirmPortfolioBook:
                 INSERT INTO candidate_markout (
                     candidate_id, horizon_seconds, checked_at_utc,
                     value_lamports, pnl_bps, sellable,
-                    observed_age_seconds, lateness_seconds, late, status
+                    observed_age_seconds, lateness_seconds, late, status,
+                    gross_pnl_bps, network_fee_lamports, first_attempt_age_seconds
                 ) VALUES (
                     :candidate_id, :horizon_seconds, :checked_at_utc,
                     :value_lamports, :pnl_bps, :sellable,
-                    :age, :lateness, :late, :status
+                    :age, :lateness, :late, :status,
+                    :gross, :fee, :faa
                 )
             """), {
                 "candidate_id": int(cid),
@@ -457,6 +543,9 @@ class FirmPortfolioBook:
                 "lateness": lateness,
                 "late": late,
                 "status": status,
+                "gross": None if gross_pnl_bps is None else float(gross_pnl_bps),
+                "fee": None if fee_lamports is None else int(fee_lamports),
+                "faa": None if first_attempt_age is None else float(first_attempt_age),
             })
             if h == OUTCOME_HORIZON_SECONDS:
                 if late:

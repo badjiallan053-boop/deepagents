@@ -710,6 +710,11 @@ def realtime_status(x_paper_token: Optional[str] = Header(default=None)):
         counts["episode_primary"] = int(cx.execute(text(
             "SELECT COUNT(*) FROM realtime_candidate WHERE episode_primary=1"
         )).scalar_one())
+        # Firm-level unique decisions (one per token move across sources):
+        # the only count that may be compared with the 300-candidate gate.
+        counts["firm_primary"] = int(cx.execute(text(
+            "SELECT COUNT(*) FROM realtime_candidate WHERE firm_primary=1"
+        )).scalar_one())
     idle_reasons = realtime.idle_reasons()
     return {
         "mode": "paper-only",
@@ -742,7 +747,10 @@ def realtime_candidates(limit: int = 100, decision: Optional[str] = None,
                drift_500_bps, price_impact, organic_score, strategy_score,
                microstructure_json, strategy_votes_json, decision, reason,
                paper_entered, outcome_5m_bps, outcome_5m_status,
-               outcome_checked_at_utc, episode_key, episode_primary
+               outcome_checked_at_utc, episode_key, episode_primary,
+               accepted_later_at_utc, firm_episode_key, firm_primary,
+               decision_at_utc, entry_quote_at_utc, entry_latency_ms,
+               pre_decision_buy_out_amount
         FROM realtime_candidate
     """
     params = {"limit": limit}
@@ -764,6 +772,7 @@ def realtime_evaluation(x_paper_token: Optional[str] = Header(default=None)):
             SELECT decision, outcome_5m_bps
             FROM realtime_candidate
             WHERE outcome_5m_bps IS NOT NULL
+              AND firm_primary=1
         """)).mappings().all()
 
     groups = {}
@@ -810,6 +819,7 @@ def realtime_strategy_evaluation(x_paper_token: Optional[str] = Header(default=N
             SELECT strategy_votes_json, outcome_5m_bps
             FROM realtime_candidate
             WHERE outcome_5m_bps IS NOT NULL
+              AND firm_primary=1
               AND strategy_votes_json IS NOT NULL
         """)).mappings().all()
 
