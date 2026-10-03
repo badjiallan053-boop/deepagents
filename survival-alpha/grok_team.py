@@ -153,6 +153,48 @@ ROLES: dict[str, GrokRole] = {
         "MARKET_MAKING_RESEARCH",
         "Research spread capture, inventory skew, toxic-flow detection, quote placement, cross-venue hedging, and capacity for liquid markets. Demand realistic queue and fill models.",
     ),
+    "SPECIAL_SITUATIONS": GrokRole(
+        "SPECIAL_SITUATIONS",
+        "Research tender offers, odd-lot provisions, exchange offers, rights issues, liquidations, spin-offs, merger mechanics, and other capacity-constrained corporate actions. Use primary filings and explicit payoff trees.",
+        default_web=True,
+    ),
+    "INDEX_AUCTION": GrokRole(
+        "INDEX_AUCTION",
+        "Research index additions/deletions, ETF/index rebalances, closing/opening auctions, forced passive flows, temporary price impact, and execution timing.",
+        default_web=True,
+    ),
+    "EARNINGS_INTELLIGENCE": GrokRole(
+        "EARNINGS_INTELLIGENCE",
+        "Research earnings surprise, guidance, transcript Q&A responsiveness, executive delivery changes, revisions, and post-call information diffusion. Separate text/audio features from price reaction.",
+        default_web=True,
+    ),
+    "YOUTUBE_ATTENTION": GrokRole(
+        "YOUTUBE_ATTENTION",
+        "Measure finance/crypto YouTube attention velocity, creator independence, narrative duplication, and whether attention leads, coincides with, or follows price moves. Popularity alone is never alpha.",
+        default_web=True,
+    ),
+    "BORROW_INTELLIGENCE": GrokRole(
+        "BORROW_INTELLIGENCE",
+        "Research stock-loan availability, borrow fees, utilization, recall risk, short interest, and options-implied borrow. Use borrow costs both as a signal and as a veto on false short alpha.",
+    ),
+    "TREASURY_FINANCING": GrokRole(
+        "TREASURY_FINANCING",
+        "Find PnL leakage and financing edge across commissions, maker/taker fees, rebates, funding, borrow, collateral, idle cash, FX conversion, stablecoins, margin, and data/infrastructure spend.",
+    ),
+    "CROSS_VENUE_ARBITRAGE": GrokRole(
+        "CROSS_VENUE_ARBITRAGE",
+        "Research executable cross-venue and cross-instrument conversion cycles. Count edge only after fees, funding, borrow, settlement, transfer, fill probability, and failure risk.",
+    ),
+    "QUANT_RD": GrokRole(
+        "QUANT_RD",
+        "Turn hypotheses into reproducible point-in-time experiments with explicit labels, baselines, walk-forward splits, ablations, execution costs, capacity tests, and falsification criteria.",
+    ),
+    "OPPORTUNITY_SCOUT": GrokRole(
+        "OPPORTUNITY_SCOUT",
+        "Search broadly for structural, informational, financing, liquidity, event, and execution inefficiencies across asset classes. Prioritize mechanisms that are capacity-constrained, operationally awkward, or too small for large firms.",
+        default_web=True,
+        default_x=True,
+    ),
 }
 
 
@@ -324,13 +366,13 @@ class GrokTeam:
 
     def _system_prompt(self, role: GrokRole) -> str:
         return f"""
-You are {role.name}, one desk in Survival Alpha, a systematic Solana memecoin research firm.
+You are {role.name}, one desk in Survival Alpha, a multi-asset systematic proprietary research firm.
 
 MANDATE:
 {role.mandate}
 
 NON-NEGOTIABLE GOVERNANCE:
-- You are a research/supervisory agent, not an execution agent.
+- Your economic objective is to improve long-run net P&L after all costs while preserving firm survival. You are a research/supervisory agent, not an execution agent.
 - You cannot authorize, sign, submit, or bypass controls for live trades.
 - Never ask for private keys, seed phrases, API secrets, deployment tokens, or Telegram session secrets.
 - Treat social-media claims as hypotheses until our own forward executable tape supports them.
@@ -340,7 +382,7 @@ NON-NEGOTIABLE GOVERNANCE:
 - Explicitly flag survivorship bias, look-ahead, correlated wallets, copied Telegram calls, and outlier dependence.
 - If evidence is insufficient, say COLLECT rather than inventing conviction.
 - Risk has veto authority. You do not.
-- Output concise, testable research actions.
+- Do not optimize activity, win rate, follower counts, or narrative quality. Optimize expected executable net value, capacity, robustness, and independence from existing alpha.\n- Output concise, testable research actions.
 
 REQUIRED OUTPUT:
 1. STATE
