@@ -168,6 +168,9 @@ class RealtimeEngine:
         self.pumpportal_key = os.getenv("PUMPPORTAL_API_KEY", "").strip()
         self.telegram_token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
         self.telegram_chat_id = os.getenv("TELEGRAM_CHAT_ID", "").strip()
+        self.pump_quoter_url = os.getenv(
+            "PUMP_QUOTER_URL", "http://127.0.0.1:10001"
+        ).rstrip("/")
 
         self._stop = asyncio.Event()
         self._tasks: list[asyncio.Task] = []
@@ -287,6 +290,71 @@ class RealtimeEngine:
         data["_clientRttMs"] = rtt_ms
         return data
 
+    async def _market_buy_quote(self, mint: str, amount: int) -> dict[str, Any]:
+        """
+        Quote the actual market phase. Bonding-curve tokens are priced from live
+        Pump reserves through the local quote-only SDK sidecar; graduated/routable
+        tokens fall back to Jupiter.
+        """
+        assert self._http is not None
+        try:
+            r = await self._http.get(
+                f"{self.pump_quoter_url}/buy-quote",
+                params={"mint": mint, "lamports": str(int(amount))},
+                timeout=4.0,
+            )
+            if r.status_code == 200:
+                p = r.json()
+                if p.get("phase") == "bonding_curve":
+                    return {
+                        "_market": "pump_bonding_curve",
+                        "phase": "bonding_curve",
+                        "outAmount": p.get("tokensOut"),
+                        "sellbackLamports": p.get("sellbackLamports"),
+                        "roundtripBps": p.get("roundtripBps"),
+                        "priceImpact": (
+                            float(p.get("buyImpactBps") or 0) / 10_000.0
+                        ),
+                        "graduationProgressBps": p.get("graduationProgressBps"),
+                        "marketCapLamports": p.get("marketCapLamports"),
+                        "solNeededToGraduate": p.get("solNeededToGraduate"),
+                    }
+        except Exception:
+            log.debug("Pump sidecar buy quote unavailable for %s", mint, exc_info=True)
+
+        q = await self._jupiter_quote(WSOL_MINT, mint, amount)
+        q["_market"] = "jupiter"
+        q["phase"] = "graduated_or_external"
+        return q
+
+    async def _market_sell_quote(self, mint: str, token_amount: int) -> dict[str, Any]:
+        assert self._http is not None
+        try:
+            r = await self._http.get(
+                f"{self.pump_quoter_url}/sell-quote",
+                params={"mint": mint, "tokens": str(int(token_amount))},
+                timeout=4.0,
+            )
+            if r.status_code == 200:
+                p = r.json()
+                if p.get("phase") == "bonding_curve":
+                    return {
+                        "_market": "pump_bonding_curve",
+                        "phase": "bonding_curve",
+                        "outAmount": p.get("solOutLamports"),
+                        "priceImpact": (
+                            float(p.get("sellImpactBps") or 0) / 10_000.0
+                        ),
+                    }
+        except Exception:
+            log.debug("Pump sidecar sell quote unavailable for %s", mint, exc_info=True)
+
+        q = await self._jupiter_quote(mint, WSOL_MINT, token_amount)
+        q["_market"] = "jupiter"
+        q["phase"] = "graduated_or_external"
+        return q
+
+
     async def evaluate(self, event: CandidateEvent) -> Optional[int]:
         if not event.mint or event.mint == WSOL_MINT:
             return None
@@ -298,14 +366,22 @@ class RealtimeEngine:
         self._seen[seen_key] = now
 
         try:
-            q0 = await self._jupiter_quote(WSOL_MINT, event.mint, self.notional)
+            q0 = await self._market_buy_quote(event.mint, self.notional)
             out0 = int(q0.get("outAmount") or 0)
             if out0 <= 0:
                 return self._persist_candidate(event, None, None, None, None, "REJECT", "no executable buy quote")
 
-            sell0 = await self._jupiter_quote(event.mint, WSOL_MINT, out0)
-            sell_lamports = int(sell0.get("outAmount") or 0)
-            roundtrip_bps = ((sell_lamports / self.notional) - 1.0) * 10_000.0
+            if q0.get("_market") == "pump_bonding_curve" and q0.get("sellbackLamports"):
+                sell_lamports = int(q0.get("sellbackLamports") or 0)
+                roundtrip_bps = float(
+                    q0.get("roundtripBps")
+                    if q0.get("roundtripBps") is not None
+                    else ((sell_lamports / self.notional) - 1.0) * 10_000.0
+                )
+            else:
+                sell0 = await self._market_sell_quote(event.mint, out0)
+                sell_lamports = int(sell0.get("outAmount") or 0)
+                roundtrip_bps = ((sell_lamports / self.notional) - 1.0) * 10_000.0
 
             # Use the 500ms window productively: while quote decay accrues,
             # collect candidate-local on-chain microstructure from Helius.
@@ -316,7 +392,7 @@ class RealtimeEngine:
                 )
 
             await asyncio.sleep(0.5)
-            q500 = await self._jupiter_quote(WSOL_MINT, event.mint, self.notional)
+            q500 = await self._market_buy_quote(event.mint, self.notional)
             out500 = int(q500.get("outAmount") or 0)
             drift500 = ((out500 / out0) - 1.0) * 10_000.0 if out500 > 0 else -10_000.0
 
@@ -493,7 +569,7 @@ class RealtimeEngine:
         if already_open:
             return None
 
-        q = await self._jupiter_quote(WSOL_MINT, row["mint"], int(row["notional_lamports"]))
+        q = await self._market_buy_quote(row["mint"], int(row["notional_lamports"]))
         tokens = str(q.get("outAmount") or "0")
         if tokens == "0":
             return None
@@ -544,7 +620,7 @@ class RealtimeEngine:
             ), {"id": position_id}).mappings().first()
         if not pos:
             return
-        q = await self._jupiter_quote(pos["mint"], WSOL_MINT, int(pos["token_amount"]))
+        q = await self._market_sell_quote(pos["mint"], int(pos["token_amount"]))
         value = int(q.get("outAmount") or 0)
         pnl_bps = ((value / int(pos["cost_lamports"])) - 1.0) * 10_000 if value else -10_000.0
         with self.engine.begin() as cx:
@@ -587,8 +663,8 @@ class RealtimeEngine:
                             await self.paper_exit(int(pos["id"]))
                             continue
 
-                        q = await self._jupiter_quote(
-                            pos["mint"], WSOL_MINT, int(pos["token_amount"])
+                        q = await self._market_sell_quote(
+                            pos["mint"], int(pos["token_amount"])
                         )
                         value = int(q.get("outAmount") or 0)
                         pnl_bps = ((value / int(pos["cost_lamports"])) - 1.0) * 10_000 if value else -10_000.0
@@ -633,8 +709,8 @@ class RealtimeEngine:
                     if age < 300:
                         continue
                     try:
-                        q = await self._jupiter_quote(
-                            row["mint"], WSOL_MINT, int(row["buy_out_amount"])
+                        q = await self._market_sell_quote(
+                            row["mint"], int(row["buy_out_amount"])
                         )
                         value = int(q.get("outAmount") or 0)
                         cost = int(row["notional_lamports"])
