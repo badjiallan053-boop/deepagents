@@ -76,6 +76,38 @@ class AppAuthTests(unittest.TestCase):
             if "GET" in methods and "require_admin(" in src:
                 self.fail(f"GET {route.path} should use require_reader")
 
+    def test_quote_drift_summary_requires_token(self):
+        self.assertEqual(self.client.get("/paper/quote-drift/summary").status_code, 401)
+        r = self.client.get("/paper/quote-drift/summary", headers={"X-Paper-Token": "read-secret"})
+        self.assertEqual(r.status_code, 200)
+
+    def test_scorecards_survive_all_winning_buckets(self):
+        from sqlalchemy import text
+        votes = '[{"name":"TRENCHER_ORGANIC","passed":true}]'
+        with app_module.engine.begin() as cx:
+            for i in range(3):
+                cx.execute(text("""
+                    INSERT INTO realtime_candidate (created_at_utc, updated_at_utc, mint, source,
+                        notional_lamports, buy_out_amount, decision, strategy_votes_json,
+                        outcome_5m_bps, episode_primary)
+                    VALUES ('2026-10-03T00:00:00+00:00', 'x', :m, 'jupiter_organic', 40000000,
+                        '1', 'ACTIONABLE_PAPER', :v, 500.0, 1)
+                """), {"m": f"WinMint{i}", "v": votes})
+                cid = cx.execute(text("SELECT MAX(id) FROM realtime_candidate")).scalar_one()
+                cx.execute(text("""
+                    INSERT INTO candidate_markout (candidate_id, horizon_seconds, checked_at_utc,
+                        value_lamports, pnl_bps, sellable, late, status)
+                    VALUES (:id, 300, 'x', 42000000, 500.0, 1, 0, 'SOLD')
+                """), {"id": cid})
+        h = {"X-Paper-Token": "read-secret"}
+        r = self.client.get("/team/strategy-scorecards", headers=h)
+        self.assertEqual(r.status_code, 200)
+        card = r.json()["strategies"]["TRENCHER_ORGANIC"]["passed"]
+        self.assertTrue(card["profit_factor_capped"])
+        r = self.client.get("/team/horizon-scorecards", headers=h)
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(r.json()["horizons"]["300"]["accepted"]["profit_factor_capped"])
+
 
 if __name__ == "__main__":
     unittest.main()

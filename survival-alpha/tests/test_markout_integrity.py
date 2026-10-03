@@ -329,5 +329,21 @@ class EpisodeDedupeTests(unittest.TestCase):
         self.assertFalse(any("HELIUS" in r for r in rt.degraded_reasons()))
 
 
+    # Postgres-safe boolean writes (paper_entered is BOOLEAN on Postgres).
+    def test_paper_enter_sets_boolean_flag(self):
+        cid = self._persist(decision="ACTIONABLE_PAPER")
+
+        async def buy_quote(mint, amount):
+            return {"outAmount": "123456"}
+
+        self.rt._market_buy_quote = buy_quote
+        pid = asyncio.run(self.rt.paper_enter(cid))
+        self.assertIsNotNone(pid)
+        self.assertTrue(bool(self._row(cid)["paper_entered"]))
+        with self.engine.begin() as cx:
+            n = cx.execute(text("SELECT COUNT(*) FROM paper_position WHERE status='OPEN'")).scalar_one()
+        self.assertEqual(n, 1)
+
+
 if __name__ == "__main__":
     unittest.main()

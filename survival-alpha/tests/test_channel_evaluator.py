@@ -22,6 +22,20 @@ class ChannelEvaluatorTests(unittest.TestCase):
         card = evaluate_outcomes([100, 80, -20], min_samples=20)
         self.assertEqual(card.status, "COLLECT")
 
+    def test_no_losses_caps_profit_factor_and_stays_json_safe(self):
+        import json
+        from channel_evaluator import PROFIT_FACTOR_CAP
+        card = evaluate_outcomes([100, 200, 300] * 10, min_samples=20, min_profit_factor=1.3)
+        self.assertEqual(card.profit_factor, PROFIT_FACTOR_CAP)
+        self.assertTrue(card.profit_factor_capped)
+        self.assertEqual(card.status, "PROMOTE")  # gate semantics unchanged vs inf
+        json.dumps(card.to_dict(), allow_nan=False)
+
+    def test_normal_profit_factor_not_flagged(self):
+        card = evaluate_outcomes([100, -50, 200], min_samples=1)
+        self.assertFalse(card.profit_factor_capped)
+        self.assertAlmostEqual(card.profit_factor, 6.0)
+
 
 if __name__ == "__main__":
     unittest.main()

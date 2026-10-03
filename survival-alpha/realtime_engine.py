@@ -884,9 +884,10 @@ class RealtimeEngine:
                 pid = cx.execute(text(
                     "SELECT id FROM paper_position WHERE candidate_id=:cid ORDER BY id DESC LIMIT 1"
                 ), {"cid": candidate_id}).scalar_one()
+            # Bound Python bool: BOOLEAN on Postgres, INTEGER 1 on SQLite.
             cx.execute(text(
-                "UPDATE realtime_candidate SET paper_entered=1, updated_at_utc=:u WHERE id=:id"
-            ), {"u": _now_utc(), "id": candidate_id})
+                "UPDATE realtime_candidate SET paper_entered=:t, updated_at_utc=:u WHERE id=:id"
+            ), {"t": True, "u": _now_utc(), "id": candidate_id})
 
         await self._telegram_send(
             f"🧪 PAPER ENTERED #{pid}\n{row['mint']}\n"

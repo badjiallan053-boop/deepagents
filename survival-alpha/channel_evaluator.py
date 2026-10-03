@@ -17,9 +17,16 @@ class Scorecard:
     large_loss_rate: float | None
     bootstrap_mean_lower_95_bps: float | None
     status: str
+    # True when there were no losing outcomes: profit_factor is then reported
+    # as PROFIT_FACTOR_CAP instead of inf so the card stays JSON-serializable.
+    profit_factor_capped: bool = False
 
     def to_dict(self):
         return asdict(self)
+
+
+# Same convention as grok_team's compact stats; a JSON-safe stand-in for inf.
+PROFIT_FACTOR_CAP = 999.0
 
 
 def _profit_factor(values: list[float]) -> float | None:
@@ -57,6 +64,7 @@ def evaluate_outcomes(
         return Scorecard(0, None, None, None, None, None, None, "NO_DATA")
 
     pf = _profit_factor(values)
+    pf_capped = pf is not None and (math.isinf(pf) or pf > PROFIT_FACTOR_CAP)
     lower = _bootstrap_lower(values)
     n = len(values)
     positive_rate = sum(1 for v in values if v > 0) / n
@@ -81,8 +89,9 @@ def evaluate_outcomes(
         mean_bps=sum(values) / n,
         median_bps=statistics.median(values),
         positive_rate=positive_rate,
-        profit_factor=pf,
+        profit_factor=PROFIT_FACTOR_CAP if pf_capped else pf,
         large_loss_rate=large_loss_rate,
         bootstrap_mean_lower_95_bps=lower,
         status=status,
+        profit_factor_capped=pf_capped,
     )

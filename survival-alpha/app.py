@@ -341,7 +341,8 @@ def quote_drift(signal: QuoteSignal, x_paper_token: Optional[str] = Header(defau
 
 
 @app.get("/paper/quote-drift/summary")
-def quote_summary(limit: int = 5000):
+def quote_summary(limit: int = 5000, x_paper_token: Optional[str] = Header(default=None)):
+    require_reader(x_paper_token)
     limit = min(max(limit, 1), 20000)
     with engine.begin() as cx:
         rows = cx.execute(text("""
