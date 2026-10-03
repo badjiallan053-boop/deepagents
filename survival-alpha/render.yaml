@@ -40,3 +40,15 @@ services:
         sync: false
       - key: TELEGRAM_CHAT_ID
         sync: false
+      - key: TG_BOT_SIGNAL_CHAT_IDS
+        sync: false
+      - key: TG_API_ID
+        sync: false
+      - key: TG_API_HASH
+        sync: false
+      - key: TG_SESSION_STRING
+        sync: false
+      - key: TG_SIGNAL_CHANNELS
+        sync: false
+      - key: PUMP_QUOTER_URL
+        value: "http://127.0.0.1:10001"
