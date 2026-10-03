@@ -483,6 +483,11 @@ class RealtimeEngine:
                 source_count=source_count,
                 independent_wallet_count=independent_wallet_count,
             )
+            channel_prior = (
+                self._telegram_channel_prior(event.detail)
+                if event.source == "telegram"
+                else {"n": 0, "profit_factor": None, "bootstrap_mean_lower_95_bps": None}
+            )
             votes = evaluate_tournament(
                 source=event.source,
                 micro=micro,
@@ -491,6 +496,9 @@ class RealtimeEngine:
                 organic_score=effective_organic,
                 source_count=source_count,
                 independent_wallet_count=independent_wallet_count,
+                telegram_channel_samples=int(channel_prior.get("n") or 0),
+                telegram_channel_profit_factor=channel_prior.get("profit_factor"),
+                telegram_channel_ci_lower_bps=channel_prior.get("bootstrap_mean_lower_95_bps"),
             )
 
             # A strategy must pass independently; the aggregate score is diagnostic,
@@ -515,6 +523,14 @@ class RealtimeEngine:
                 microstructure=micro.to_dict(),
                 strategy_votes=[v.to_dict() for v in votes],
                 organic_score=effective_organic,
+                market_phase=str(q0.get("phase") or q0.get("_market") or ""),
+                market_data={
+                    "market": q0.get("_market"),
+                    "graduationProgressBps": q0.get("graduationProgressBps"),
+                    "marketCapLamports": q0.get("marketCapLamports"),
+                    "solNeededToGraduate": q0.get("solNeededToGraduate"),
+                    "channelPrior": channel_prior if event.source == "telegram" else None,
+                },
             )
 
             if decision == "ACTIONABLE_PAPER":
@@ -542,6 +558,8 @@ class RealtimeEngine:
         microstructure: Optional[dict] = None,
         strategy_votes: Optional[list[dict]] = None,
         organic_score: Optional[float] = None,
+        market_phase: str = "",
+        market_data: Optional[dict] = None,
     ) -> int:
         row = {
             "created_at_utc": _now_utc(),
@@ -562,6 +580,10 @@ class RealtimeEngine:
             "strategy_score": strategy_score,
             "microstructure_json": json.dumps(microstructure or {}, separators=(",", ":")),
             "strategy_votes_json": json.dumps(strategy_votes or [], separators=(",", ":")),
+            "signal_published_at_utc": event.published_at_utc or None,
+            "signal_age_ms": self._signal_age_ms(event.published_at_utc),
+            "market_phase": market_phase or None,
+            "market_data_json": json.dumps(market_data or {}, separators=(",", ":")),
             "decision": decision,
             "reason": reason,
         }
@@ -572,13 +594,15 @@ class RealtimeEngine:
                     source_signature, source_wallet, source_slot, notional_lamports,
                     buy_out_amount, sellback_out_lamports, roundtrip_bps,
                     drift_500_bps, price_impact, organic_score, strategy_score,
-                    microstructure_json, strategy_votes_json, decision, reason
+                    microstructure_json, strategy_votes_json, signal_published_at_utc,
+                    signal_age_ms, market_phase, market_data_json, decision, reason
                 ) VALUES (
                     :created_at_utc, :updated_at_utc, :mint, :source, :source_detail,
                     :source_signature, :source_wallet, :source_slot, :notional_lamports,
                     :buy_out_amount, :sellback_out_lamports, :roundtrip_bps,
                     :drift_500_bps, :price_impact, :organic_score, :strategy_score,
-                    :microstructure_json, :strategy_votes_json, :decision, :reason
+                    :microstructure_json, :strategy_votes_json, :signal_published_at_utc,
+                    :signal_age_ms, :market_phase, :market_data_json, :decision, :reason
                 )
             """), row)
             cid = getattr(result, "lastrowid", None)
@@ -1005,6 +1029,30 @@ class RealtimeEngine:
                 r.raise_for_status()
                 for update in r.json().get("result", []):
                     self._telegram_offset = max(self._telegram_offset, int(update["update_id"]) + 1)
+
+                    # Bot-mode signal ingestion for channels/groups where the bot
+                    # is actually present. Only explicitly whitelisted chat IDs count.
+                    msg = update.get("channel_post") or update.get("message")
+                    if msg:
+                        chat = msg.get("chat") or {}
+                        chat_id = str(chat.get("id") or "")
+                        if chat_id in self.bot_signal_chat_ids:
+                            username = chat.get("username")
+                            channel = f"@{username}" if username else f"id_{chat_id}"
+                            body = msg.get("text") or msg.get("caption") or ""
+                            calls = parse_telegram_message(
+                                channel=channel,
+                                message_id=int(msg.get("message_id") or 0),
+                                published_at=int(msg.get("date") or time.time()),
+                                text=body,
+                                source_url=(
+                                    f"https://t.me/{username}/{msg.get('message_id')}"
+                                    if username else ""
+                                ),
+                            )
+                            for call in calls:
+                                await self._handle_telegram_call(call)
+
                     cb = update.get("callback_query")
                     if not cb:
                         continue
