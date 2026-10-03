@@ -135,8 +135,9 @@ class RealtimeEngine:
         self.organic_poll_secs = _env_float("JUPITER_ORGANIC_POLL_SECS", 20.0)
         self.candidate_cooldown_secs = _env_float("CANDIDATE_COOLDOWN_SECS", 60.0)
         self.position_poll_secs = _env_float("PAPER_POSITION_POLL_SECS", 5.0)
+        self.paper_max_hold_secs = _env_float("PAPER_MAX_HOLD_SECS", 300.0)
         self.auto_paper = _env_bool("AUTO_PAPER", False)
-        self.max_open_paper = _env_int("MAX_OPEN_PAPER_POSITIONS", 3)
+        self.max_open_paper = _env_int("MAX_OPEN_PAPER_POSITIONS", 20)
 
         self.jupiter_key = os.getenv("JUPITER_API_KEY", "").strip()
         self.helius_key = os.getenv("HELIUS_API_KEY", "").strip()
@@ -367,6 +368,12 @@ class RealtimeEngine:
         if self._open_position_count() >= self.max_open_paper:
             await self._telegram_send("Paper entry skipped: max open paper positions reached.")
             return None
+        with self.engine.begin() as cx:
+            already_open = int(cx.execute(text(
+                "SELECT COUNT(*) FROM paper_position WHERE status='OPEN' AND mint=:mint"
+            ), {"mint": row["mint"]}).scalar_one())
+        if already_open:
+            return None
 
         q = await self._jupiter_quote(WSOL_MINT, row["mint"], int(row["notional_lamports"]))
         tokens = str(q.get("outAmount") or "0")
@@ -450,6 +457,18 @@ class RealtimeEngine:
                     )).mappings().all()
                 for pos in rows:
                     try:
+                        opened = str(pos["opened_at_utc"])
+                        if opened.endswith("Z"):
+                            opened = opened[:-1] + "+00:00"
+                        from datetime import datetime, timezone
+                        opened_dt = datetime.fromisoformat(opened)
+                        if opened_dt.tzinfo is None:
+                            opened_dt = opened_dt.replace(tzinfo=timezone.utc)
+                        age_secs = (datetime.now(timezone.utc) - opened_dt).total_seconds()
+                        if age_secs >= self.paper_max_hold_secs:
+                            await self.paper_exit(int(pos["id"]))
+                            continue
+
                         q = await self._jupiter_quote(
                             pos["mint"], WSOL_MINT, int(pos["token_amount"])
                         )
