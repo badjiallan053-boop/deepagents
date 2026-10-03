@@ -17,6 +17,7 @@ from sqlalchemy import create_engine, text
 from social_signal import compute_features, content_fingerprint
 from realtime_engine import RealtimeEngine
 from agent_team import AgentTeam
+from grok_team import GrokTeam
 
 JUPITER_ORDER_URL = "https://api.jup.ag/swap/v2/order"
 WSOL_MINT = "So11111111111111111111111111111111111111112"
@@ -32,6 +33,7 @@ engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 app = FastAPI(title="Survival Alpha Paper Lab", version="0.2.0")
 realtime = RealtimeEngine(engine)
 agent_team = AgentTeam(engine)
+grok_team = GrokTeam(engine)
 
 
 @app.on_event("startup")
@@ -164,6 +166,13 @@ class WatchWalletRequest(BaseModel):
     wallet: str = Field(min_length=30, max_length=60)
     label: Optional[str] = Field(default=None, max_length=200)
     enabled: bool = True
+
+
+class GrokRunRequest(BaseModel):
+    objective: str = Field(default="", max_length=10000)
+    deep: Optional[bool] = None
+    use_web: Optional[bool] = None
+    use_x: Optional[bool] = None
 
 
 class SocialEvent(BaseModel):
@@ -413,6 +422,60 @@ def _fetch_wallet(wallet, days, page_limit, max_pages):
 
 
 
+
+@app.get("/grok/status")
+def grok_status(x_paper_token: Optional[str] = Header(default=None)):
+    require_admin(x_paper_token)
+    return {
+        "mode": "research-only",
+        "grok": grok_team.status(),
+        "live_execution_available": False,
+    }
+
+
+@app.get("/grok/context/{role}")
+def grok_context(role: str, x_paper_token: Optional[str] = Header(default=None)):
+    require_admin(x_paper_token)
+    try:
+        return {
+            "mode": "research-only",
+            "context": grok_team.local_context(role),
+            "contains_secrets": False,
+        }
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+
+
+@app.post("/grok/run/{role}")
+async def grok_run(role: str, req: GrokRunRequest,
+                   x_paper_token: Optional[str] = Header(default=None)):
+    require_admin(x_paper_token)
+    try:
+        return await grok_team.run(
+            role_name=role,
+            objective=req.objective,
+            deep=req.deep,
+            use_web=req.use_web,
+            use_x=req.use_x,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(503, str(exc))
+    except Exception as exc:
+        raise HTTPException(502, f"Grok request failed: {type(exc).__name__}: {exc}")
+
+
+@app.get("/grok/runs")
+def grok_runs(limit: int = 50, x_paper_token: Optional[str] = Header(default=None)):
+    require_admin(x_paper_token)
+    return {
+        "mode": "research-only",
+        "runs": grok_team.recent_runs(limit),
+        "live_execution_available": False,
+    }
+
+
 @app.get("/team/manifest")
 def team_manifest(x_paper_token: Optional[str] = Header(default=None)):
     require_admin(x_paper_token)
@@ -530,7 +593,7 @@ def realtime_status(x_paper_token: Optional[str] = Header(default=None)):
                 "SELECT COUNT(*) FROM paper_position WHERE status='OPEN'"
             )).scalar_one()),
             "watch_wallets": int(cx.execute(text(
-                "SELECT COUNT(*) FROM watch_wallet WHERE enabled=1"
+                "SELECT COUNT(*) FROM watch_wallet WHERE enabled"
             )).scalar_one()),
         }
     return {
