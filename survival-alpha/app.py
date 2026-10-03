@@ -18,6 +18,7 @@ from social_signal import compute_features, content_fingerprint
 from realtime_engine import RealtimeEngine
 from agent_team import AgentTeam
 from grok_team import GrokTeam
+from grok_profit_team import ProfitTeam, HypothesisInput
 
 JUPITER_ORDER_URL = "https://api.jup.ag/swap/v2/order"
 WSOL_MINT = "So11111111111111111111111111111111111111112"
@@ -34,6 +35,7 @@ app = FastAPI(title="Survival Alpha Paper Lab", version="0.2.0")
 realtime = RealtimeEngine(engine)
 agent_team = AgentTeam(engine)
 grok_team = GrokTeam(engine)
+profit_team = ProfitTeam(engine, grok_team)
 
 
 @app.on_event("startup")
@@ -173,6 +175,25 @@ class GrokRunRequest(BaseModel):
     deep: Optional[bool] = None
     use_web: Optional[bool] = None
     use_x: Optional[bool] = None
+
+
+class ProfitHypothesisRequest(BaseModel):
+    title: str = Field(min_length=3, max_length=300)
+    desk: str = Field(min_length=2, max_length=80)
+    asset_class: str = Field(min_length=2, max_length=80)
+    instruments: list[str] = Field(min_length=1, max_length=50)
+    mechanism: str = Field(min_length=10, max_length=10000)
+    horizon: str = Field(min_length=1, max_length=200)
+    source_refs: list[str] = Field(default_factory=list, max_length=100)
+    falsification_test: str = Field(min_length=5, max_length=10000)
+    data_needed: str = Field(default="", max_length=10000)
+    execution_constraints: str = Field(default="", max_length=10000)
+    correlation_cluster: str = Field(default="", max_length=200)
+    expected_edge_bps: Optional[float] = None
+    expected_cost_bps: Optional[float] = None
+    capacity_usd: Optional[float] = Field(default=None, ge=0)
+    confidence: Optional[float] = Field(default=None, ge=0, le=1)
+    notes: str = Field(default="", max_length=10000)
 
 
 class SocialEvent(BaseModel):
@@ -421,6 +442,83 @@ def _fetch_wallet(wallet, days, page_limit, max_pages):
 
 
 
+
+
+
+@app.get("/profit-team/manifest")
+def profit_team_manifest(x_paper_token: Optional[str] = Header(default=None)):
+    require_admin(x_paper_token)
+    return profit_team.manifest()
+
+
+@app.get("/profit-team/dashboard")
+def profit_team_dashboard(x_paper_token: Optional[str] = Header(default=None)):
+    require_admin(x_paper_token)
+    return profit_team.dashboard()
+
+
+@app.post("/profit-team/hypotheses")
+def create_profit_hypothesis(req: ProfitHypothesisRequest,
+                             x_paper_token: Optional[str] = Header(default=None)):
+    require_admin(x_paper_token)
+    try:
+        hid = profit_team.create(HypothesisInput(
+            title=req.title,
+            desk=req.desk,
+            asset_class=req.asset_class,
+            instruments=req.instruments,
+            mechanism=req.mechanism,
+            horizon=req.horizon,
+            source_refs=req.source_refs,
+            falsification_test=req.falsification_test,
+            data_needed=req.data_needed,
+            execution_constraints=req.execution_constraints,
+            correlation_cluster=req.correlation_cluster,
+            expected_edge_bps=req.expected_edge_bps,
+            expected_cost_bps=req.expected_cost_bps,
+            capacity_usd=req.capacity_usd,
+            confidence=req.confidence,
+            notes=req.notes,
+        ))
+        return {
+            "hypothesis_id": hid,
+            "status": "ACTIVE",
+            "stage": "DESK_REVIEW",
+            "live_trade_authorized": False,
+        }
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+
+
+@app.get("/profit-team/hypotheses")
+def list_profit_hypotheses(limit: int = 200, status: Optional[str] = None,
+                           x_paper_token: Optional[str] = Header(default=None)):
+    require_admin(x_paper_token)
+    return {"hypotheses": profit_team.list(limit=limit, status=status)}
+
+
+@app.get("/profit-team/hypotheses/{hypothesis_id}")
+def get_profit_hypothesis(hypothesis_id: int,
+                          x_paper_token: Optional[str] = Header(default=None)):
+    require_admin(x_paper_token)
+    h = profit_team.get(hypothesis_id)
+    if not h:
+        raise HTTPException(404, "hypothesis not found")
+    return {"hypothesis": h, "reviews": profit_team.reviews(hypothesis_id)}
+
+
+@app.post("/profit-team/hypotheses/{hypothesis_id}/review-next")
+async def review_profit_hypothesis(hypothesis_id: int,
+                                   x_paper_token: Optional[str] = Header(default=None)):
+    require_admin(x_paper_token)
+    try:
+        return await profit_team.review_next(hypothesis_id)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(409, str(exc))
+    except Exception as exc:
+        raise HTTPException(502, f"profit-team review failed: {type(exc).__name__}: {exc}")
 
 
 @app.get("/grok/status")
