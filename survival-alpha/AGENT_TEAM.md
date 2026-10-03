@@ -188,3 +188,42 @@ A live signer is a separate future component. Do not add it to this process.
 A Stage-1 experiment should only be considered after the forward tape shows
 repeatable separation and the measured execution model remains close to actual
 quotes. The first Stage-1 bankroll remains isolated and tiny.
+
+
+### 15. PORTFOLIO_MANAGER
+Runs a second, simulated fund book. Research candidates are never given capital
+merely because they passed today's gate. A currently passing strategy must first
+have been PROMOTED from prior forward samples. Telegram channels must earn the
+same promotion independently.
+
+### 16. FIRM_RISK
+Portfolio-level veto that sits above the allocator. It enforces daily loss,
+gross exposure, single-position, source/channel concentration, open-position and
+duplicate-mint limits. It cannot generate a trade.
+
+### 17. MARKOUT_AGENT
+Marks every candidate at fixed 30s / 2m / 5m / 15m executable exit horizons.
+This reveals whether an edge is only theoretical at fast horizons or persists
+long enough for our infrastructure to capture.
+
+## Book structure
+
+```
+SCOUTS -> RISK/STRATEGY -> RESEARCH BOOK -> FORWARD EVIDENCE
+                                      |
+                                      v
+                              PROMOTION GATE
+                                      |
+                                      v
+                              CAPITAL ALLOCATOR
+                                      |
+                                      v
+                                FIRM RISK
+                                      |
+                                      v
+                           SIMULATED FUND BOOK
+```
+
+The research book and firm book must never be conflated. The research book asks
+"does information exist?" The firm book asks "would we allocate scarce capital
+to this already-proven edge under portfolio constraints?"
