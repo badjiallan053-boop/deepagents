@@ -20,6 +20,7 @@ from agent_team import AgentTeam
 from grok_team import GrokTeam
 from grok_profit_team import ProfitTeam, HypothesisInput
 from funding_basis import FundingBasisTracker, check_read_or_admin as funding_check_reader
+from special_situations import SpecialSituationsScanner, check_read_or_admin
 
 JUPITER_ORDER_URL = "https://api.jup.ag/swap/v2/order"
 WSOL_MINT = "So11111111111111111111111111111111111111112"
@@ -1129,3 +1130,55 @@ def funding_positions(
 def funding_scorecard(x_paper_token: Optional[str] = Header(default=None)):
     require_funding_reader(x_paper_token)
     return funding.scorecard()
+
+
+# ---------------------------------------------------------------------------
+# Special situations: SEC odd-lot tender offers (PAPER ONLY, no broker/orders).
+# Background poller runs only when SPECIAL_SITUATIONS_ENABLED=true and
+# SEC_USER_AGENT is set. Read endpoints accept PAPER_READ_TOKEN or
+# PAPER_ADMIN_TOKEN (switch to require_reader() once PR #1 merges).
+# ---------------------------------------------------------------------------
+special = SpecialSituationsScanner(engine)
+
+
+@app.on_event("startup")
+async def _start_special():
+    await special.start()
+
+
+@app.on_event("shutdown")
+async def _stop_special():
+    await special.stop()
+
+
+def require_special_reader(token: Optional[str]) -> None:
+    status, detail = check_read_or_admin(token)
+    if status != 200:
+        raise HTTPException(status, detail)
+
+
+@app.get("/special/status")
+def special_status(x_paper_token: Optional[str] = Header(default=None)):
+    require_special_reader(x_paper_token)
+    return special.status()
+
+
+@app.get("/special/tenders")
+def special_tenders(
+    status: Optional[str] = None,
+    odd_lot_only: bool = False,
+    limit: int = 200,
+    x_paper_token: Optional[str] = Header(default=None),
+):
+    require_special_reader(x_paper_token)
+    rows = special.list_tenders(status=status, odd_lot_only=odd_lot_only, limit=limit)
+    return {"mode": "paper-only", "live_execution_available": False, "count": len(rows), "tenders": rows}
+
+
+@app.get("/special/tenders/{accession}")
+def special_tender_detail(accession: str, x_paper_token: Optional[str] = Header(default=None)):
+    require_special_reader(x_paper_token)
+    t = special.get_tender(accession)
+    if not t:
+        raise HTTPException(404, "tender not found")
+    return t

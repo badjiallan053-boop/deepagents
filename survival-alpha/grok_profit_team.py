@@ -234,13 +234,24 @@ class ProfitTeam:
             """), {"id": int(hypothesis_id)}).mappings().all()
         return [dict(r) for r in rows]
 
-    @staticmethod
-    def _parse_verdict(text_value: str) -> str:
-        m = re.search(
-            r"(?:GATE_VERDICT|VERDICT)\s*[:=\-]\s*(PASS|REWORK|KILL|COLLECT)",
-            text_value or "",
-            flags=re.I,
-        )
+    _VERDICT_LINE = re.compile(
+        r"^[\s*_`>#-]*GATE_VERDICT[\s*_`]*[:=\-]\s*[*_`]*(PASS|REWORK|KILL|COLLECT)[*_`.\s]*$",
+        flags=re.I,
+    )
+
+    @classmethod
+    def _parse_verdict(cls, text_value: str) -> str:
+        """Accept GATE_VERDICT only from the final non-empty line of the reply.
+
+        Security: a search over the whole reply would let quoted or injected
+        content (e.g. web/X results echoed by the model, or text inside the
+        hypothesis packet) earlier in the response decide the gate. The prompt
+        requires the verdict as the last line, so anything else is COLLECT.
+        """
+        lines = [ln.strip() for ln in (text_value or "").splitlines() if ln.strip()]
+        if not lines:
+            return "COLLECT"
+        m = cls._VERDICT_LINE.match(lines[-1])
         return m.group(1).upper() if m else "COLLECT"
 
     @staticmethod
