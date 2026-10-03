@@ -30,7 +30,17 @@ Configuration (env)
 SPECIAL_SITUATIONS_ENABLED   default "false" - background poller off unless true
 SEC_USER_AGENT               required by SEC fair-access policy ("Name email")
 SPECIAL_POLL_SECONDS         default 1800
-SPECIAL_LOOKBACK_DAYS        default 45
+SPECIAL_LOOKBACK_DAYS        default 45 (full-text search window for new filings; 1..365)
+SPECIAL_BACKFILL_DAYS        default 365 - when an amendment arrives whose original
+                             filing is not in the DB, look back this far for the
+                             original (catches older offers still open)
+SPECIAL_UNKNOWN_EXPIRY_STALE_DAYS default 60 - a tender whose expiration could not
+                             be parsed is UNKNOWN_EXPIRY; after this many days
+                             with no new filing it becomes STALE_UNKNOWN
+SPECIAL_PRORATION_FILL_FLOOR default 0.0 - assumed fill fraction for a prorated
+                             offer (no odd-lot priority) when the offer size vs
+                             shares outstanding cannot be parsed
+SPECIAL_PRICE_USER_AGENT     generic UA for price requests (never the SEC UA)
 SPECIAL_SEC_MAX_RPS          default 5 (hard-capped at 9, SEC limit is 10/s)
 SPECIAL_PRICE_SOURCE         "none" (default, EV unpriced) | "yahoo_chart"
                              (unofficial public endpoint, opt-in, labeled)
@@ -61,7 +71,7 @@ from typing import Any, Optional
 from urllib.parse import quote
 
 import httpx
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 
 log = logging.getLogger("special_situations")
 
@@ -79,6 +89,10 @@ FTS_URL = "https://efts.sec.gov/LATEST/search-index"
 TICKERS_URL = "https://www.sec.gov/files/company_tickers.json"
 ARCHIVE_URL = "https://www.sec.gov/Archives/edgar/data/{cik}/{acc_nodash}/{acc}.txt"
 YAHOO_CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?range=1d&interval=1d"
+# Price requests go through a SEPARATE client with a generic UA. The SEC
+# User-Agent carries a contact e-mail and must only ever be sent to sec.gov.
+DEFAULT_PRICE_USER_AGENT = "Mozilla/5.0 (compatible; paper-research)"
+OPEN_LIKE_STATUSES = ("OPEN", "EXPIRED_AWAITING_RESULTS", "UNKNOWN_EXPIRY")
 MAX_SUBMISSION_BYTES = 12_000_000
 MAX_TEXT_CHARS = 1_500_000
 SKIP_DOC_TYPES = ("GRAPHIC", "ZIP", "PDF", "EXCEL", "XML", "JSON")
@@ -280,6 +294,9 @@ def extract_expiration(t: str, amendment: bool = False) -> dict[str, Any]:
 
     cands = [parse_month_date(m.group(1)) for m in re.finditer(
         r"expire[sd]?\s+at\s+.{0,170}?\bon\s+(?:[A-Za-z]+day,?\s+)?" + _DATE, t, re.I) if not_waiting_period(m)]
+    # Canadian take-over bids (Schedule 14D-1F): "will remain open for acceptance until 5:00 p.m. (Mountain Time) on ..."
+    cands += [parse_month_date(m.group(1)) for m in re.finditer(
+        r"open\s+for\s+acceptance\s+until\s+.{0,80}?\bon\s+(?:[A-Za-z]+day,?\s+)?" + _DATE, t, re.I)]
     cands += [parse_month_date(m.group(1)) for m in re.finditer(
         r"Expiration\s+(?:Date|Time)\W{0,20}(?:means|is|shall\s+mean)\s+.{0,170}?\bon\s+(?:[A-Za-z]+day,?\s+)?" + _DATE,
         t, re.I)]
@@ -303,7 +320,7 @@ def extract_odd_lot(t: str) -> dict[str, Any]:
     fewer = [m for m in re.finditer(r"fewer\s+than\s+100\s+(?:shares|units|common\s+shares)", t, re.I)]
     priority = False
     snippet = None
-    record_date = None
+    record_dates: set[str] = set()
     for fm in fewer:
         win = t[max(0, fm.start() - 1500): fm.end() + 1500]
         near_odd = bool(re.search(r"odd[\s\-\u2010-\u2014]*lot", win, re.I))
@@ -316,17 +333,134 @@ def extract_odd_lot(t: str) -> dict[str, Any]:
             priority = True
             if snippet is None:
                 snippet = _snippet(t, fm.start(), fm.end(), pad=260)
+        if near_odd:
+            # every odd-lot definition / certification (Offer to Purchase, Letter of
+            # Transmittal, Notice of Guaranteed Delivery...) may state its own date
             before = t[max(0, fm.start() - 400): fm.start()]
-            rd = re.search(r"as\s+of\s+the\s+close\s+of\s+business\s+on\s+" + _DATE, before, re.I) or \
-                re.search(r"(?:of\s+record|record\s+date)\s+(?:as\s+of|on)\s+" + _DATE, before, re.I)
-            if rd and record_date is None:
-                record_date = parse_month_date(rd.group(1))
+            for rd in re.finditer(r"as\s+of\s+the\s+close\s+of\s+business\s+on\s+" + _DATE, before, re.I):
+                d = parse_month_date(rd.group(1))
+                if d:
+                    record_dates.add(d)
+            for rd in re.finditer(r"(?:of\s+record|record\s+date)\s+(?:as\s+of|on)\s+" + _DATE, before, re.I):
+                d = parse_month_date(rd.group(1))
+                if d:
+                    record_dates.add(d)
+    dates = sorted(record_dates) if priority else []
     return {
         "odd_lot_mentioned": bool(mentions),
         "odd_lot_priority": priority,
-        "odd_lot_record_date": record_date,
+        # strictest (earliest) date governs eligibility; all dates are kept
+        "odd_lot_record_date": dates[0] if dates else None,
+        "odd_lot_record_dates": dates,
+        "odd_lot_record_date_conflict": len(dates) > 1,
         "odd_lot_snippet": snippet,
     }
+
+
+_PREF_TICKER = re.compile(r"-P[A-Z]?$|\.PR[A-Z]?$|\^")
+_OTHER_TICKER = re.compile(r"(?:-WT|-W|-U|-R|-RT|\.WS|\.U)$")
+
+
+def extract_security(t: str) -> dict[str, Any]:
+    """Which class is being tendered, and is it traded at all?"""
+    title = None
+    m = re.search(r"([^()\[\]]{3,220}?)\s*\(\s*Title\s+of\s+Class(?:es)?\s+of\s+Securities\s*\)", t[:200_000], re.I)
+    if m:
+        title = re.sub(r"[_\-=*]{2,}", " ", m.group(1))
+        title = re.sub(r"\s+", " ", title).strip(" ,;:")[-200:] or None
+    tl = (title or "").lower()
+    if re.search(r"\boptions?\b", tl):
+        cls = "OPTIONS"
+    elif "warrant" in tl:
+        cls = "WARRANTS"
+    elif re.search(r"\bnotes?\b|debentures?|bonds?\b", tl):
+        cls = "DEBT"
+    elif "preferred" in tl or "preference" in tl:
+        cls = "PREFERRED"
+    elif re.search(r"common|ordinary|beneficial\s+interest|\bshares\b|\bunits\b|stock", tl):
+        cls = "COMMON"
+    else:
+        cls = "UNKNOWN"
+    untraded = bool(re.search(
+        r"no\s+established\s+(?:public\s+)?trading\s+market|"
+        r"not\s+(?:currently\s+)?(?:listed\s+or\s+)?traded\s+on\s+(?:an?\s+)?(?:established\s+)?(?:public\s+)?(?:trading\s+market|(?:securities\s+)?exchange)|"
+        r"(?:there\s+is\s+(?:otherwise\s+)?)?no\s+(?:current\s+)?public\s+(?:trading\s+)?market\s+for\s+(?:the|its|our)\s+Shares|"
+        r"since\s+there\s+is\s+no\s+current\s+public\s+market",
+        t[:400_000], re.I))
+    return {"security_title": title, "security_class": cls, "untraded": untraded}
+
+
+def select_ticker(candidates: list[str], security_class: Optional[str], untraded: bool = False) -> Optional[str]:
+    """Pick the exchange ticker for the class actually tendered.
+
+    SEC's company_tickers.json lists every class under one CIK (e.g. a fund's
+    preferred series). We only price COMMON tenders off a common ticker; a
+    preferred tender cannot be mapped to a specific series reliably, so it is
+    left unpriced rather than priced off the wrong security."""
+    if untraded or not candidates:
+        return None
+    if security_class not in ("COMMON", "UNKNOWN", None):
+        return None
+    common = [c for c in candidates if not _PREF_TICKER.search(c) and not _OTHER_TICKER.search(c)]
+    return common[0] if common else None
+
+
+def extract_offer_kind(t: str) -> dict[str, Any]:
+    """CASH tender vs securities exchange vs employee option exchange."""
+    head = t[:60_000]
+    if re.search(r"\bexchange\b.{0,80}?\b(?:certain\s+)?(?:outstanding\s+|eligible\s+|unexercised\s+)*"
+                 r"(?:stock\s+)?options\s+(?:to\s+purchase|for\s+new|granted)", head, re.I | re.S) or \
+            re.search(r"Offer\s+to\s+Exchange\s+(?:Certain\s+)?(?:Outstanding\s+|Eligible\s+)*(?:Stock\s+)?Options", head, re.I):
+        return {"offer_kind": "OPTION_EXCHANGE"}
+    mixed = re.search(r"\d+(?:\.\d+)?\s+of\s+an?\s+[^.]{0,80}?share[^.]{0,200}?(?:U\.?S\.?)?\$\s?\d+(?:\.\d+)?\s+in\s+cash",
+                      t[:400_000], re.I)
+    if mixed:
+        return {"offer_kind": "CASH_AND_STOCK", "offer_kind_snippet": _snippet(t, mixed.start(), mixed.end(), pad=80, cap=400)}
+    # "a tender or exchange offer for the shares" is boilerplate in cash-offer conditions, so only
+    # an offer *to exchange* or the capitalised defined term counts
+    exch = re.search(r"\b(?:offer|offering)\s+(?:by\s+[^.]{0,80}?\s+)?to\s+exchange\b", head, re.I) or \
+        re.search(r"[(“\"]\s*the\s+[“\"]?\s*Exchange\s+Offer\s*[”\"]|\bOFFER\s+TO\s+EXCHANGE\b|\bOffer\s+to\s+Exchange\b", head)
+    if exch:
+        return {"offer_kind": "SECURITIES_EXCHANGE", "offer_kind_snippet": _snippet(t, exch.start(), exch.end(), pad=80, cap=400)}
+    return {"offer_kind": "CASH"}
+
+
+def extract_offer_size(t: str) -> dict[str, Any]:
+    """Offer size relative to shares outstanding -> worst-case pro-rata fill."""
+    any_and_all = bool(re.search(
+        r"(?:acquire|purchase)\s+(?:any\s+and\s+)?all\s+(?:of\s+)?(?:the\s+)?(?:issued\s+and\s+)?outstanding\s+"
+        r"(?:shares|common|ordinary|units)", t[:200_000], re.I))
+    pcts = []
+    for pat in (
+        r"up\s+to\s+(\d{1,2}(?:\.\d+)?)\s*(?:%|percent)\s+of\s+(?:its|the|our|the\s+Fund.s|the\s+Trust.s)\s+"
+        r"(?:currently\s+)?(?:issued\s+and\s+)?outstanding",
+        r"(?:purchase|repurchase|acquire)\s+(?:for\s+cash\s+)?up\s+to\s+[\d,]{4,}\s+[^.]{0,120}?\(\s*(?:or\s+)?approximately\s+"
+        r"(\d{1,2}(?:\.\d+)?)\s*%",
+        r"Offer\s+(?:is|would\s+be)\s+for\s+(?:a\s+maximum\s+of\s+[\d,]+\s+Shares,?\s+)?(?:constituting\s+)?approximately\s+"
+        r"(\d{1,2}(?:\.\d+)?)\s*%",
+        r"constituting\s+approximately\s+(\d{1,2}(?:\.\d+)?)\s*%\s+of\s+the\s+(?:total\s+)?(?:issued\s+and\s+)?"
+        r"(?:outstanding|Shares\s+outstanding|shares\s+outstanding)",
+    ):
+        for m in re.finditer(pat, t, re.I):
+            # "may purchase additional Shares representing up to 2% ... (Rule 13e-4(f))" is not the offer size
+            if re.search(r"additional|without\s+amending|without\s+extending", t[max(0, m.start() - 120): m.start()], re.I):
+                continue
+            pcts.append(_num(m.group(1)))
+    pct = _mode([x for x in pcts if x and 0 < x < 100])
+    max_shares = _mode([_num(m.group(1)) for m in re.finditer(
+        r"(?:to\s+purchase|repurchase|to\s+acquire|offering\s+to\s+purchase|Offer\s+to\s+Purchase)\s+(?:for\s+cash\s+)?"
+        r"up\s+to\s+(?:a\s+maximum\s+of\s+|an\s+aggregate\s+of\s+)?(\d{1,3}(?:,\d{3})+)\s+(?:outstanding\s+|of\s+(?:its|the)\s+"
+        r"(?:issued\s+and\s+)?outstanding\s+)?(?:shares|Shares|common)", t, re.I)])
+    outstanding = _mode([_num(m.group(1)) for m in re.finditer(
+        r"there\s+were\s+(\d{1,3}(?:,\d{3})+)\s+(?:Shares|shares)[^.]{0,60}?(?:issued\s+and\s+)?outstanding", t, re.I)])
+    min_fill = None
+    if pct:
+        min_fill = pct / 100.0
+    elif max_shares and outstanding and outstanding > max_shares:
+        min_fill = max_shares / outstanding
+    return {"any_and_all": any_and_all and not pct and not max_shares, "offer_max_pct": pct,
+            "offer_max_shares": max_shares, "shares_outstanding_parsed": outstanding,
+            "min_fill_if_all_tender": round(min_fill, 6) if min_fill else None}
 
 
 def _cond(t: str, neg: list[str], pos: list[str]) -> dict[str, Any]:
@@ -419,7 +553,20 @@ def extract_final_results(t: str, form: str) -> dict[str, Any]:
     if term:
         out["terminated"] = True
         out["termination_snippet"] = _snippet(t, term.start(), term.end(), pad=160)
+    expired_done = re.search(
+        r"(?:Offer|withdrawal\s+rights)\s+expired\s+(?:as\s+scheduled\s+)?at\s+[^.]{0,160}", t, re.I)
+    accepted_all = re.search(
+        r"(?:has|have)\s+(?:irrevocably\s+)?accepted\s+(?:for\s+(?:payment|purchase)\s+)?(?:\(?irrevocably\)?\s+)?all\s+"
+        r"(?:such\s+)?(?:Shares|shares|Units|units)\s+(?:that\s+were\s+)?validly\s+tendered|"
+        r"(?:effected|completed|consummated)\s+the\s+Merger", t, re.I)
+    if expired_done:
+        out["expired_reported"] = True
+    if expired_done and accepted_all and not out["terminated"]:
+        out["completed_all_accepted"] = True
+        out["results_snippet"] = out.get("results_snippet") or _snippet(t, expired_done.start(), expired_done.end(), pad=60)
     out["final"] = bool((final_box or final_words) and acc and acc[1] is not None and not out["terminated"])
+    if out.get("completed_all_accepted"):
+        out["final"] = True
     if out["final"] and out["preliminary"] and not (final_box or re.search(r"announces?\s+final\s+results", t, re.I)):
         out["final"] = False
     return out
@@ -434,6 +581,9 @@ def extract_terms(raw: str) -> dict[str, Any]:
     terms.update(extract_prices(t))
     terms.update(extract_expiration(t, amendment=amendment))
     terms.update(extract_odd_lot(t))
+    terms.update(extract_security(t))
+    terms.update(extract_offer_kind(t))
+    terms.update(extract_offer_size(t))
     terms["conditions"] = extract_conditions(t)
     terms["results"] = extract_final_results(t, form)
     terms["going_private"] = bool("SC 13E3" in hdr.get("all_form_types", []) or form.startswith("SC 13E3")
@@ -476,8 +626,28 @@ def completion_probability(conditions: dict[str, Any], a: dict[str, Any]) -> tup
     return round(max(0.0, min(1.0, p)), 4), applied
 
 
+def _json_list(v: Any) -> list:
+    if v is None:
+        return []
+    if isinstance(v, list):
+        return v
+    try:
+        out = json.loads(v)
+        return out if isinstance(out, list) else []
+    except (TypeError, ValueError):
+        return []
+
+
 def compute_ev(tender: dict[str, Any], market_price: Optional[float], today: Optional[date] = None,
                assumptions: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+    """Paper EV for an odd-lot position.
+
+    Hard blockers (record-date trap, expired, non-USD, non-cash consideration,
+    untraded security) make the offer ineligible: no EV is produced at all.
+    Prorated offers (no odd-lot priority, not any-and-all) get a conservative
+    EV that assumes only the worst-case pro-rata fill (offer size / shares
+    outstanding, i.e. every holder tenders) or SPECIAL_PRORATION_FILL_FLOOR
+    when the size cannot be parsed. Fees are charged in full regardless."""
     a = assumptions or ev_assumptions()
     today = today or utc_now().date()
     conditions = tender.get("conditions") or {}
@@ -488,7 +658,8 @@ def compute_ev(tender: dict[str, Any], market_price: Optional[float], today: Opt
     offer_hi = tender.get("price_fixed") if tender.get("price_fixed") is not None else tender.get("price_high")
     fees = a["buy_commission_usd"] + a["tender_fee_usd"]
     out: dict[str, Any] = {
-        "model": "p_complete * ((offer - market) * shares - fees); Dutch uses range low (conservative)",
+        "model": ("p_complete * ((offer - market) * shares * fill) - fees; Dutch uses range low; "
+                  "fill=1 with odd-lot priority or any-and-all, else worst-case pro-rata fill"),
         "assumptions": a,
         "p_complete": p,
         "p_adjustments": applied,
@@ -498,22 +669,58 @@ def compute_ev(tender: dict[str, Any], market_price: Optional[float], today: Opt
         "fees_usd": fees,
         "shares": a["shares"],
         "blockers": [],
+        "flags": [],
     }
-    if not tender.get("odd_lot_priority"):
-        out["blockers"].append("no odd-lot priority clause detected: small lots would be prorated")
-    rd = tender.get("odd_lot_record_date")
-    if rd and rd < today.isoformat():
+    status = None
+    kind = tender.get("offer_kind") or "CASH"
+    if kind == "OPTION_EXCHANGE":
+        out["blockers"].append("employee option exchange: not a tradable tender")
+        status = status or "NOT_TRADABLE"
+    elif kind in ("SECURITIES_EXCHANGE", "CASH_AND_STOCK"):
+        out["blockers"].append(f"{kind.lower()}: consideration is (partly) securities; cash EV not modeled")
+        status = status or "EXCHANGE_UNMODELED"
+    if tender.get("untraded"):
+        out["blockers"].append("tendered class has no established trading market")
+        status = status or "UNTRADED"
+    rds = sorted(set(_json_list(tender.get("odd_lot_record_dates")) + (
+        [tender["odd_lot_record_date"]] if tender.get("odd_lot_record_date") else [])))
+    if len(rds) > 1:
+        out["flags"].append(f"conflicting odd-lot record dates in filing: {', '.join(rds)} (strictest used)")
+    out["odd_lot_record_dates"] = rds
+    if rds and rds[0] < today.isoformat():
         out["blockers"].append(
-            f"odd-lot priority requires ownership as of {rd}: shares bought now likely do NOT qualify")
+            f"odd-lot priority requires ownership as of {rds[0]}: shares bought now do NOT qualify")
+        status = status or "INELIGIBLE_RECORD_DATE"
     exp = tender.get("expiration_date")
     if exp and exp < today.isoformat():
         out["blockers"].append(f"offer expired {exp}")
+        status = status or "EXPIRED"
     if (tender.get("currency") or "USD") != "USD":
         out["blockers"].append(f"non-USD offer ({tender.get('currency')}); not modeled")
+        status = status or "BLOCKED_NON_USD"
+    # proration
+    odd_lot = bool(tender.get("odd_lot_priority"))
+    any_all = bool(tender.get("any_and_all"))
+    if odd_lot or any_all:
+        fill, fill_basis = 1.0, ("odd-lot priority" if odd_lot else "any-and-all offer")
+    else:
+        out["flags"].append("prorated: no odd-lot priority clause; small lots are cut back like everyone else")
+        mf = tender.get("min_fill_if_all_tender") if tender.get("min_fill_if_all_tender") is not None \
+            else tender.get("min_fill")
+        if mf:
+            fill, fill_basis = float(mf), "worst case: offer size / shares outstanding (all holders tender)"
+        else:
+            fill = max(0.0, min(1.0, env_float("SPECIAL_PRORATION_FILL_FLOOR", 0.0)))
+            fill_basis = "offer size unparsed: SPECIAL_PRORATION_FILL_FLOOR"
+    out.update(prorated=not (odd_lot or any_all), fill_assumed=round(fill, 6), fill_basis=fill_basis)
+    if status:
+        out["status"] = status
+        out["ev_usd"] = None
+        return out
     if tender.get("offer_type") == "NAV_BASED":
         out["status"] = "NAV_BASED_UNMODELED"
         out["ev_usd"] = None
-        out["blockers"].append("offer priced off NAV at expiration; final price unknown until then")
+        out["flags"].append("offer priced off NAV at expiration; final price unknown until then")
         return out
     if offer_lo is None:
         out["status"] = "UNPARSED_PRICE"
@@ -525,12 +732,14 @@ def compute_ev(tender: dict[str, Any], market_price: Optional[float], today: Opt
         return out
     gross = (offer_lo - market_price) * a["shares"]
     out["gross_spread_usd"] = round(gross, 4)
-    out["ev_usd"] = round(p * gross - fees, 4)
-    out["ev_usd_if_offer_high"] = round(p * (offer_hi - market_price) * a["shares"] - fees, 4) if offer_hi else None
+    out["ev_usd"] = round(p * gross * fill - fees, 4)
+    out["ev_usd_full_fill"] = round(p * gross - fees, 4)
+    out["ev_usd_if_offer_high"] = round(p * (offer_hi - market_price) * a["shares"] * fill - fees, 4) if offer_hi else None
     out["capital_usd"] = round(market_price * a["shares"] + a["buy_commission_usd"], 2)
-    out["status"] = "PRICED"
-    # NB: fees are paid even if the deal fails; the failure branch's P&L
-    # depends on the post-failure price, which is unknown -> not modeled.
+    out["status"] = "PRICED_PRORATED" if out["prorated"] else "PRICED"
+    # NB: fees are paid even if the deal fails; the failure branch's P&L and the
+    # market value of prorated (returned) shares depend on post-offer prices,
+    # which are unknown -> not modeled.
     return out
 
 
@@ -618,7 +827,13 @@ def ensure_special_tables(engine) -> None:
             expiration_date TEXT,
             odd_lot_priority INTEGER NOT NULL DEFAULT 0,
             odd_lot_record_date TEXT,
+            odd_lot_record_dates TEXT,
             odd_lot_snippet TEXT,
+            offer_kind TEXT,
+            security_class TEXT,
+            untraded INTEGER NOT NULL DEFAULT 0,
+            any_and_all INTEGER NOT NULL DEFAULT 0,
+            min_fill DOUBLE PRECISION,
             conditions_json TEXT,
             going_private INTEGER NOT NULL DEFAULT 0,
             status TEXT NOT NULL,
@@ -648,8 +863,11 @@ def ensure_special_tables(engine) -> None:
     for s in stmts:
         with engine.begin() as cx:
             cx.execute(text(s))
-    # Future column additions go here, one ALTER per transaction, e.g.:
-    # _add_column(engine, "special_tender", "new_col", "TEXT")
+    # Column additions for tables created by earlier versions (one ALTER per transaction).
+    for col, ddl in (("odd_lot_record_dates", "TEXT"), ("offer_kind", "TEXT"), ("security_class", "TEXT"),
+                     ("untraded", "INTEGER NOT NULL DEFAULT 0"), ("any_and_all", "INTEGER NOT NULL DEFAULT 0"),
+                     ("min_fill", "DOUBLE PRECISION")):
+        _add_column(engine, "special_tender", col, ddl)
 
 
 def _add_column(engine, table: str, column: str, ddl: str) -> None:
@@ -794,24 +1012,28 @@ class SpecialSituationsScanner:
             await asyncio.sleep(max(300, env_int("SPECIAL_POLL_SECONDS", 1800)))
 
     # -- discovery -------------------------------------------------------------
-    async def _ticker_map(self, client: SecClient) -> dict[str, str]:
+    async def _ticker_map(self, client: SecClient) -> dict[str, list[str]]:
+        """CIK -> ALL tickers SEC lists for it (common, preferred series, warrants...)."""
         if self._tickers and time.time() - self._tickers_at < 86400:
             return self._tickers
         data = await client.get_json(TICKERS_URL)
-        m: dict[str, str] = {}
+        m: dict[str, list[str]] = {}
         for row in (data.values() if isinstance(data, dict) else data):
             cik = str(row.get("cik_str", "")).lstrip("0")
-            if cik and cik not in m:
-                m[cik] = str(row.get("ticker", "")).upper()
+            tk = str(row.get("ticker", "")).upper().strip()
+            if cik and tk and tk not in m.setdefault(cik, []):
+                m[cik].append(tk)
         self._tickers, self._tickers_at = m, time.time()
         return m
 
-    async def discover(self, client: SecClient, start: date, end: date, max_hits: int = 2000) -> list[dict[str, Any]]:
+    async def discover(self, client: SecClient, start: date, end: date, max_hits: int = 2000,
+                       ciks: Optional[list[str]] = None) -> list[dict[str, Any]]:
         forms = ",".join(FTS_ROOT_FORMS)
         seen: dict[str, dict[str, Any]] = {}
         frm = 0
+        cik_q = ("&ciks=" + ",".join(f"{int(c):010d}" for c in ciks)) if ciks else ""
         while frm < max_hits:
-            url = (f"{FTS_URL}?forms={quote(forms, safe=',')}&dateRange=custom"
+            url = (f"{FTS_URL}?forms={quote(forms, safe=',')}{cik_q}&dateRange=custom"
                    f"&startdt={start.isoformat()}&enddt={end.isoformat()}&from={frm}")
             data = await client.get_json(url)
             hits = (data.get("hits") or {}).get("hits") or []
@@ -888,7 +1110,8 @@ class SpecialSituationsScanner:
                                       {"a": acc}).mappings().first()
             res = terms.get("results") or {}
             if existing is None:
-                status = "OPEN"
+                # a tender whose expiration could not be parsed is UNKNOWN, never OPEN forever
+                status = "OPEN" if terms.get("expiration_date") else "UNKNOWN_EXPIRY"
                 row = {
                     "tender_key": f"{cik}:{file_number or '-'}:{acc}",
                     "subject_cik": cik, "subject_name": subj.get("name"), "ticker": ticker,
@@ -901,6 +1124,12 @@ class SpecialSituationsScanner:
                     "odd_lot_priority": 1 if terms.get("odd_lot_priority") else 0,
                     "odd_lot_record_date": terms.get("odd_lot_record_date"),
                     "odd_lot_snippet": terms.get("odd_lot_snippet"),
+                    "odd_lot_record_dates": json.dumps(terms.get("odd_lot_record_dates") or []),
+                    "offer_kind": terms.get("offer_kind") or "CASH",
+                    "security_class": terms.get("security_class"),
+                    "untraded": 1 if terms.get("untraded") else 0,
+                    "any_and_all": 1 if terms.get("any_and_all") else 0,
+                    "min_fill": terms.get("min_fill_if_all_tender"),
                     "conditions_json": json.dumps(terms.get("conditions") or {}),
                     "going_private": 1 if terms.get("going_private") else 0,
                     "status": status, "created": now, "updated": now,
@@ -909,12 +1138,14 @@ class SpecialSituationsScanner:
                     INSERT INTO special_tender (tender_key, subject_cik, subject_name, ticker, file_number, root_form,
                         first_accession, first_filed_date, last_accession, last_filed_date, amendments, offer_type,
                         price_fixed, price_low, price_high, currency, expiration_date, odd_lot_priority,
-                        odd_lot_record_date, odd_lot_snippet, conditions_json, going_private, status,
+                        odd_lot_record_date, odd_lot_snippet, odd_lot_record_dates, offer_kind, security_class,
+                        untraded, any_and_all, min_fill, conditions_json, going_private, status,
                         created_at_utc, updated_at_utc)
                     VALUES (:tender_key, :subject_cik, :subject_name, :ticker, :file_number, :root_form,
                         :first_accession, :first_filed_date, :last_accession, :last_filed_date, :amendments,
                         :offer_type, :price_fixed, :price_low, :price_high, :currency, :expiration_date,
-                        :odd_lot_priority, :odd_lot_record_date, :odd_lot_snippet, :conditions_json,
+                        :odd_lot_priority, :odd_lot_record_date, :odd_lot_snippet, :odd_lot_record_dates,
+                        :offer_kind, :security_class, :untraded, :any_and_all, :min_fill, :conditions_json,
                         :going_private, :status, :created, :updated)"""), row)
                 tender_id = cx.execute(text("SELECT id FROM special_tender WHERE tender_key=:k"),
                                        {"k": row["tender_key"]}).scalar_one()
@@ -928,8 +1159,8 @@ class SpecialSituationsScanner:
                     upd.update(la=acc, lf=filed)
                     # amendments may change price/expiration; only overwrite with parsed values
                     # amendments restate the current expiration; a later date means an extension
-                    if terms.get("expiration_date") and (terms.get("extended") or (
-                            existing["expiration_date"] and terms["expiration_date"] > existing["expiration_date"])):
+                    if terms.get("expiration_date") and (terms.get("extended") or not existing["expiration_date"] or (
+                            terms["expiration_date"] > existing["expiration_date"])):
                         sets.append("expiration_date=:exp")
                         upd["exp"] = terms["expiration_date"]
                     for k in ("price_fixed", "price_low", "price_high"):
@@ -938,8 +1169,21 @@ class SpecialSituationsScanner:
                             sets.append(f"{k}=:{k}")
                             upd[k] = terms[k]
                     if not existing["odd_lot_priority"] and terms.get("odd_lot_priority"):
-                        sets += ["odd_lot_priority=1", "odd_lot_snippet=:ols", "odd_lot_record_date=:olr"]
-                        upd.update(ols=terms.get("odd_lot_snippet"), olr=terms.get("odd_lot_record_date"))
+                        sets += ["odd_lot_priority=1", "odd_lot_snippet=:ols"]
+                        upd.update(ols=terms.get("odd_lot_snippet"))
+                    # union of record dates across filings; strictest (earliest) governs
+                    rds = sorted(set(_json_list(existing.get("odd_lot_record_dates"))
+                                     + ([existing["odd_lot_record_date"]] if existing.get("odd_lot_record_date") else [])
+                                     + list(terms.get("odd_lot_record_dates") or [])))
+                    if rds:
+                        sets += ["odd_lot_record_dates=:olrs", "odd_lot_record_date=:olr"]
+                        upd.update(olrs=json.dumps(rds), olr=rds[0])
+                    # an exchange / option-exchange classification is sticky; amendments are often terse
+                    if terms.get("offer_kind") not in (None, "CASH") and (existing.get("offer_kind") or "CASH") == "CASH":
+                        sets.append("offer_kind=:ok")
+                        upd["ok"] = terms["offer_kind"]
+                    if terms.get("untraded") and not existing.get("untraded"):
+                        sets.append("untraded=1")
                 cx.execute(text(f"UPDATE special_tender SET {', '.join(sets)} WHERE id=:id"), upd)
             # results
             if form.endswith("/A") and existing["status"] not in ("COMPLETED", "TERMINATED"):
@@ -947,11 +1191,18 @@ class SpecialSituationsScanner:
                     cx.execute(text("""UPDATE special_tender SET status='TERMINATED', final_accession=:a,
                                        updated_at_utc=:u WHERE id=:id"""), {"a": acc, "u": now, "id": tender_id})
                 elif res.get("final"):
+                    fp = res.get("final_price")
+                    if fp is None and res.get("completed_all_accepted") and existing["offer_type"] == "FIXED_PRICE":
+                        fp = existing["price_fixed"]  # any-and-all fixed-price offer: paid the offer price
                     cx.execute(text("""UPDATE special_tender SET status='COMPLETED', final_accession=:a,
                                        final_price=:p, shares_accepted=:s, proration_pct=:pr, updated_at_utc=:u
                                        WHERE id=:id"""),
-                               {"a": acc, "p": res.get("final_price"), "s": res.get("shares_accepted"),
+                               {"a": acc, "p": fp, "s": res.get("shares_accepted"),
                                 "pr": res.get("proration_pct"), "u": now, "id": tender_id})
+                elif res.get("expired_reported"):
+                    cx.execute(text("""UPDATE special_tender SET status='EXPIRED_AWAITING_RESULTS', updated_at_utc=:u
+                                       WHERE id=:id AND status IN ('OPEN','UNKNOWN_EXPIRY')"""),
+                               {"u": now, "id": tender_id})
         self._record_filing({
             "accession": acc, "form": form, "filed_date": filed, "subject_cik": cik,
             "subject_name": subj.get("name"), "ticker": ticker, "file_number": file_number,
@@ -964,23 +1215,48 @@ class SpecialSituationsScanner:
 
     def refresh_status(self, tender_id: int, today: Optional[date] = None) -> None:
         today = today or utc_now().date()
+        iso = today.isoformat()
+        stale_days = max(1, env_int("SPECIAL_UNKNOWN_EXPIRY_STALE_DAYS", 60))
         with self.engine.begin() as cx:
-            t = cx.execute(text("SELECT status, expiration_date FROM special_tender WHERE id=:i"),
+            t = cx.execute(text("SELECT status, expiration_date, last_filed_date FROM special_tender WHERE id=:i"),
                            {"i": tender_id}).mappings().first()
-            if t and t["status"] == "OPEN" and t["expiration_date"] and t["expiration_date"] < today.isoformat():
-                cx.execute(text("UPDATE special_tender SET status='EXPIRED_AWAITING_RESULTS' WHERE id=:i"),
-                           {"i": tender_id})
-            elif (t and t["status"] == "EXPIRED_AWAITING_RESULTS" and t["expiration_date"]
-                  and t["expiration_date"] >= today.isoformat()):
-                # an amendment extended the offer
-                cx.execute(text("UPDATE special_tender SET status='OPEN' WHERE id=:i"), {"i": tender_id})
+            if not t:
+                return
+            st, exp = t["status"], t["expiration_date"]
+            new = st
+            if st in ("OPEN", "UNKNOWN_EXPIRY", "STALE_UNKNOWN") and exp:
+                new = "EXPIRED_AWAITING_RESULTS" if exp < iso else "OPEN"
+            elif st == "EXPIRED_AWAITING_RESULTS" and exp and exp >= iso:
+                new = "OPEN"  # an amendment extended the offer
+            elif st == "OPEN" and not exp:
+                new = "UNKNOWN_EXPIRY"
+            if new == "UNKNOWN_EXPIRY" or (st == "UNKNOWN_EXPIRY" and new == st):
+                last = t["last_filed_date"]
+                if last and last < (today - timedelta(days=stale_days)).isoformat():
+                    new = "STALE_UNKNOWN"
+            if new != st:
+                cx.execute(text("UPDATE special_tender SET status=:s WHERE id=:i"), {"s": new, "i": tender_id})
 
     # -- pricing / EV / paper book ------------------------------------------------
-    async def fetch_price(self, client: SecClient, ticker: str) -> Optional[dict[str, Any]]:
+    def _price_client(self) -> httpx.AsyncClient:
+        """Separate client for third-party quote endpoints. It deliberately does
+        NOT share headers with SecClient so the SEC contact e-mail never leaves
+        for a non-SEC host."""
+        ua = (os.getenv("SPECIAL_PRICE_USER_AGENT", "") or DEFAULT_PRICE_USER_AGENT).strip()
+        if "@" in ua or ua == self.user_agent():
+            ua = DEFAULT_PRICE_USER_AGENT
+        return httpx.AsyncClient(timeout=20.0, transport=self.transport, follow_redirects=True,
+                                 headers={"User-Agent": ua, "Accept": "application/json"})
+
+    async def fetch_price(self, client: httpx.AsyncClient, ticker: str) -> Optional[dict[str, Any]]:
         if self.price_source() != "yahoo_chart" or not ticker:
             return None
+        if isinstance(client, SecClient):  # defensive: never send the SEC UA to a quote vendor
+            raise TypeError("fetch_price must use the price client, not SecClient")
         try:
-            data = json.loads(await client.get(YAHOO_CHART_URL.format(ticker=quote(ticker)), max_bytes=2_000_000, sec=False))
+            r = await client.get(YAHOO_CHART_URL.format(ticker=quote(ticker)))
+            r.raise_for_status()
+            data = r.json()
             meta = data["chart"]["result"][0]["meta"]
             px = meta.get("regularMarketPrice")
             ts = meta.get("regularMarketTime")
@@ -1042,19 +1318,23 @@ class SpecialSituationsScanner:
         if not ua:
             raise RuntimeError("SEC_USER_AGENT is not set")
         today = today or utc_now().date()
-        lookback = lookback_days or env_int("SPECIAL_LOOKBACK_DAYS", 45)
+        lookback = max(1, min(365, int(lookback_days or env_int("SPECIAL_LOOKBACK_DAYS", 45))))
+        backfill = max(lookback, min(730, env_int("SPECIAL_BACKFILL_DAYS", 365)))
         client = SecClient(ua, env_float("SPECIAL_SEC_MAX_RPS", 5.0), transport=self.transport)
-        summary: dict[str, Any] = {"started_at_utc": utc_now_iso(), "discovered": 0, "new": 0, "parsed": 0,
-                                   "skipped_no_ticker": 0, "errors": 0, "priced": 0}
+        price_client = self._price_client()
+        summary: dict[str, Any] = {"started_at_utc": utc_now_iso(), "lookback_days": lookback,
+                                   "backfill_days": backfill, "discovered": 0, "backfilled_originals": 0,
+                                   "new": 0, "parsed": 0, "skipped_no_ticker": 0, "errors": 0, "priced": 0}
         try:
             tickers = await self._ticker_map(client)
             hits = await self.discover(client, today - timedelta(days=lookback), today)
             summary["discovered"] = len(hits)
+            hits = await self._backfill_originals(client, hits, tickers, today, backfill, summary)
             for hit in hits:
                 if self._known(hit["accession"]) in ("PARSED", "SKIPPED_NO_TICKER"):
                     continue
                 summary["new"] += 1
-                tick = next((tickers[c] for c in hit["ciks"] if c in tickers), None)
+                tick = next((tickers[c][0] for c in hit["ciks"] if tickers.get(c)), None)
                 if not tick:
                     self._record_filing({
                         "accession": hit["accession"], "form": hit["form"], "filed_date": hit["filed_date"],
@@ -1064,14 +1344,16 @@ class SpecialSituationsScanner:
                         "error": None, "source_url": None, "discovered_at_utc": utc_now_iso(), "parsed_at_utc": None})
                     summary["skipped_no_ticker"] += 1
                     continue
-                cik = next(c for c in hit["ciks"] if c in tickers)
+                cik = next(c for c in hit["ciks"] if tickers.get(c))
                 url = ARCHIVE_URL.format(cik=cik, acc_nodash=_acc_nodash(hit["accession"]), acc=hit["accession"])
                 try:
                     raw = (await client.get(url)).decode("utf-8", errors="replace")
                     terms = extract_terms(raw)
                     subj = (terms.get("header") or {}).get("subject") or {}
-                    # ticker must belong to the SUBJECT company, never the bidder/filer
-                    tick = tickers.get(subj.get("cik") or "") if subj.get("cik") else tick
+                    # ticker must belong to the SUBJECT company (never the bidder/filer) AND to the
+                    # class actually tendered; untraded classes get no ticker at all
+                    cands = tickers.get(subj.get("cik") or "", []) if subj.get("cik") else tickers.get(cik, [])
+                    tick = select_ticker(cands, terms.get("security_class"), bool(terms.get("untraded")))
                     self.ingest_parsed(hit, terms, tick, source_url=url, today=today)
                     summary["parsed"] += 1
                 except Exception as e:
@@ -1084,11 +1366,12 @@ class SpecialSituationsScanner:
                         "discovered_at_utc": utc_now_iso(), "parsed_at_utc": None})
             # refresh statuses, prices and EV for open tenders
             with self.engine.begin() as cx:
-                open_rows = cx.execute(text("""SELECT id, ticker FROM special_tender
-                                               WHERE status IN ('OPEN','EXPIRED_AWAITING_RESULTS')""")).mappings().all()
+                open_rows = cx.execute(text("""SELECT id, ticker, untraded, offer_kind FROM special_tender
+                                               WHERE status IN ('OPEN','EXPIRED_AWAITING_RESULTS','UNKNOWN_EXPIRY')""")).mappings().all()
             for r in open_rows:
                 self.refresh_status(int(r["id"]), today)
-                price = await self.fetch_price(client, r["ticker"]) if r["ticker"] else None
+                priceable = r["ticker"] and not r["untraded"] and (r["offer_kind"] or "CASH") not in ("OPTION_EXCHANGE",)
+                price = await self.fetch_price(price_client, r["ticker"]) if priceable else None
                 if price:
                     summary["priced"] += 1
                 self.apply_price_and_ev(int(r["id"]), price, today)
@@ -1097,11 +1380,51 @@ class SpecialSituationsScanner:
             summary["sec_requests"] = client.requests
             summary["http_errors"] = client.errors
             await client.close()
+            await price_client.aclose()
         summary["finished_at_utc"] = utc_now_iso()
         self.last_scan = summary
         self.last_error = None
         self.scans += 1
         return summary
+
+    async def _backfill_originals(self, client: SecClient, hits: list[dict[str, Any]], tickers: dict[str, list[str]],
+                                  today: date, backfill_days: int, summary: dict[str, Any]) -> list[dict[str, Any]]:
+        """An amendment inside the lookback window whose original filing is older than
+        the window (and not already in the DB) means an older offer may still be open:
+        fetch the original so terms (price, odd-lot clause, record dates) are known."""
+        have = {h["accession"] for h in hits}
+        originals_in_window = {(c, (h["form"] or "").replace("/A", "")) for h in hits
+                               if not (h["form"] or "").endswith("/A") for c in h["ciks"]}
+        extra: list[dict[str, Any]] = []
+        asked: set[str] = set()
+        for h in hits:
+            if not (h["form"] or "").endswith("/A"):
+                continue
+            root = h["form"].replace("/A", "")
+            ciks = [c for c in h["ciks"] if tickers.get(c)]
+            if not ciks or any((c, root) in originals_in_window for c in ciks):
+                continue
+            with self.engine.begin() as cx:
+                known = cx.execute(text("SELECT 1 FROM special_tender WHERE subject_cik IN :c AND root_form=:r"
+                                        ).bindparams(bindparam("c", expanding=True)),
+                                   {"c": ciks, "r": root}).first()
+            if known or ciks[0] in asked:
+                continue
+            asked.add(ciks[0])
+            try:
+                found = await self.discover(client, today - timedelta(days=backfill_days),
+                                            date.fromisoformat(h["filed_date"]) if h.get("filed_date") else today,
+                                            max_hits=200, ciks=[ciks[0]])
+            except Exception as e:  # backfill is best-effort
+                log.info("backfill failed for %s: %s", ciks[0], e)
+                continue
+            for f in found:
+                if f["form"] in ORIGINAL_FORMS and f["accession"] not in have and \
+                        f["form"] == root and (f["filed_date"] or "") <= (h["filed_date"] or "9999"):
+                    have.add(f["accession"])
+                    extra.append(f)
+        summary["backfilled_originals"] = len(extra)
+        return sorted(hits + extra, key=lambda r: (r["filed_date"] or "", r["accession"]))
 
     # -- read API --------------------------------------------------------------------
     @staticmethod
@@ -1112,6 +1435,10 @@ class SpecialSituationsScanner:
             d[k[:-5]] = json.loads(v) if v else None
         d["odd_lot_priority"] = bool(d.get("odd_lot_priority"))
         d["going_private"] = bool(d.get("going_private"))
+        d["untraded"] = bool(d.get("untraded"))
+        d["any_and_all"] = bool(d.get("any_and_all"))
+        d["odd_lot_record_dates"] = _json_list(d.get("odd_lot_record_dates"))
+        d["odd_lot_record_date_conflict"] = len(d["odd_lot_record_dates"]) > 1
         if d.get("paper_would_trade") is not None:
             d["paper_would_trade"] = bool(d["paper_would_trade"])
         d["paper_only"] = True
