@@ -327,6 +327,18 @@ def extract_expiration(t: str, amendment: bool = False) -> dict[str, Any]:
     return {"expiration_date": exp, "extended": bool(extended_to), "expiration_candidates": sorted(set(c for c in cands if c))[:10]}
 
 
+_ODD_LOT_PRIORITY = re.compile(
+    r"(?:not\s+(?:be\s+)?subject\s+to\s+(?:any\s+)?proration|priority|"
+    r"before\s+(?:any\s+)?proration|prior\s+to\s+(?:any\s+)?proration|"
+    r"without\s+(?:any\s+)?proration|will\s+not\s+be\s+prorated|first,?\s+(?:all|from))",
+    re.I)
+_ODD_LOT_NEGATION = re.compile(
+    r"\b(?:not|no|without|neither|nor)\b[^.;]{0,40}\bpriority\b|"
+    r"\b(?:will|shall)\s+(?:also\s+)?be\s+subject\s+to\s+proration|"
+    r"on\s+the\s+same\s+basis\s+as\s+(?:all\s+)?other",
+    re.I)
+
+
 def extract_odd_lot(t: str) -> dict[str, Any]:
     mentions = [m for m in re.finditer(r"odd[\s\-\u2010-\u2014]*lot", t, re.I)]
     fewer = [m for m in re.finditer(r"fewer\s+than\s+100\s+(?:shares|units|common\s+shares)", t, re.I)]
@@ -336,11 +348,15 @@ def extract_odd_lot(t: str) -> dict[str, Any]:
     for fm in fewer:
         win = t[max(0, fm.start() - 1500): fm.end() + 1500]
         near_odd = bool(re.search(r"odd[\s\-\u2010-\u2014]*lot", win, re.I))
-        prio = re.search(
-            r"(?:not\s+(?:be\s+)?subject\s+to\s+(?:any\s+)?proration|priority|"
-            r"before\s+(?:any\s+)?proration|prior\s+to\s+(?:any\s+)?proration|"
-            r"without\s+(?:any\s+)?proration|will\s+not\s+be\s+prorated|first,?\s+(?:all|from))",
-            win, re.I)
+        # Sentence-level, negation-aware (red-team B2-3): "will not give
+        # priority to odd lot holders ... subject to proration" must not count.
+        prio = None
+        for sent in re.split(r"(?<=[.;])\s+", win):
+            if not re.search(r"odd[\s\-\u2010-\u2014]*lot|fewer\s+than\s+100", sent, re.I):
+                continue
+            if _ODD_LOT_NEGATION.search(sent):
+                continue
+            prio = _ODD_LOT_PRIORITY.search(sent) or prio
         if near_odd and prio:
             priority = True
             if snippet is None:

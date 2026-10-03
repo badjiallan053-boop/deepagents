@@ -910,6 +910,15 @@ class RiskFollowUpTests(EnvMixin, unittest.TestCase):
         self.assertEqual(ledger["by_result"], {"UNRESOLVED": 1})
         self.assertEqual(ledger["n_resolved"], 0)
 
+    def test_negated_odd_lot_priority_is_not_priority(self):
+        # Red-team B2-3 probe text.
+        neg = ("The Company will not give priority to odd lot holders. Stockholders owning fewer than "
+               "100 shares who tender will be subject to proration on the same basis as all other holders.")
+        self.assertFalse(ss.extract_odd_lot(neg)["odd_lot_priority"])
+        pos = ("Odd Lots. All Shares tendered by any stockholder who owns fewer than 100 shares will be "
+               "accepted for purchase before any proration of the purchase of other tendered Shares.")
+        self.assertTrue(ss.extract_odd_lot(pos)["odd_lot_priority"])
+
     def test_stale_quote_is_unpriced(self):
         with self.engine.begin() as cx:
             cx.execute(text("""INSERT INTO special_tender (tender_key, subject_cik, first_accession, status,
