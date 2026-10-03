@@ -19,6 +19,7 @@ from realtime_engine import RealtimeEngine
 from agent_team import AgentTeam
 from grok_team import GrokTeam
 from grok_profit_team import ProfitTeam, HypothesisInput
+from funding_basis import FundingBasisTracker, check_read_or_admin as funding_check_reader
 
 JUPITER_ORDER_URL = "https://api.jup.ag/swap/v2/order"
 WSOL_MINT = "So11111111111111111111111111111111111111112"
@@ -1068,3 +1069,63 @@ def export_quote_csv(x_paper_token: Optional[str] = Header(default=None)):
     w.writeheader()
     w.writerows(rows)
     return {"csv": buf.getvalue()}
+
+
+# ---------------------------------------------------------------------------
+# Funding / basis tracker (PAPER ONLY: public market data, no keys, no orders).
+# Background poller runs only when FUNDING_BASIS_ENABLED=true. Read endpoints
+# accept PAPER_READ_TOKEN or PAPER_ADMIN_TOKEN (switch to require_reader()
+# once PR #1 merges).
+# ---------------------------------------------------------------------------
+funding = FundingBasisTracker(engine)
+
+
+@app.on_event("startup")
+async def _start_funding():
+    await funding.start()
+
+
+@app.on_event("shutdown")
+async def _stop_funding():
+    await funding.stop()
+
+
+def require_funding_reader(token: Optional[str]) -> None:
+    status, detail = funding_check_reader(token)
+    if status != 200:
+        raise HTTPException(status, detail)
+
+
+@app.get("/funding/status")
+def funding_status(x_paper_token: Optional[str] = Header(default=None)):
+    require_funding_reader(x_paper_token)
+    return funding.status()
+
+
+@app.get("/funding/opportunities")
+def funding_opportunities(
+    limit: int = 50,
+    strategy: Optional[str] = None,
+    eligible_only: bool = False,
+    x_paper_token: Optional[str] = Header(default=None),
+):
+    require_funding_reader(x_paper_token)
+    rows = funding.opportunities(limit=limit, strategy=strategy, eligible_only=eligible_only)
+    return {"mode": "paper-only", "live_execution_available": False, "count": len(rows), "opportunities": rows}
+
+
+@app.get("/funding/positions")
+def funding_positions(
+    status: Optional[str] = None,
+    limit: int = 200,
+    x_paper_token: Optional[str] = Header(default=None),
+):
+    require_funding_reader(x_paper_token)
+    rows = funding.positions(status=status, limit=limit)
+    return {"mode": "paper-only", "live_execution_available": False, "count": len(rows), "positions": rows}
+
+
+@app.get("/funding/scorecard")
+def funding_scorecard(x_paper_token: Optional[str] = Header(default=None)):
+    require_funding_reader(x_paper_token)
+    return funding.scorecard()
