@@ -26,6 +26,9 @@ def evaluate_tournament(
     organic_score: Optional[float],
     source_count: int,
     independent_wallet_count: int,
+    telegram_channel_samples: int = 0,
+    telegram_channel_profit_factor: Optional[float] = None,
+    telegram_channel_ci_lower_bps: Optional[float] = None,
 ) -> list[StrategyVote]:
     """
     Four deliberately different hypotheses. They are evaluated independently,
@@ -117,6 +120,35 @@ def evaluate_tournament(
         passed,
         s,
         "high organic score confirmed by another independent source",
+    ))
+
+    # 5) Telegram source alpha. This cannot pass on reputation or follower count.
+    # A channel has to earn a positive forward prior from OUR delayed fills first.
+    channel_prior_good = (
+        telegram_channel_samples >= 20
+        and telegram_channel_profit_factor is not None
+        and telegram_channel_profit_factor > 1.30
+        and telegram_channel_ci_lower_bps is not None
+        and telegram_channel_ci_lower_bps > 0
+    )
+    s = 0.0
+    s += 45 if channel_prior_good else min(25.0, telegram_channel_samples * 1.25)
+    s += 20 if executable else 0
+    s += 15 if bundle_safe else 0
+    s += 10 if diverse else 0
+    s += 10 if balanced_pressure else 0
+    passed = (
+        source == "telegram"
+        and channel_prior_good
+        and executable
+        and bundle_safe
+        and diverse
+    )
+    votes.append(StrategyVote(
+        "TELEGRAM_CHANNEL_EDGE",
+        passed,
+        s,
+        "channel must prove forward PF>1.3 with positive bootstrap lower bound before promotion",
     ))
 
     return votes
