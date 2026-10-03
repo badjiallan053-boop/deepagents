@@ -1,5 +1,7 @@
 # Survival Alpha — Paper Lab
 
+See `AGENT_TEAM.md` for the complete agentic-desk architecture.
+
 This service is intentionally **paper-only**. It contains no wallet library, no private-key configuration, no transaction builder, and no execution endpoint.
 
 ## Endpoints
@@ -55,20 +57,31 @@ next step is empirical Jupiter quote-drift measurement. See
 The service now runs an always-on event engine when `REALTIME_ENABLED=true`.
 
 Sources:
+- Telegram signal channels via Bot API or optional Telethon MTProto
 - Helius Developer `transactionSubscribe` for watched-wallet buys
-- PumpPortal migration stream (and optionally new-token stream)
+- PumpPortal creation/migration streams
 - Jupiter `/tokens/v2/toporganicscore/5m`
+- slower X/Reddit narrative context through the social/Work layer
 
 Hot path:
 1. candidate event arrives;
-2. Jupiter WSOL->token executable quote;
-3. immediate token->WSOL sell-back quote;
-4. 500ms WSOL->token re-quote;
-5. deterministic sellability + latency gate;
-6. passing candidates become `ACTIONABLE_PAPER`;
-7. Telegram sends `PAPER ENTER / REJECT / OPEN JUPITER`.
+2. market phase is detected;
+3. Pump bonding-curve quote or Jupiter graduated-market quote;
+4. immediate hypothetical sell-back;
+5. 500ms re-quote while Helius microstructure is collected;
+6. risk governor vetoes unsafe candidates;
+7. independent strategy agents vote;
+8. passing candidates become `ACTIONABLE_PAPER`;
+9. paper executor + Telegram operator controls handle the forward experiment.
 
 No live transaction endpoint exists.
+
+### Team endpoints
+
+- `GET /team/manifest`
+- `GET /team/channel-scorecards`
+- `GET /team/strategy-scorecards`
+- `GET /team/diagnostics`
 
 ### Realtime endpoints
 
@@ -85,7 +98,14 @@ No live transaction endpoint exists.
 - `PUMPPORTAL_API_KEY`
 - `TELEGRAM_BOT_TOKEN`
 - `TELEGRAM_CHAT_ID`
-- `WATCH_WALLETS` (comma-separated; wallets can also be hot-added via API)
+- `TG_BOT_SIGNAL_CHAT_IDS` — signal chats where the bot is present
+- `TG_API_ID`, `TG_API_HASH`, `TG_SESSION_STRING` — optional Telethon mode
+- `TG_SIGNAL_CHANNELS` — comma-separated MTProto signal sources
+- `WATCH_WALLETS` — comma-separated; wallets can also be hot-added via API
+
+Prefer bot mode where possible. For MTProto mode, create the session locally and
+store it only in the deployment provider's secret store; a dedicated research
+Telegram account is safer than a primary personal account.
 
 ### Research controls
 
@@ -125,6 +145,9 @@ model:
   + executable quote.
 - `ORGANIC_MIND_SHARE`: high Jupiter organic score confirmed by another source,
   while bundle and execution gates remain healthy.
+- `TELEGRAM_CHANNEL_EDGE`: a Telegram source is allowed to become a strategy
+  only after >=20 of our own forward samples, profit factor >1.3, and a positive
+  95% bootstrap lower bound.
 
 The thresholds are hypotheses. They are not assumed to be profitable.
 
@@ -136,3 +159,11 @@ Each candidate also stores a Helius microstructure snapshot containing recent
 buy/sell counts, unique buyers/sellers, same-slot buy concentration, top-buyer
 concentration, fee intensity, mint/freeze authority state, and top-account
 concentration, alongside the actual Jupiter round-trip and 500ms quote drift.
+
+
+## CI battle test
+
+The branch CI compiles every Python agent, runs deterministic unit tests for the
+Telegram parser, channel-evidence gate and strategy tournament, syntax-checks the
+Pump quote sidecar, and fails if a Python private-key/send path or a Pump SDK
+transaction-builder primitive is introduced.
