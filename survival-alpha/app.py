@@ -443,6 +443,17 @@ def team_strategy_scorecards(x_paper_token: Optional[str] = Header(default=None)
     }
 
 
+
+@app.get("/team/horizon-scorecards")
+def team_horizon_scorecards(x_paper_token: Optional[str] = Header(default=None)):
+    require_admin(x_paper_token)
+    return {
+        "mode": "paper-only",
+        "horizons": agent_team.horizon_scorecards(),
+        "principle": "promote holding horizons from forward executable markouts, not screenshots",
+    }
+
+
 @app.get("/team/diagnostics")
 def team_diagnostics(x_paper_token: Optional[str] = Header(default=None)):
     require_admin(x_paper_token)
