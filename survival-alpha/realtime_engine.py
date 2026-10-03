@@ -12,6 +12,9 @@ import httpx
 import websockets
 from sqlalchemy import text
 
+from elite_signals import elite_verdict, microstructure_snapshot
+from strategy_tournament import evaluate_tournament
+
 log = logging.getLogger("survival-alpha.realtime")
 
 WSOL_MINT = "So11111111111111111111111111111111111111112"
@@ -69,6 +72,9 @@ def ensure_realtime_tables(engine) -> None:
             drift_500_bps DOUBLE PRECISION,
             price_impact DOUBLE PRECISION,
             organic_score DOUBLE PRECISION,
+            strategy_score DOUBLE PRECISION,
+            microstructure_json TEXT,
+            strategy_votes_json TEXT,
             decision TEXT NOT NULL,
             reason TEXT,
             paper_entered {bool_type} NOT NULL DEFAULT 0,
@@ -106,6 +112,9 @@ def ensure_realtime_tables(engine) -> None:
         for ddl in (
             "ALTER TABLE realtime_candidate ADD COLUMN outcome_5m_bps DOUBLE PRECISION",
             "ALTER TABLE realtime_candidate ADD COLUMN outcome_checked_at_utc TEXT",
+            "ALTER TABLE realtime_candidate ADD COLUMN strategy_score DOUBLE PRECISION",
+            "ALTER TABLE realtime_candidate ADD COLUMN microstructure_json TEXT",
+            "ALTER TABLE realtime_candidate ADD COLUMN strategy_votes_json TEXT",
         ):
             try:
                 cx.execute(text(ddl))
@@ -152,6 +161,10 @@ class RealtimeEngine:
 
         self.jupiter_key = os.getenv("JUPITER_API_KEY", "").strip()
         self.helius_key = os.getenv("HELIUS_API_KEY", "").strip()
+        self.helius_rpc_url = (
+            os.getenv("HELIUS_RPC_URL", "").strip()
+            or (f"https://mainnet.helius-rpc.com/?api-key={self.helius_key}" if self.helius_key else "")
+        )
         self.pumpportal_key = os.getenv("PUMPPORTAL_API_KEY", "").strip()
         self.telegram_token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
         self.telegram_chat_id = os.getenv("TELEGRAM_CHAT_ID", "").strip()
@@ -213,6 +226,47 @@ class RealtimeEngine:
         # stable de-dupe
         return list(dict.fromkeys(env_wallets + list(db)))
 
+    def _recent_confirmations(
+        self, mint: str, current: CandidateEvent, horizon_seconds: int = 120
+    ) -> tuple[int, int, Optional[float]]:
+        from datetime import datetime, timezone
+
+        now = datetime.now(timezone.utc)
+        sources = {current.source}
+        wallets = {current.wallet} if current.wallet else set()
+        organic_values = [current.organic_score] if current.organic_score is not None else []
+
+        with self.engine.begin() as cx:
+            rows = cx.execute(text("""
+                SELECT created_at_utc, source, source_wallet, organic_score
+                FROM realtime_candidate
+                WHERE mint=:mint
+                ORDER BY id DESC
+                LIMIT 50
+            """), {"mint": mint}).mappings().all()
+
+        for row in rows:
+            try:
+                ts = str(row["created_at_utc"])
+                if ts.endswith("Z"):
+                    ts = ts[:-1] + "+00:00"
+                dt = datetime.fromisoformat(ts)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                if (now - dt).total_seconds() > horizon_seconds:
+                    continue
+            except Exception:
+                continue
+            if row["source"]:
+                sources.add(str(row["source"]))
+            if row["source_wallet"]:
+                wallets.add(str(row["source_wallet"]))
+            if row["organic_score"] is not None:
+                organic_values.append(float(row["organic_score"]))
+
+        return len(sources), len(wallets), (max(organic_values) if organic_values else None)
+
+
     async def _jupiter_quote(self, input_mint: str, output_mint: str, amount: int) -> dict[str, Any]:
         assert self._http is not None
         params = {
@@ -253,20 +307,59 @@ class RealtimeEngine:
             sell_lamports = int(sell0.get("outAmount") or 0)
             roundtrip_bps = ((sell_lamports / self.notional) - 1.0) * 10_000.0
 
+            # Use the 500ms window productively: while quote decay accrues,
+            # collect candidate-local on-chain microstructure from Helius.
+            micro_task = None
+            if self.helius_rpc_url:
+                micro_task = asyncio.create_task(
+                    microstructure_snapshot(self._http, self.helius_rpc_url, event.mint)
+                )
+
             await asyncio.sleep(0.5)
             q500 = await self._jupiter_quote(WSOL_MINT, event.mint, self.notional)
             out500 = int(q500.get("outAmount") or 0)
             drift500 = ((out500 / out0) - 1.0) * 10_000.0 if out500 > 0 else -10_000.0
 
-            reasons = []
-            if roundtrip_bps < -abs(self.max_roundtrip_cost_bps):
-                reasons.append(f"roundtrip {roundtrip_bps:.0f}bps")
-            if drift500 < -abs(self.max_adverse_500_bps):
-                reasons.append(f"500ms drift {drift500:.0f}bps")
-            if event.source == "jupiter_organic" and (event.organic_score or 0) < self.organic_min:
-                reasons.append("organic score below floor")
+            if micro_task:
+                micro = await micro_task
+            else:
+                from elite_signals import MicrostructureSnapshot
+                micro = MicrostructureSnapshot(error="HELIUS_API_KEY missing")
 
-            decision = "REJECT" if reasons else "ACTIONABLE_PAPER"
+            source_count, independent_wallet_count, recent_organic = self._recent_confirmations(
+                event.mint, event
+            )
+            effective_organic = (
+                event.organic_score if event.organic_score is not None else recent_organic
+            )
+
+            verdict = elite_verdict(
+                micro=micro,
+                roundtrip_bps=roundtrip_bps,
+                drift_500_bps=drift500,
+                organic_score=effective_organic,
+                source_count=source_count,
+                independent_wallet_count=independent_wallet_count,
+            )
+            votes = evaluate_tournament(
+                source=event.source,
+                micro=micro,
+                roundtrip_bps=roundtrip_bps,
+                drift_500_bps=drift500,
+                organic_score=effective_organic,
+                source_count=source_count,
+                independent_wallet_count=independent_wallet_count,
+            )
+
+            # A strategy must pass independently; the aggregate score is diagnostic,
+            # not a permission slip.
+            passing = [v for v in votes if v.passed]
+            decision = "ACTIONABLE_PAPER" if passing and verdict.decision != "REJECT" else verdict.decision
+            reason = (
+                "passed: " + ",".join(v.name for v in passing)
+                if passing else "; ".join(verdict.reasons)
+            )
+
             cid = self._persist_candidate(
                 event,
                 str(out0),
@@ -274,8 +367,12 @@ class RealtimeEngine:
                 roundtrip_bps,
                 drift500,
                 decision,
-                "; ".join(reasons) if reasons else "sellability + 500ms drift passed",
+                reason,
                 price_impact=q0.get("priceImpact"),
+                strategy_score=verdict.score,
+                microstructure=micro.to_dict(),
+                strategy_votes=[v.to_dict() for v in votes],
+                organic_score=effective_organic,
             )
 
             if decision == "ACTIONABLE_PAPER":
@@ -299,6 +396,10 @@ class RealtimeEngine:
         decision: str,
         reason: str,
         price_impact: Optional[float] = None,
+        strategy_score: Optional[float] = None,
+        microstructure: Optional[dict] = None,
+        strategy_votes: Optional[list[dict]] = None,
+        organic_score: Optional[float] = None,
     ) -> int:
         row = {
             "created_at_utc": _now_utc(),
@@ -315,7 +416,10 @@ class RealtimeEngine:
             "roundtrip_bps": roundtrip_bps,
             "drift_500_bps": drift500,
             "price_impact": price_impact,
-            "organic_score": event.organic_score,
+            "organic_score": organic_score if organic_score is not None else event.organic_score,
+            "strategy_score": strategy_score,
+            "microstructure_json": json.dumps(microstructure or {}, separators=(",", ":")),
+            "strategy_votes_json": json.dumps(strategy_votes or [], separators=(",", ":")),
             "decision": decision,
             "reason": reason,
         }
@@ -325,12 +429,14 @@ class RealtimeEngine:
                     created_at_utc, updated_at_utc, mint, source, source_detail,
                     source_signature, source_wallet, source_slot, notional_lamports,
                     buy_out_amount, sellback_out_lamports, roundtrip_bps,
-                    drift_500_bps, price_impact, organic_score, decision, reason
+                    drift_500_bps, price_impact, organic_score, strategy_score,
+                    microstructure_json, strategy_votes_json, decision, reason
                 ) VALUES (
                     :created_at_utc, :updated_at_utc, :mint, :source, :source_detail,
                     :source_signature, :source_wallet, :source_slot, :notional_lamports,
                     :buy_out_amount, :sellback_out_lamports, :roundtrip_bps,
-                    :drift_500_bps, :price_impact, :organic_score, :decision, :reason
+                    :drift_500_bps, :price_impact, :organic_score, :strategy_score,
+                    :microstructure_json, :strategy_votes_json, :decision, :reason
                 )
             """), row)
             cid = getattr(result, "lastrowid", None)
