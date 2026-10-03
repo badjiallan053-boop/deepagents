@@ -450,7 +450,8 @@ def realtime_candidates(limit: int = 100, decision: Optional[str] = None,
         SELECT id, created_at_utc, updated_at_utc, mint, source, source_detail,
                source_signature, source_wallet, source_slot, notional_lamports,
                buy_out_amount, sellback_out_lamports, roundtrip_bps,
-               drift_500_bps, price_impact, organic_score, decision, reason,
+               drift_500_bps, price_impact, organic_score, strategy_score,
+               microstructure_json, strategy_votes_json, decision, reason,
                paper_entered, outcome_5m_bps, outcome_checked_at_utc
         FROM realtime_candidate
     """
@@ -506,6 +507,69 @@ def realtime_evaluation(x_paper_token: Optional[str] = Header(default=None)):
         "horizon": "5m",
         "summary": summary,
         "accepted_minus_rejected_mean_bps": edge_bps,
+        "live_execution_available": False,
+    }
+
+
+
+@app.get("/realtime/strategy-evaluation")
+def realtime_strategy_evaluation(x_paper_token: Optional[str] = Header(default=None)):
+    require_admin(x_paper_token)
+    with engine.begin() as cx:
+        rows = cx.execute(text("""
+            SELECT strategy_votes_json, outcome_5m_bps
+            FROM realtime_candidate
+            WHERE outcome_5m_bps IS NOT NULL
+              AND strategy_votes_json IS NOT NULL
+        """)).mappings().all()
+
+    groups = {}
+    for r in rows:
+        try:
+            votes = json.loads(r["strategy_votes_json"] or "[]")
+        except Exception:
+            continue
+        outcome = float(r["outcome_5m_bps"])
+        for vote in votes:
+            name = str(vote.get("name") or "UNKNOWN")
+            passed = bool(vote.get("passed"))
+            bucket = groups.setdefault(name, {"pass": [], "fail": []})
+            bucket["pass" if passed else "fail"].append(outcome)
+
+    def stats(xs):
+        if not xs:
+            return {"n": 0}
+        vals = sorted(xs)
+        n = len(vals)
+        med = vals[n//2] if n % 2 else (vals[n//2-1] + vals[n//2]) / 2
+        return {
+            "n": n,
+            "mean_5m_bps": sum(vals)/n,
+            "median_5m_bps": med,
+            "positive_rate": sum(1 for x in vals if x > 0)/n,
+            "large_loss_rate": sum(1 for x in vals if x <= -2000)/n,
+        }
+
+    out = {}
+    for name, buckets in groups.items():
+        passed = stats(buckets["pass"])
+        failed = stats(buckets["fail"])
+        edge = None
+        if buckets["pass"] and buckets["fail"]:
+            edge = (
+                sum(buckets["pass"])/len(buckets["pass"])
+                - sum(buckets["fail"])/len(buckets["fail"])
+            )
+        out[name] = {
+            "passed": passed,
+            "failed": failed,
+            "pass_minus_fail_mean_bps": edge,
+        }
+
+    return {
+        "mode": "paper-only",
+        "horizon": "5m",
+        "strategies": out,
         "live_execution_available": False,
     }
 
