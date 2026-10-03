@@ -2,7 +2,8 @@ services:
   - type: web
     name: survival-alpha-paper
     runtime: docker
-    plan: free
+    region: singapore
+    plan: 0.5c-512mb
     autoDeploy: false
     healthCheckPath: /health
     envVars:
@@ -13,4 +14,27 @@ services:
       - key: PAPER_ADMIN_TOKEN
         sync: false
       - key: DATABASE_URL
+        sync: false
+
+      - key: REALTIME_ENABLED
+        value: "true"
+      - key: PAPER_NOTIONAL_LAMPORTS
+        value: "40000000"
+      - key: AUTO_PAPER
+        value: "false"
+      - key: MAX_OPEN_PAPER_POSITIONS
+        value: "3"
+      - key: MAX_ROUNDTRIP_COST_BPS
+        value: "800"
+      - key: MAX_ADVERSE_500_BPS
+        value: "500"
+      - key: JUPITER_ORGANIC_MIN
+        value: "50"
+      - key: WATCH_WALLETS
+        sync: false
+      - key: PUMPPORTAL_API_KEY
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
         sync: false
