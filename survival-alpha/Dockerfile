@@ -9,9 +9,11 @@ COPY requirements.txt package.json package-lock.json ./
 RUN pip install --no-cache-dir -r requirements.txt \
     && npm ci --omit=dev
 
-COPY app.py realtime_engine.py social_signal.py elite_signals.py strategy_tournament.py telegram_parser.py telegram_signal_agent.py channel_evaluator.py agent_team.py grok_team.py grok_profit_team.py funding_basis.py capital_allocator.py firm_risk.py firm_book.py pump_quote_service.mjs pump_quote_math.mjs ./
+COPY app.py realtime_engine.py social_signal.py elite_signals.py strategy_tournament.py telegram_parser.py telegram_signal_agent.py channel_evaluator.py agent_team.py grok_team.py grok_profit_team.py funding_basis.py capital_allocator.py firm_risk.py firm_book.py pump_quote_service.mjs ./
 
 ENV PYTHONUNBUFFERED=1
 ENV PUMP_QUOTER_PORT=10001
+# Separate line so PRs editing the module COPY list above do not conflict.
+COPY pump_quote_math.mjs ./
 
 CMD ["sh", "-c", "if [ -n \"$SOLANA_RPC_URL\" ] || [ -n \"$HELIUS_API_KEY\" ]; then node pump_quote_service.mjs & fi; exec uvicorn app:app --host 0.0.0.0 --port ${PORT:-10000}"]
