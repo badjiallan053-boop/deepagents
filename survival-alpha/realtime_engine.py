@@ -87,7 +87,7 @@ def ensure_realtime_tables(engine) -> None:
             market_data_json TEXT,
             decision TEXT NOT NULL,
             reason TEXT,
-            paper_entered {bool_type} NOT NULL DEFAULT 0,
+            paper_entered {bool_type} NOT NULL DEFAULT {bool_false},
             outcome_5m_bps DOUBLE PRECISION,
             outcome_checked_at_utc TEXT,
             UNIQUE(source, source_signature, mint)
@@ -113,7 +113,7 @@ def ensure_realtime_tables(engine) -> None:
         cx.execute(text(f"""
         CREATE TABLE IF NOT EXISTS watch_wallet (
             wallet TEXT PRIMARY KEY,
-            enabled {bool_type} NOT NULL DEFAULT 1,
+            enabled {bool_type} NOT NULL DEFAULT {bool_true},
             label TEXT,
             created_at_utc TEXT NOT NULL
         )
@@ -249,7 +249,7 @@ class RealtimeEngine:
         ]
         with self.engine.begin() as cx:
             db = cx.execute(text(
-                "SELECT wallet FROM watch_wallet WHERE enabled = 1 ORDER BY created_at_utc"
+                "SELECT wallet FROM watch_wallet WHERE enabled ORDER BY created_at_utc"
             )).scalars().all()
         # stable de-dupe
         return list(dict.fromkeys(env_wallets + list(db)))
