@@ -14,6 +14,8 @@ from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import create_engine, text
 
+from social_signal import compute_features, content_fingerprint
+
 JUPITER_ORDER_URL = "https://api.jup.ag/swap/v2/order"
 WSOL_MINT = "So11111111111111111111111111111111111111112"
 PUMP_FUN_PROGRAM_ID = "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"
@@ -104,6 +106,25 @@ def init_db() -> None:
             is_pumpfun BOOLEAN NOT NULL
         )
         """))
+        cx.execute(text(f"""
+        CREATE TABLE IF NOT EXISTS social_event (
+            id {wallet_pk},
+            observed_at_utc TEXT NOT NULL,
+            published_at_utc TEXT NOT NULL,
+            source TEXT NOT NULL,
+            external_id TEXT NOT NULL,
+            author_id TEXT NOT NULL,
+            mint TEXT NOT NULL,
+            content_fingerprint TEXT NOT NULL,
+            author_age_days DOUBLE PRECISION,
+            follower_count BIGINT,
+            engagement_count BIGINT NOT NULL,
+            is_verified BOOLEAN NOT NULL,
+            contract_present BOOLEAN NOT NULL,
+            source_url TEXT,
+            UNIQUE(source, external_id)
+        )
+        """))
 
 
 init_db()
@@ -123,6 +144,21 @@ class BackfillRequest(BaseModel):
     max_pages: int = Field(default=20, ge=1, le=100)
     page_limit: int = Field(default=100, ge=1, le=1000)
     pump_only: bool = True
+
+
+class SocialEvent(BaseModel):
+    source: str = Field(min_length=1, max_length=20)
+    external_id: str = Field(min_length=1, max_length=200)
+    published_at_utc: str = Field(min_length=10, max_length=64)
+    author_id: str = Field(min_length=1, max_length=200)
+    mint: str = Field(min_length=30, max_length=60)
+    text: str = Field(min_length=1, max_length=10000)
+    author_age_days: Optional[float] = Field(default=None, ge=0)
+    follower_count: Optional[int] = Field(default=None, ge=0)
+    engagement_count: int = Field(default=0, ge=0)
+    is_verified: bool = False
+    contract_present: bool = False
+    source_url: Optional[str] = Field(default=None, max_length=2000)
 
 
 def _quote(session: requests.Session, signal: QuoteSignal):
@@ -352,6 +388,99 @@ def _fetch_wallet(wallet, days, page_limit, max_pages):
         if not token or not batch:
             break
     return all_txs
+
+
+
+@app.post("/paper/social/ingest")
+def social_ingest(event: SocialEvent, x_paper_token: Optional[str] = Header(default=None)):
+    require_admin(x_paper_token)
+    source = event.source.strip().lower()
+    if source not in {"x", "reddit"}:
+        raise HTTPException(400, "source must be x or reddit")
+
+    # Raw post text is deliberately not persisted. We only store a normalized
+    # fingerprint and structured provenance/features.
+    row = {
+        "observed_at_utc": utc_now(),
+        "published_at_utc": event.published_at_utc,
+        "source": source,
+        "external_id": event.external_id,
+        "author_id": event.author_id,
+        "mint": event.mint,
+        "content_fingerprint": content_fingerprint(event.text),
+        "author_age_days": event.author_age_days,
+        "follower_count": event.follower_count,
+        "engagement_count": event.engagement_count,
+        "is_verified": event.is_verified,
+        "contract_present": event.contract_present,
+        "source_url": event.source_url,
+    }
+
+    try:
+        with engine.begin() as cx:
+            cx.execute(text("""
+                INSERT INTO social_event (
+                    observed_at_utc, published_at_utc, source, external_id, author_id,
+                    mint, content_fingerprint, author_age_days, follower_count,
+                    engagement_count, is_verified, contract_present, source_url
+                ) VALUES (
+                    :observed_at_utc, :published_at_utc, :source, :external_id, :author_id,
+                    :mint, :content_fingerprint, :author_age_days, :follower_count,
+                    :engagement_count, :is_verified, :contract_present, :source_url
+                )
+            """), row)
+    except Exception as exc:
+        # Duplicate source/external_id should not create multiple votes.
+        if "unique" not in str(exc).lower() and "duplicate" not in str(exc).lower():
+            raise
+        return {"mode": "paper-only", "inserted": False, "duplicate": True}
+
+    return {
+        "mode": "paper-only",
+        "inserted": True,
+        "raw_text_stored": False,
+        "next_action": "RECOMPUTE_SOCIAL_SIGNAL_ONLY",
+    }
+
+
+@app.get("/paper/social/signal/{mint}")
+def social_signal(mint: str, x_paper_token: Optional[str] = Header(default=None)):
+    require_admin(x_paper_token)
+    with engine.begin() as cx:
+        rows = cx.execute(text("""
+            SELECT published_at_utc, source, author_id, content_fingerprint,
+                   author_age_days, follower_count, engagement_count,
+                   is_verified, contract_present
+            FROM social_event
+            WHERE mint = :mint
+            ORDER BY id DESC
+            LIMIT 1000
+        """), {"mint": mint}).mappings().all()
+
+    features = compute_features([dict(r) for r in rows], time.time())
+    return {
+        "mode": "paper-only",
+        "mint": mint,
+        "features": features,
+        "next_action": "SAMPLE_QUOTES_ONLY" if features["social_candidate"] else "IGNORE",
+        "can_authorize_trade": False,
+    }
+
+
+@app.get("/paper/social/recent")
+def social_recent(limit: int = 100, x_paper_token: Optional[str] = Header(default=None)):
+    require_admin(x_paper_token)
+    limit = min(max(limit, 1), 1000)
+    with engine.begin() as cx:
+        rows = cx.execute(text("""
+            SELECT observed_at_utc, published_at_utc, source, external_id, author_id,
+                   mint, author_age_days, follower_count, engagement_count,
+                   is_verified, contract_present, source_url
+            FROM social_event
+            ORDER BY id DESC
+            LIMIT :limit
+        """), {"limit": limit}).mappings().all()
+    return {"mode": "paper-only", "events": [dict(r) for r in rows]}
 
 
 @app.post("/paper/backfill")
