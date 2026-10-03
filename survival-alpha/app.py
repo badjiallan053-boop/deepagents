@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import create_engine, text
 
 from social_signal import compute_features, content_fingerprint
+from realtime_engine import RealtimeEngine
 
 JUPITER_ORDER_URL = "https://api.jup.ag/swap/v2/order"
 WSOL_MINT = "So11111111111111111111111111111111111111112"
@@ -27,7 +28,18 @@ elif DATABASE_URL.startswith("postgresql://") and "+psycopg" not in DATABASE_URL
     DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg://", 1)
 
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
-app = FastAPI(title="Survival Alpha Paper Lab", version="0.1.0")
+app = FastAPI(title="Survival Alpha Paper Lab", version="0.2.0")
+realtime = RealtimeEngine(engine)
+
+
+@app.on_event("startup")
+async def _start_realtime():
+    await realtime.start()
+
+
+@app.on_event("shutdown")
+async def _stop_realtime():
+    await realtime.stop()
 
 
 def utc_now() -> str:
@@ -144,6 +156,12 @@ class BackfillRequest(BaseModel):
     max_pages: int = Field(default=20, ge=1, le=100)
     page_limit: int = Field(default=100, ge=1, le=1000)
     pump_only: bool = True
+
+
+class WatchWalletRequest(BaseModel):
+    wallet: str = Field(min_length=30, max_length=60)
+    label: Optional[str] = Field(default=None, max_length=200)
+    enabled: bool = True
 
 
 class SocialEvent(BaseModel):
@@ -389,6 +407,117 @@ def _fetch_wallet(wallet, days, page_limit, max_pages):
             break
     return all_txs
 
+
+
+
+@app.get("/realtime/status")
+def realtime_status(x_paper_token: Optional[str] = Header(default=None)):
+    require_admin(x_paper_token)
+    with engine.begin() as cx:
+        counts = {
+            "candidates": int(cx.execute(text("SELECT COUNT(*) FROM realtime_candidate")).scalar_one()),
+            "actionable": int(cx.execute(text(
+                "SELECT COUNT(*) FROM realtime_candidate WHERE decision='ACTIONABLE_PAPER'"
+            )).scalar_one()),
+            "open_paper": int(cx.execute(text(
+                "SELECT COUNT(*) FROM paper_position WHERE status='OPEN'"
+            )).scalar_one()),
+            "watch_wallets": int(cx.execute(text(
+                "SELECT COUNT(*) FROM watch_wallet WHERE enabled=1"
+            )).scalar_one()),
+        }
+    return {
+        "mode": "paper-only",
+        "realtime_enabled": realtime.enabled,
+        "live_execution_available": False,
+        "wallet_key_loaded": False,
+        "sources": {
+            "helius_wallets": bool(realtime.helius_key),
+            "pumpportal": bool(realtime.pumpportal_key),
+            "jupiter_organic": bool(realtime.jupiter_key),
+            "telegram_actions": bool(realtime.telegram_token and realtime.telegram_chat_id),
+        },
+        "counts": counts,
+    }
+
+
+@app.get("/realtime/candidates")
+def realtime_candidates(limit: int = 100, decision: Optional[str] = None,
+                        x_paper_token: Optional[str] = Header(default=None)):
+    require_admin(x_paper_token)
+    limit = min(max(limit, 1), 1000)
+    query = """
+        SELECT id, created_at_utc, updated_at_utc, mint, source, source_detail,
+               source_signature, source_wallet, source_slot, notional_lamports,
+               buy_out_amount, sellback_out_lamports, roundtrip_bps,
+               drift_500_bps, price_impact, organic_score, decision, reason,
+               paper_entered
+        FROM realtime_candidate
+    """
+    params = {"limit": limit}
+    if decision:
+        query += " WHERE decision=:decision"
+        params["decision"] = decision
+    query += " ORDER BY id DESC LIMIT :limit"
+    with engine.begin() as cx:
+        rows = cx.execute(text(query), params).mappings().all()
+    return {"mode": "paper-only", "candidates": [dict(r) for r in rows]}
+
+
+@app.get("/realtime/positions")
+def realtime_positions(x_paper_token: Optional[str] = Header(default=None)):
+    require_admin(x_paper_token)
+    with engine.begin() as cx:
+        rows = cx.execute(text("""
+            SELECT * FROM paper_position ORDER BY id DESC LIMIT 200
+        """)).mappings().all()
+    return {"mode": "paper-only", "positions": [dict(r) for r in rows]}
+
+
+@app.post("/realtime/watch-wallet")
+def add_watch_wallet(req: WatchWalletRequest,
+                     x_paper_token: Optional[str] = Header(default=None)):
+    require_admin(x_paper_token)
+    with engine.begin() as cx:
+        existing = cx.execute(text(
+            "SELECT wallet FROM watch_wallet WHERE wallet=:wallet"
+        ), {"wallet": req.wallet}).first()
+        if existing:
+            cx.execute(text("""
+                UPDATE watch_wallet SET enabled=:enabled, label=:label
+                WHERE wallet=:wallet
+            """), {"enabled": req.enabled, "label": req.label, "wallet": req.wallet})
+        else:
+            cx.execute(text("""
+                INSERT INTO watch_wallet (wallet, enabled, label, created_at_utc)
+                VALUES (:wallet, :enabled, :label, :created)
+            """), {
+                "wallet": req.wallet, "enabled": req.enabled,
+                "label": req.label, "created": utc_now(),
+            })
+    realtime.request_watchlist_reload()
+    return {
+        "mode": "paper-only",
+        "wallet": req.wallet,
+        "enabled": req.enabled,
+        "watchlist_reloaded": True,
+    }
+
+
+@app.post("/realtime/paper-enter/{candidate_id}")
+async def realtime_paper_enter(candidate_id: int,
+                               x_paper_token: Optional[str] = Header(default=None)):
+    require_admin(x_paper_token)
+    pid = await realtime.paper_enter(candidate_id)
+    return {"mode": "paper-only", "position_id": pid, "live_trade_sent": False}
+
+
+@app.post("/realtime/paper-exit/{position_id}")
+async def realtime_paper_exit(position_id: int,
+                              x_paper_token: Optional[str] = Header(default=None)):
+    require_admin(x_paper_token)
+    await realtime.paper_exit(position_id)
+    return {"mode": "paper-only", "position_id": position_id, "live_trade_sent": False}
 
 
 @app.post("/paper/social/ingest")
