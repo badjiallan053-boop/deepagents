@@ -23,10 +23,15 @@ jobs:
           python-version: "3.12"
       - run: pip install -r requirements.txt
       - name: Compile
-        run: python -m py_compile app.py realtime_engine.py social_signal.py elite_signals.py strategy_tournament.py
+        run: python -m py_compile app.py realtime_engine.py social_signal.py elite_signals.py strategy_tournament.py telegram_parser.py telegram_signal_agent.py channel_evaluator.py agent_team.py
+      - name: Unit battle tests
+        run: python -m unittest discover -s tests -v
+      - name: Node sidecar syntax
+        run: node --check pump_quote_service.mjs
       - name: Assert no live execution path
         run: |
           ! grep -R -E "sendTransaction|/swap/v2/execute|PRIVATE_KEY|SECRET_KEY|Keypair\(" --include="*.py" .
+          ! grep -E "sendTransaction|Keypair\(|buyInstructions|sellInstructions|routedBuyInstructions|routedSellInstructions" pump_quote_service.mjs
       - name: Assert realtime stays paper-only
         run: |
           grep -q "ACTIONABLE_PAPER" realtime_engine.py
