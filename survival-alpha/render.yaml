@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: survival-alpha-paper
+    runtime: docker
+    plan: free
+    autoDeploy: false
+    healthCheckPath: /health
+    envVars:
+      - key: JUPITER_API_KEY
+        sync: false
+      - key: HELIUS_API_KEY
+        sync: false
+      - key: PAPER_ADMIN_TOKEN
+        sync: false
+      - key: DATABASE_URL
+        sync: false
