@@ -1,0 +1,33 @@
+name: survival-alpha-ci
+
+on:
+  push:
+    branches: ["survival-alpha-paper"]
+    paths:
+      - "survival-alpha/**"
+      - ".github/workflows/survival-alpha-ci.yml"
+  pull_request:
+    paths:
+      - "survival-alpha/**"
+
+jobs:
+  paper-safety:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: survival-alpha
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Compile
+        run: python -m py_compile app.py realtime_engine.py social_signal.py
+      - name: Assert no live execution path
+        run: |
+          ! grep -R -E "sendTransaction|/swap/v2/execute|PRIVATE_KEY|SECRET_KEY|Keypair\(" --include="*.py" .
+      - name: Assert realtime stays paper-only
+        run: |
+          grep -q "ACTIONABLE_PAPER" realtime_engine.py
+          grep -q "live_execution_available.*False" app.py
