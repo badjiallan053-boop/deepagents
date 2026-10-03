@@ -34,6 +34,13 @@ class GateStatsTests(unittest.TestCase):
         big = gs.gate_stats(vals * 5, [f"t{i}" for i in range(300)])
         self.assertEqual(big["status"], "GATE4_ELIGIBLE")
 
+    def test_capped_pf_or_zero_losses_is_review_never_a_pass(self):
+        allwin = gs.gate_stats([50.0 + i for i in range(400)])
+        self.assertTrue(allwin["profit_factor_capped"])
+        self.assertEqual(allwin["status"], "REVIEW")
+        flat = gs.gate_stats([0.0] * 10 + [50.0 + i for i in range(400)])
+        self.assertEqual(flat["status"], "REVIEW")
+
     def test_dominance(self):
         vals = [-10.0] * 40 + [5000.0]
         ids = [f"d{i}" for i in range(41)]

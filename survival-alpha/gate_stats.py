@@ -15,7 +15,8 @@ dominating" means the same thing on every scorecard (Risk red-team X4, N1-3).
   rate above max_exclusion_rate turns the status into DATA_QUALITY.
 
 Statuses: NO_DATA, COLLECT (clusters < min_n_research), DATA_QUALITY,
-REJECT_OR_REWORK, DOMINATED, RESEARCH_CANDIDATE (>= min_n_research clusters,
+REJECT_OR_REWORK, REVIEW (capped profit factor or zero losses: never a pass),
+DOMINATED, RESEARCH_CANDIDATE (>= min_n_research clusters,
 PF > threshold, cluster LB > 0, not dominated), GATE4_ELIGIBLE (same with
 >= min_n_gate clusters). Multiple-testing control across buckets is NOT done
 here; callers comparing many buckets must pre-register a primary bucket or
@@ -155,6 +156,10 @@ def gate_stats(
         status = "COLLECT"
     elif not passes:
         status = "REJECT_OR_REWORK"
+    elif capped or not any(v < 0 for v in values):
+        # Capped PF / zero losses: the loss model or the marks need checking.
+        # A REVIEW flag, never a pass (Risk re-review pr-redteam-002).
+        status = "REVIEW"
     elif dominated:
         status = "DOMINATED"
     elif k >= min_n_gate:
