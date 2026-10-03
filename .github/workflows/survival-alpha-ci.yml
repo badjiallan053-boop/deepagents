@@ -23,7 +23,7 @@ jobs:
           python-version: "3.12"
       - run: pip install -r requirements.txt
       - name: Compile
-        run: python -m py_compile app.py realtime_engine.py social_signal.py
+        run: python -m py_compile app.py realtime_engine.py social_signal.py elite_signals.py strategy_tournament.py
       - name: Assert no live execution path
         run: |
           ! grep -R -E "sendTransaction|/swap/v2/execute|PRIVATE_KEY|SECRET_KEY|Keypair\(" --include="*.py" .
