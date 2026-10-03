@@ -14,7 +14,9 @@ services:
       - key: PAPER_ADMIN_TOKEN
         sync: false
       - key: DATABASE_URL
-        sync: false
+        fromDatabase:
+          name: survival-alpha-db
+          property: connectionString
 
       - key: REALTIME_ENABLED
         value: "true"
@@ -52,3 +54,34 @@ services:
         sync: false
       - key: PUMP_QUOTER_URL
         value: "http://127.0.0.1:10001"
+
+      - key: FIRM_PAPER_NAV_LAMPORTS
+        value: "400000000"
+      - key: FIRM_BASE_POSITION_BPS
+        value: "250"
+      - key: FIRM_MAX_SINGLE_POSITION_BPS
+        value: "1000"
+      - key: FIRM_MAX_GROSS_EXPOSURE_BPS
+        value: "5000"
+      - key: FIRM_MAX_SOURCE_EXPOSURE_BPS
+        value: "2500"
+      - key: FIRM_DAILY_LOSS_LIMIT_BPS
+        value: "500"
+      - key: FIRM_MAX_OPEN_POSITIONS
+        value: "5"
+      - key: FIRM_MIN_PROMOTION_SAMPLES
+        value: "30"
+      - key: FIRM_MIN_PROFIT_FACTOR
+        value: "1.30"
+      - key: FIRM_HOLD_SECONDS
+        value: "300"
+      - key: MARKOUT_HORIZONS_SECONDS
+        value: "30,120,300,900"
+
+databases:
+  - name: survival-alpha-db
+    region: singapore
+    plan: free
+    databaseName: survival_alpha
+    user: survival_alpha
+    ipAllowList: []
