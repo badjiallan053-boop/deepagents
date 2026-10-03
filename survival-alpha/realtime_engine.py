@@ -59,6 +59,8 @@ def ensure_realtime_tables(engine) -> None:
     sqlite = str(engine.url).startswith("sqlite")
     pk = "INTEGER PRIMARY KEY AUTOINCREMENT" if sqlite else "BIGSERIAL PRIMARY KEY"
     bool_type = "INTEGER" if sqlite else "BOOLEAN"
+    bool_false = "0" if sqlite else "FALSE"
+    bool_true = "1" if sqlite else "TRUE"
     with engine.begin() as cx:
         cx.execute(text(f"""
         CREATE TABLE IF NOT EXISTS realtime_candidate (
