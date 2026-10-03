@@ -91,7 +91,10 @@ def ensure_realtime_tables(engine) -> None:
             reason TEXT,
             paper_entered {bool_type} NOT NULL DEFAULT {bool_false},
             outcome_5m_bps DOUBLE PRECISION,
+            outcome_5m_status TEXT,
             outcome_checked_at_utc TEXT,
+            episode_key TEXT,
+            episode_primary INTEGER NOT NULL DEFAULT 0,
             UNIQUE(source, source_signature, mint)
         )
         """))
@@ -120,22 +123,37 @@ def ensure_realtime_tables(engine) -> None:
             created_at_utc TEXT NOT NULL
         )
         """))
-        # Lightweight forward-compatible migrations for already-created paper DBs.
-        for ddl in (
-            "ALTER TABLE realtime_candidate ADD COLUMN outcome_5m_bps DOUBLE PRECISION",
-            "ALTER TABLE realtime_candidate ADD COLUMN outcome_checked_at_utc TEXT",
-            "ALTER TABLE realtime_candidate ADD COLUMN strategy_score DOUBLE PRECISION",
-            "ALTER TABLE realtime_candidate ADD COLUMN microstructure_json TEXT",
-            "ALTER TABLE realtime_candidate ADD COLUMN strategy_votes_json TEXT",
-            "ALTER TABLE realtime_candidate ADD COLUMN signal_published_at_utc TEXT",
-            "ALTER TABLE realtime_candidate ADD COLUMN signal_age_ms DOUBLE PRECISION",
-            "ALTER TABLE realtime_candidate ADD COLUMN market_phase TEXT",
-            "ALTER TABLE realtime_candidate ADD COLUMN market_data_json TEXT",
-        ):
-            try:
+    # Lightweight forward-compatible migrations for already-created paper DBs.
+    # One transaction per ALTER: on Postgres a failed ALTER (column exists)
+    # aborts the transaction, which silently skipped every later migration.
+    for ddl in (
+        "ALTER TABLE realtime_candidate ADD COLUMN outcome_5m_bps DOUBLE PRECISION",
+        "ALTER TABLE realtime_candidate ADD COLUMN outcome_checked_at_utc TEXT",
+        "ALTER TABLE realtime_candidate ADD COLUMN strategy_score DOUBLE PRECISION",
+        "ALTER TABLE realtime_candidate ADD COLUMN microstructure_json TEXT",
+        "ALTER TABLE realtime_candidate ADD COLUMN strategy_votes_json TEXT",
+        "ALTER TABLE realtime_candidate ADD COLUMN signal_published_at_utc TEXT",
+        "ALTER TABLE realtime_candidate ADD COLUMN signal_age_ms DOUBLE PRECISION",
+        "ALTER TABLE realtime_candidate ADD COLUMN market_phase TEXT",
+        "ALTER TABLE realtime_candidate ADD COLUMN market_data_json TEXT",
+        "ALTER TABLE realtime_candidate ADD COLUMN outcome_5m_status TEXT",
+        "ALTER TABLE realtime_candidate ADD COLUMN episode_key TEXT",
+        "ALTER TABLE realtime_candidate ADD COLUMN episode_primary INTEGER NOT NULL DEFAULT 0",
+    ):
+        try:
+            with engine.begin() as cx:
                 cx.execute(text(ddl))
-            except Exception:
-                pass
+        except Exception:
+            pass
+
+
+def _phase_bucket(market_phase: Optional[str]) -> str:
+    phase = (market_phase or "").lower()
+    if "bonding" in phase:
+        return "bonding"
+    if phase in {"graduated_or_external", "jupiter"} or "graduat" in phase:
+        return "graduated"
+    return ""
 
 
 @dataclass
@@ -171,6 +189,9 @@ class RealtimeEngine:
         self.organic_min = _env_float("JUPITER_ORGANIC_MIN", 50.0)
         self.organic_poll_secs = _env_float("JUPITER_ORGANIC_POLL_SECS", 20.0)
         self.candidate_cooldown_secs = _env_float("CANDIDATE_COOLDOWN_SECS", 60.0)
+        # A token keeps one measured row per (source, detail, mint, market phase)
+        # episode; a new episode starts after this much silence or on migration.
+        self.episode_gap_secs = _env_float("CANDIDATE_EPISODE_GAP_SECS", 3600.0)
         self.position_poll_secs = _env_float("PAPER_POSITION_POLL_SECS", 5.0)
         self.paper_max_hold_secs = _env_float("PAPER_MAX_HOLD_SECS", 300.0)
         self.auto_paper = _env_bool("AUTO_PAPER", False)
@@ -203,19 +224,47 @@ class RealtimeEngine:
         self.capital_allocator = FirmCapitalAllocator(self.engine)
         self.firm_risk = FirmRiskGovernor(self.engine)
 
-    async def start(self) -> None:
+    def idle_reasons(self) -> list[str]:
+        """Blocking reasons: any entry here means no candidates are ingested."""
+        reasons = []
         if not self.enabled:
-            log.warning("REALTIME_ENABLED=false; realtime engine is idle")
-            return
+            reasons.append("REALTIME_ENABLED is false")
         if not self.jupiter_key:
-            log.error("JUPITER_API_KEY missing; realtime engine cannot score candidates")
+            reasons.append("JUPITER_API_KEY missing: engine cannot quote or score candidates")
+        return reasons
+
+    def degraded_reasons(self) -> list[str]:
+        """Non-blocking gaps that silently weaken or bias measurements."""
+        reasons = []
+        if not self.helius_rpc_url:
+            reasons.append("HELIUS_API_KEY/HELIUS_RPC_URL missing: no microstructure snapshot")
+        if not self.helius_key:
+            reasons.append("HELIUS_API_KEY missing: watched-wallet feed not started")
+        if not (os.getenv("SOLANA_RPC_URL", "").strip() or self.helius_rpc_url):
+            reasons.append(
+                "SOLANA_RPC_URL/HELIUS_API_KEY missing: Pump quote sidecar not started; "
+                "bonding-curve tokens fall back to Jupiter quotes"
+            )
+        if not self.pumpportal_key:
+            reasons.append("PUMPPORTAL_API_KEY missing: PumpPortal migration feed not started (POST_MIGRATION_SURVIVOR cannot pass)")
+        return reasons
+
+    @property
+    def running(self) -> bool:
+        return any(not t.done() for t in self._tasks)
+
+    async def start(self) -> None:
+        idle = self.idle_reasons()
+        if idle:
+            log.warning("realtime engine is idle: %s", "; ".join(idle))
             return
+        for reason in self.degraded_reasons():
+            log.warning("realtime engine degraded: %s", reason)
 
         self._http = httpx.AsyncClient(timeout=12.0)
         self._tasks = [
             asyncio.create_task(self._organic_loop(), name="jupiter-organic"),
             asyncio.create_task(self._position_loop(), name="paper-positions"),
-            asyncio.create_task(self._counterfactual_loop(), name="counterfactuals"),
             asyncio.create_task(self._firm_book_loop(), name="firm-book"),
         ]
         if self.helius_key:
@@ -602,6 +651,9 @@ class RealtimeEngine:
             "reason": reason,
         }
         with self.engine.begin() as cx:
+            episode_key, primary, demote_id = self._assign_episode(cx, row)
+            row["episode_key"] = episode_key
+            row["episode_primary"] = 1 if primary else 0
             result = cx.execute(text("""
                 INSERT INTO realtime_candidate (
                     created_at_utc, updated_at_utc, mint, source, source_detail,
@@ -609,14 +661,16 @@ class RealtimeEngine:
                     buy_out_amount, sellback_out_lamports, roundtrip_bps,
                     drift_500_bps, price_impact, organic_score, strategy_score,
                     microstructure_json, strategy_votes_json, signal_published_at_utc,
-                    signal_age_ms, market_phase, market_data_json, decision, reason
+                    signal_age_ms, market_phase, market_data_json, decision, reason,
+                    episode_key, episode_primary
                 ) VALUES (
                     :created_at_utc, :updated_at_utc, :mint, :source, :source_detail,
                     :source_signature, :source_wallet, :source_slot, :notional_lamports,
                     :buy_out_amount, :sellback_out_lamports, :roundtrip_bps,
                     :drift_500_bps, :price_impact, :organic_score, :strategy_score,
                     :microstructure_json, :strategy_votes_json, :signal_published_at_utc,
-                    :signal_age_ms, :market_phase, :market_data_json, :decision, :reason
+                    :signal_age_ms, :market_phase, :market_data_json, :decision, :reason,
+                    :episode_key, :episode_primary
                 )
             """), row)
             cid = getattr(result, "lastrowid", None)
@@ -624,7 +678,88 @@ class RealtimeEngine:
                 cid = cx.execute(text(
                     "SELECT id FROM realtime_candidate WHERE mint=:mint ORDER BY id DESC LIMIT 1"
                 ), {"mint": event.mint}).scalar_one()
+            if demote_id is not None:
+                self._demote_primary(cx, demote_id)
         return int(cid)
+
+    def _assign_episode(self, cx, row: dict[str, Any]) -> tuple[str, bool, Optional[int]]:
+        """
+        De-duplicate re-polls of the same signal so a token counts once per
+        episode, not once per cooldown. Episode = (source, detail, mint,
+        market-phase bucket, first-seen time); a new one starts after
+        CANDIDATE_EPISODE_GAP_SECS without a sighting or on a phase change
+        (e.g. bonding curve -> migrated). Different sources/wallets/channels
+        stay separate signals.
+
+        Only measurable rows (executable buy quote) can be the primary. The
+        first measurable row is primary, unless a later row in the same
+        episode is ACTIONABLE_PAPER while the primary was not: then the
+        accepted row takes over (decisions only, never outcomes).
+        Returns (episode_key, is_primary, id_to_demote).
+        """
+        from datetime import datetime, timezone
+
+        bucket = _phase_bucket(row["market_phase"])
+        prev = cx.execute(text("""
+            SELECT created_at_utc, market_phase, episode_key
+            FROM realtime_candidate
+            WHERE mint=:mint AND source=:source
+              AND COALESCE(source_detail, '')=:detail
+              AND episode_key IS NOT NULL
+            ORDER BY id DESC
+            LIMIT 1
+        """), {
+            "mint": row["mint"], "source": row["source"],
+            "detail": row["source_detail"] or "",
+        }).mappings().first()
+
+        episode_key = None
+        if prev:
+            try:
+                prev_dt = datetime.fromisoformat(str(prev["created_at_utc"]).replace("Z", "+00:00"))
+                if prev_dt.tzinfo is None:
+                    prev_dt = prev_dt.replace(tzinfo=timezone.utc)
+                gap = (datetime.now(timezone.utc) - prev_dt).total_seconds()
+            except Exception:
+                gap = float("inf")
+            # key = source|detail|mint|bucket|first_seen; parse from the right.
+            parts = str(prev["episode_key"]).rsplit("|", 2)
+            prev_bucket = parts[1] if len(parts) == 3 else ""
+            same_phase = not bucket or not prev_bucket or bucket == prev_bucket
+            if gap <= self.episode_gap_secs and same_phase:
+                episode_key = str(prev["episode_key"])
+                if bucket and not prev_bucket:
+                    episode_key = None  # first priced row decides the phase; restart cleanly
+        if episode_key is None:
+            episode_key = "|".join([
+                str(row["source"]), str(row["source_detail"] or ""), str(row["mint"]),
+                bucket, str(row["created_at_utc"]),
+            ])
+
+        if row["buy_out_amount"] is None:
+            return episode_key, False, None
+        current = cx.execute(text("""
+            SELECT id, decision FROM realtime_candidate
+            WHERE episode_key=:k AND episode_primary=1
+            ORDER BY id LIMIT 1
+        """), {"k": episode_key}).mappings().first()
+        if current is None:
+            return episode_key, True, None
+        if row["decision"] == "ACTIONABLE_PAPER" and current["decision"] != "ACTIONABLE_PAPER":
+            return episode_key, True, int(current["id"])
+        return episode_key, False, None
+
+    @staticmethod
+    def _demote_primary(cx, candidate_id: int) -> None:
+        # Derived measurements only; the candidate row itself is kept for audit.
+        cx.execute(text("DELETE FROM candidate_markout WHERE candidate_id=:id"), {"id": candidate_id})
+        cx.execute(text("DELETE FROM markout_attempt WHERE candidate_id=:id"), {"id": candidate_id})
+        cx.execute(text("""
+            UPDATE realtime_candidate
+            SET episode_primary=0, outcome_5m_bps=NULL, outcome_5m_status=NULL,
+                outcome_checked_at_utc=NULL, updated_at_utc=:u
+            WHERE id=:id
+        """), {"u": _now_utc(), "id": candidate_id})
 
     async def _maybe_allocate_firm(
         self,
@@ -831,6 +966,9 @@ class RealtimeEngine:
             await asyncio.sleep(self.position_poll_secs)
 
     async def _firm_book_loop(self) -> None:
+        # Also the counterfactual marker: every episode-primary candidate,
+        # accepted or rejected, is marked at identical horizons and the 300s
+        # markout is the single source of truth for outcome_5m_bps.
         while not self._stop.is_set():
             try:
                 await self.firm_book.mark_open(self._market_sell_quote)
@@ -839,54 +977,6 @@ class RealtimeEngine:
                 log.exception("firm book loop error")
             await asyncio.sleep(5)
 
-
-    async def _counterfactual_loop(self) -> None:
-        """
-        Mark every candidate, accepted or rejected, at the same 5-minute horizon.
-        This is the anti-self-deception loop: filters are judged against what they rejected.
-        """
-        from datetime import datetime, timezone
-        while not self._stop.is_set():
-            try:
-                with self.engine.begin() as cx:
-                    rows = cx.execute(text("""
-                        SELECT id, created_at_utc, mint, notional_lamports, buy_out_amount
-                        FROM realtime_candidate
-                        WHERE buy_out_amount IS NOT NULL
-                          AND outcome_checked_at_utc IS NULL
-                        ORDER BY id
-                        LIMIT 200
-                    """)).mappings().all()
-
-                for row in rows:
-                    created = str(row["created_at_utc"])
-                    if created.endswith("Z"):
-                        created = created[:-1] + "+00:00"
-                    dt = datetime.fromisoformat(created)
-                    if dt.tzinfo is None:
-                        dt = dt.replace(tzinfo=timezone.utc)
-                    age = (datetime.now(timezone.utc) - dt).total_seconds()
-                    if age < 300:
-                        continue
-                    try:
-                        q = await self._market_sell_quote(
-                            row["mint"], int(row["buy_out_amount"])
-                        )
-                        value = int(q.get("outAmount") or 0)
-                        cost = int(row["notional_lamports"])
-                        outcome_bps = ((value / cost) - 1.0) * 10_000 if value else -10_000.0
-                        with self.engine.begin() as cx:
-                            cx.execute(text("""
-                                UPDATE realtime_candidate
-                                SET outcome_5m_bps=:o, outcome_checked_at_utc=:u,
-                                    updated_at_utc=:u
-                                WHERE id=:id
-                            """), {"o": outcome_bps, "u": _now_utc(), "id": row["id"]})
-                    except Exception:
-                        log.exception("counterfactual mark failed candidate=%s", row["id"])
-            except Exception:
-                log.exception("counterfactual loop error")
-            await asyncio.sleep(10)
 
     async def _organic_loop(self) -> None:
         while not self._stop.is_set():

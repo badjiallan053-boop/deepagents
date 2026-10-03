@@ -149,6 +149,7 @@ class AgentTeam:
                        c.decision, c.strategy_votes_json
                 FROM candidate_markout m
                 JOIN realtime_candidate c ON c.id=m.candidate_id
+                WHERE COALESCE(m.late, 0)=0
             """)).mappings().all()
 
         by_horizon: dict[int, dict[str, Any]] = {}
