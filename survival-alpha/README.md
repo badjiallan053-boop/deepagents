@@ -75,6 +75,7 @@ No live transaction endpoint exists.
 - `GET /realtime/status`
 - `GET /realtime/candidates`
 - `GET /realtime/positions`
+- `GET /realtime/evaluation`
 - `POST /realtime/watch-wallet`
 - `POST /realtime/paper-enter/{candidate_id}`
 - `POST /realtime/paper-exit/{position_id}`
@@ -92,8 +93,9 @@ No live transaction endpoint exists.
 - `MAX_ROUNDTRIP_COST_BPS=800`
 - `MAX_ADVERSE_500_BPS=500`
 - `JUPITER_ORGANIC_MIN=50`
-- `MAX_OPEN_PAPER_POSITIONS=3`
-- `AUTO_PAPER=false`
+- `MAX_OPEN_PAPER_POSITIONS=20`
+- `PAPER_MAX_HOLD_SECS=300`
+- `AUTO_PAPER=true`
 
 These defaults are experiment thresholds, not claims of profitability. Change them only after forward results support doing so.
 
@@ -102,3 +104,9 @@ These defaults are experiment thresholds, not claims of profitability. Change th
 Use an always-on service in Render's Singapore region. The Blueprint uses
 `0.5c-512mb`; the free plan is intentionally not used because sleeping a realtime
 WebSocket process destroys the experiment.
+
+
+Every candidate with an executable entry quote is marked again at the same
+5-minute horizon, including candidates that were rejected. `/realtime/evaluation`
+compares accepted versus rejected outcomes so the filter must prove that it
+improves the base rate rather than merely generating attractive alerts.
