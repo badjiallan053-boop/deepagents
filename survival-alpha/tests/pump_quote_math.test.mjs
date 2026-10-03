@@ -62,3 +62,25 @@ test("sidecar source has no transaction building or signing", () => {
     assert.doesNotMatch(src, /sendTransaction|Keypair\(|buyInstructions|sellInstructions|buyV2Instructions|routedBuyInstructions|routedSellInstructions|signTransaction/);
   }
 });
+
+test("redactSecrets strips RPC api keys from error text", () => {
+  const key = "abcd-1234-secret-key";
+  const msg = `fetch failed: https://mainnet.helius-rpc.com/?api-key=${key}&x=1 (${key})`;
+  const out = math.redactSecrets(msg, [key]);
+  assert.ok(!out.includes(key), out);
+  assert.match(out, /api-key=\[REDACTED\]&x=1/);
+  assert.equal(
+    math.redactSecrets("https://rpc.example/?apiKey=zzz999&token=qqq", []),
+    "https://rpc.example/?apiKey=[REDACTED]&token=[REDACTED]",
+  );
+  assert.equal(math.redactSecrets("plain error", ["", undefined]), "plain error");
+});
+
+test("Dockerfile pins Node 20 and installs npm deps without lifecycle scripts", () => {
+  const df = fs.readFileSync(new URL("../Dockerfile", import.meta.url), "utf8");
+  assert.match(df, /^FROM node:20\.\d+\.\d+-bookworm-slim AS nodebin$/m);
+  assert.doesNotMatch(df, /apt-get install[^\n]*\bnodejs\b/);
+  assert.match(df, /npm ci --omit=dev --ignore-scripts/);
+  const pkg = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+  assert.match(pkg.dependencies["@solana/web3.js"], /^\d+\.\d+\.\d+$/);
+});

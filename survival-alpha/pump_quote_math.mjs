@@ -75,3 +75,14 @@ export function roundtripBps(solAmount, sellbackLamports) {
   if (solAmount.isZero()) return 0;
   return sellbackLamports.sub(solAmount).muln(10_000).div(solAmount).toNumber();
 }
+
+// Strip RPC credentials from any text that leaves the process (HTTP error
+// bodies, logs). Covers ?api-key=/apiKey=/token= query params and any literal
+// secret values passed in (e.g. HELIUS_API_KEY, the full SOLANA_RPC_URL).
+export function redactSecrets(text, secrets = []) {
+  let out = String(text ?? "");
+  for (const s of secrets) {
+    if (s && String(s).length >= 6) out = out.split(String(s)).join("[REDACTED]");
+  }
+  return out.replace(/((?:api[-_]?key|apikey|token|access[-_]?token)=)[^&\s"'<>]+/gi, "$1[REDACTED]");
+}

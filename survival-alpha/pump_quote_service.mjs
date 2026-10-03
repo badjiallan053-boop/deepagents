@@ -8,6 +8,7 @@ import {
   graduationProgress,
   postBuyCurve,
   roundtripBps as computeRoundtripBps,
+  redactSecrets,
 } from "./pump_quote_math.mjs";
 
 // Official SDK (github.com/pump-fun/pump-sdk, MIT). Loaded via its CommonJS
@@ -34,6 +35,20 @@ const rpcUrl =
 
 if (!rpcUrl) {
   throw new Error("SOLANA_RPC_URL / HELIUS_API_KEY required for Pump quoter");
+}
+
+const SECRETS = [
+  process.env.HELIUS_API_KEY,
+  process.env.SOLANA_RPC_URL,
+  process.env.HELIUS_RPC_URL,
+  rpcUrl,
+];
+const redact = (text) => redactSecrets(text, SECRETS);
+// web3.js may log RPC failures; never let the RPC URL / API key reach logs.
+for (const level of ["log", "warn", "error"]) {
+  const orig = console[level].bind(console);
+  console[level] = (...args) =>
+    orig(...args.map((a) => (typeof a === "string" ? redact(a) : a instanceof Error ? redact(a.stack || a.message) : a)));
 }
 
 const connection = new Connection(rpcUrl, "processed");
@@ -216,7 +231,7 @@ const server = http.createServer(async (req, res) => {
 
     return respond(res, 404, { error: "not found" });
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    const message = redact(err instanceof Error ? err.message : String(err));
     const notFound = /Bonding curve account not found/i.test(message);
     return respond(res, notFound ? 404 : 500, { error: message });
   }
