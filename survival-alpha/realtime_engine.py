@@ -14,6 +14,9 @@ from sqlalchemy import text
 
 from elite_signals import elite_verdict, microstructure_snapshot
 from strategy_tournament import evaluate_tournament
+from channel_evaluator import evaluate_outcomes
+from telegram_parser import TelegramCall, parse_telegram_message
+from telegram_signal_agent import TelegramSignalAgent
 
 log = logging.getLogger("survival-alpha.realtime")
 
@@ -75,6 +78,10 @@ def ensure_realtime_tables(engine) -> None:
             strategy_score DOUBLE PRECISION,
             microstructure_json TEXT,
             strategy_votes_json TEXT,
+            signal_published_at_utc TEXT,
+            signal_age_ms DOUBLE PRECISION,
+            market_phase TEXT,
+            market_data_json TEXT,
             decision TEXT NOT NULL,
             reason TEXT,
             paper_entered {bool_type} NOT NULL DEFAULT 0,
@@ -115,6 +122,10 @@ def ensure_realtime_tables(engine) -> None:
             "ALTER TABLE realtime_candidate ADD COLUMN strategy_score DOUBLE PRECISION",
             "ALTER TABLE realtime_candidate ADD COLUMN microstructure_json TEXT",
             "ALTER TABLE realtime_candidate ADD COLUMN strategy_votes_json TEXT",
+            "ALTER TABLE realtime_candidate ADD COLUMN signal_published_at_utc TEXT",
+            "ALTER TABLE realtime_candidate ADD COLUMN signal_age_ms DOUBLE PRECISION",
+            "ALTER TABLE realtime_candidate ADD COLUMN market_phase TEXT",
+            "ALTER TABLE realtime_candidate ADD COLUMN market_data_json TEXT",
         ):
             try:
                 cx.execute(text(ddl))
@@ -131,6 +142,7 @@ class CandidateEvent:
     wallet: str = ""
     slot: int = 0
     organic_score: Optional[float] = None
+    published_at_utc: str = ""
 
 
 class RealtimeEngine:
@@ -168,6 +180,9 @@ class RealtimeEngine:
         self.pumpportal_key = os.getenv("PUMPPORTAL_API_KEY", "").strip()
         self.telegram_token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
         self.telegram_chat_id = os.getenv("TELEGRAM_CHAT_ID", "").strip()
+        self.bot_signal_chat_ids = {
+            x.strip() for x in os.getenv("TG_BOT_SIGNAL_CHAT_IDS", "").split(",") if x.strip()
+        }
         self.pump_quoter_url = os.getenv(
             "PUMP_QUOTER_URL", "http://127.0.0.1:10001"
         ).rstrip("/")
@@ -178,6 +193,7 @@ class RealtimeEngine:
         self._http: Optional[httpx.AsyncClient] = None
         self._watchlist_version = 0
         self._telegram_offset = 0
+        self._tg_signal_agent = TelegramSignalAgent(self._handle_telegram_call)
 
     async def start(self) -> None:
         if not self.enabled:
@@ -197,8 +213,10 @@ class RealtimeEngine:
             self._tasks.append(asyncio.create_task(self._helius_loop(), name="helius-wallets"))
         if self.pumpportal_key:
             self._tasks.append(asyncio.create_task(self._pumpportal_loop(), name="pumpportal"))
-        if self.telegram_token and self.telegram_chat_id:
+        if self.telegram_token and (self.telegram_chat_id or self.bot_signal_chat_ids):
             self._tasks.append(asyncio.create_task(self._telegram_callback_loop(), name="telegram-callbacks"))
+        if self._tg_signal_agent.enabled:
+            self._tasks.append(asyncio.create_task(self._tg_signal_agent.run(), name="telegram-mtproto"))
 
         await self._telegram_send(
             "🟢 Survival Alpha realtime engine online\n"
@@ -228,6 +246,54 @@ class RealtimeEngine:
             )).scalars().all()
         # stable de-dupe
         return list(dict.fromkeys(env_wallets + list(db)))
+
+    async def _handle_telegram_call(self, call: TelegramCall) -> None:
+        # Measure the first actionable call per channel/mint. Follow-ups are useful
+        # context but must not be double-counted as independent entries.
+        if call.call_type not in {"BUY", "MENTION"}:
+            return
+        with self.engine.begin() as cx:
+            seen = int(cx.execute(text("""
+                SELECT COUNT(*) FROM realtime_candidate
+                WHERE source='telegram' AND source_detail=:channel AND mint=:mint
+            """), {"channel": call.channel, "mint": call.mint}).scalar_one())
+        if seen:
+            return
+
+        await self.evaluate(CandidateEvent(
+            mint=call.mint,
+            source="telegram",
+            detail=call.channel,
+            signature=f"tg:{call.channel}:{call.message_id}",
+            published_at_utc=call.published_at_utc,
+        ))
+
+    def _telegram_channel_prior(self, channel: str) -> dict[str, Any]:
+        if not channel:
+            return {"n": 0, "profit_factor": None, "bootstrap_mean_lower_95_bps": None, "status": "NO_DATA"}
+        with self.engine.begin() as cx:
+            rows = cx.execute(text("""
+                SELECT outcome_5m_bps FROM realtime_candidate
+                WHERE source='telegram'
+                  AND source_detail=:channel
+                  AND outcome_5m_bps IS NOT NULL
+                ORDER BY id
+            """), {"channel": channel}).scalars().all()
+        return evaluate_outcomes(rows, min_samples=20, min_profit_factor=1.30).to_dict()
+
+    @staticmethod
+    def _signal_age_ms(published_at_utc: str) -> Optional[float]:
+        if not published_at_utc:
+            return None
+        try:
+            from datetime import datetime, timezone
+            s = published_at_utc.strip().replace("Z", "+00:00")
+            dt = datetime.fromisoformat(s)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return max(0.0, (datetime.now(timezone.utc) - dt).total_seconds() * 1000.0)
+        except Exception:
+            return None
 
     def _recent_confirmations(
         self, mint: str, current: CandidateEvent, horizon_seconds: int = 120
