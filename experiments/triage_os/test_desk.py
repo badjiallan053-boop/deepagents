@@ -1,6 +1,7 @@
 import importlib.util
 import io
 import json
+import unittest.mock
 import urllib.error
 import sqlite3
 import tempfile
@@ -35,6 +36,20 @@ FIX = Path(__file__).with_name("fixtures")
 def load(name):
     return json.loads((FIX / name).read_text())
 
+def sec_fetch(overrides=None):
+    """Offline SEC: full-text fixture + submissions items fixture (optionally overridden)."""
+    items = load("sec_submissions_items.json")
+    for cik, acc_items in (overrides or {}).items():
+        for acc, it in acc_items.items():
+            i = items[cik]["accessionNumber"].index(acc)
+            items[cik]["items"][i] = it
+    def fetch(url, headers):
+        if "efts.sec.gov" in url:
+            return load("sec_fulltext.json")
+        cik = url.rsplit("CIK", 1)[1].split(".")[0]
+        return {"filings": {"recent": items[cik]}}
+    return fetch
+
 class ConnectorTests(unittest.TestCase):
     """Offline: connectors are fed recorded JSON fixtures, no network."""
     def db(self, d):
@@ -62,7 +77,7 @@ class ConnectorTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d, self.db(d) as con:
             n = desk.ingest_sec_fulltext(con, '"Item 1.03"', "T t@example.com", "2026-09-22",
                                          "2026-10-22", ["1.03"],
-                                         fetch=lambda u, h: load("sec_fulltext.json"))
+                                         fetch=sec_fetch())
             self.assertEqual(n, 5)
             top = desk.rank(con)[0]
             self.assertGreaterEqual(top["priority"], 40)
@@ -134,10 +149,84 @@ class ConnectorTests(unittest.TestCase):
     def test_export_csv(self):
         with tempfile.TemporaryDirectory() as d, self.db(d) as con:
             desk.ingest_sec_fulltext(con, "q", "T t@example.com", "a", "b",
-                                     fetch=lambda u, h: load("sec_fulltext.json"))
+                                     fetch=sec_fetch())
             out = Path(d) / "o.csv"
             self.assertEqual(desk.export_csv(con, out, 3), 3)
             self.assertIn("signal_type", out.read_text().splitlines()[0])
+
+class DedupeAndHuntTests(unittest.TestCase):
+    def test_text_only_mention_dropped(self):
+        # metadata says the Petros filing has no item 1.03 -> text-only mention, dropped
+        fetch = sec_fetch({"0001815903": {"0001104659-26-112399": "5.02,9.01"}})
+        with tempfile.TemporaryDirectory() as d, desk.connect(Path(d) / "t.db") as con:
+            n = desk.ingest_sec_fulltext(con, "q", "T t@example.com", "a", "b", ["1.03"], fetch=fetch)
+            self.assertEqual(n, 4)
+            self.assertEqual(con.execute("select count(*) from signals where title like '%Petros%'").fetchone()[0], 0)
+
+    def test_metadata_items_override_search_items(self):
+        fetch = sec_fetch({"0001743745": {"0001493152-26-047256": "1.03,2.04"}})
+        with tempfile.TemporaryDirectory() as d, desk.connect(Path(d) / "t.db") as con:
+            desk.ingest_sec_fulltext(con, "q", "T t@example.com", "a", "b", ["1.03"], fetch=fetch)
+            raw = json.loads(con.execute("select raw_json from signals where external_id='0001493152-26-047256'").fetchone()[0])
+            self.assertEqual(raw["items"], ["1.03", "2.04"])
+
+    def test_entity_dedupe_across_forms_and_sources(self):
+        with tempfile.TemporaryDirectory() as d, desk.connect(Path(d) / "t.db") as con:
+            desk.ingest_sec_fulltext(con, "q", "T t@example.com", "a", "b", ["1.03"], fetch=sec_fetch())
+            desk.store(con, "courtlistener", "999", "Leslie's Inc.", "https://www.courtlistener.com/docket/999/x/",
+                       "2026-10-01", {"caseName": "Leslie's Inc.", "chapter": 11})
+            rows = desk.rank(con, 50, dedupe=True)
+            self.assertEqual(len(rows), 3)  # Petros, Greenlane, Leslie's
+            les = [r for r in rows if r["entity_key"] == "cik:1821806"][0]
+            self.assertEqual(les["signal_count"], 3)
+            self.assertEqual(set(les["sources"].split(",")), {"sec", "courtlistener"})
+            self.assertEqual(les["all_urls"].count("https://"), 3)
+
+    def test_name_only_entity_absorbed_by_later_cik(self):
+        with tempfile.TemporaryDirectory() as d, desk.connect(Path(d) / "t.db") as con:
+            desk.store(con, "courtlistener", "1", "Acme Holdings LLC", "https://www.courtlistener.com/docket/1/",
+                       "2026-10-01", {"caseName": "Acme Holdings LLC"})
+            desk.store(con, "sec", "a-1", "Acme Inc — 8-K", "https://www.sec.gov/x", "2026-10-02",
+                       {"entity": "ACME INC  (ACM)  (CIK 0000000042)", "cik": "42", "items": ["1.03"]})
+            self.assertEqual(len(desk.rank(con, 10, dedupe=True)), 1)
+
+    def test_court_partial_results_on_throttle(self):
+        page = load("courtlistener_v4.json")
+        page["next"] = "https://www.courtlistener.com/next"
+        calls = []
+        def fetch(url, headers):
+            calls.append(url)
+            if len(calls) > 1:
+                raise urllib.error.URLError("timed out")
+            return page
+        with tempfile.TemporaryDirectory() as d, desk.connect(Path(d) / "t.db") as con:
+            self.assertEqual(desk.ingest_court(con, "x", fetch=fetch), 3)
+            self.assertEqual(con.execute("select count(*) from signals").fetchone()[0], 3)
+
+    def test_court_token_from_env(self):
+        seen = {}
+        def fetch(url, headers):
+            seen.update(headers); return {"results": [], "next": None}
+        with tempfile.TemporaryDirectory() as d, desk.connect(Path(d) / "t.db") as con:
+            with unittest.mock.patch.dict("os.environ", {"COURTLISTENER_TOKEN": "abc"}):
+                desk.ingest_court(con, "x", fetch=fetch)
+        self.assertEqual(seen["Authorization"], "Token abc")
+
+    def test_daily_hunt_new_entities_only(self):
+        court = load("courtlistener_v4.json"); court["next"] = None
+        def court_fetch(url, headers):
+            return court
+        def broken_sec(url, headers):
+            raise urllib.error.URLError("down")
+        with tempfile.TemporaryDirectory() as d:
+            r1 = desk.daily_hunt(d, 2, "T t@example.com", sec_fetch=sec_fetch(), court_fetch=court_fetch)
+            self.assertGreater(r1["new_entities"], 0)
+            self.assertTrue((Path(d) / "signals_new.csv").exists())
+            r2 = desk.daily_hunt(d, 2, "T t@example.com", sec_fetch=broken_sec, court_fetch=court_fetch)
+            self.assertEqual(r2["new_entities"], 0)          # nothing unseen
+            self.assertEqual(len(r2["errors"]), 4)           # SEC failures isolated
+            lines = (Path(d) / "signals_new.csv").read_text().splitlines()
+            self.assertEqual(len(lines), 1)                  # header only
 
 if __name__ == "__main__":
     unittest.main()

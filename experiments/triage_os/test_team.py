@@ -111,6 +111,21 @@ class AbstentionTests(Base):
         self.assertEqual(case["gates"]["G5"], "advance")
         self.assertEqual(case["revise_loops"], 0)
 
+class FullReadTests(Base):
+    def test_ic_pack_and_verifier_see_whole_case(self):
+        case = team.DeskLead(self.bus, self.store).run(SIGNAL)
+        msgs = team.messages(self.bus, case["case_id"])
+        ver = [m for m in msgs if m["from"] == "verifier"][0]
+        self.assertGreaterEqual(ver["payload"]["checked"], 2)   # scout + entity claims
+        ic = [m for m in msgs if m["from"] == "ic_secretary"][0]
+        self.assertIn("signal_scout", {c["from_role"] for c in ic["claims"]})
+        for u in ("capital stack", "title", "sponsor/owner", "seller constraint"):
+            self.assertIn(u, ic["unknowns"])
+
+    def test_verifier_flags_non_https_source(self):
+        inbox = [{"claims": [{"text": "x", "confidence": "verified", "source_url": "http://a", "as_of": "d"}]}]
+        self.assertFalse(team.verifier({}, inbox)["payload"]["pass"])
+
 class HumanGateTests(Base):
     def test_external_action_blocked_until_decision(self):
         case = team.DeskLead(self.bus, self.store).run(SIGNAL)

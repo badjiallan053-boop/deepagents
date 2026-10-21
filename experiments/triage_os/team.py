@@ -44,6 +44,8 @@ DEADLINE_FIELDS = ("petition_date", "bid_deadline", "auction_date", "sale_hearin
                    "objection_deadline", "bar_date", "debt_maturity",
                    "forbearance_expiry", "delisting_deadline")
 
+FULL_READ_ROLES = {"verifier", "ic_secretary"}
+
 class GateError(Exception):
     pass
 
@@ -253,14 +255,17 @@ def contrarian(case, inbox, llm=None):
                 skipped=[], risks=[kill], to=[DESK_LEAD], payload={"veto": veto})
 
 def verifier(case, inbox, llm=None):
+    checked = [c for m in inbox for c in m["claims"] if c.get("source_url")]
     bad = [c["text"] for m in inbox for c in m["claims"]
            if c["confidence"] == "verified" and not (c.get("source_url") and c.get("as_of"))]
+    bad += [c["text"] for c in checked
+            if c["confidence"] != "unknown" and not str(c["source_url"]).startswith("https://")]
     downgraded = [c["text"] for m in inbox for c in m["claims"] if c.get("downgraded")]
     ok = not bad
     return dict(type="VERIFY", phase="VERIFY",
-                summary=("Provenance PASS" if ok else "Provenance FAIL") + f"; {len(downgraded)} claim(s) downgraded to unknown.",
+                summary=("Provenance PASS" if ok else "Provenance FAIL") + f": {len(checked)} sourced claim(s) checked; {len(downgraded)} claim(s) downgraded to unknown.",
                 claims=[], unknowns=downgraded, skipped=["did not re-fetch source documents (stub)"],
-                risks=bad, to=[DESK_LEAD], payload={"pass": ok})
+                risks=bad, to=[DESK_LEAD], payload={"pass": ok, "checked": len(checked)})
 
 def buyer_matcher(case, inbox, llm=None):
     extra = _hook(llm, "buyer_matcher", case, inbox)
@@ -275,7 +280,13 @@ def buyer_matcher(case, inbox, llm=None):
 def ic_secretary(case, inbox, llm=None):
     unk = sorted({u for m in inbox for u in m["unknowns"]})
     risks = sorted({r for m in inbox for r in m["risks"]})
-    claims = [c for m in inbox for c in m["claims"] if c["confidence"] != "unknown"]
+    claims, seen = [], set()
+    for m in inbox:
+        for c in m["claims"]:
+            key = (c.get("text"), c.get("value"), c.get("source_url"))
+            if c["confidence"] != "unknown" and c.get("source_url") and key not in seen:
+                seen.add(key)
+                claims.append(dict(c, from_role=m["from"]))
     return dict(type="REQUEST", phase="IC_PACK",
                 summary=f"IC pack for {case['signal'].get('entity')}: {len(claims)} cited claim(s), {len(unk)} unresolved unknown(s). Human DECISION required.",
                 claims=claims, unknowns=unk, skipped=["no valuation (abstained)"] if case["gates"].get("G4") == "abstain" else [],
@@ -294,7 +305,10 @@ class DeskLead:
         self.bus, self.store, self.llm = bus, store, llm
 
     def _run(self, role, case):
-        out = ROLES[role](case, messages(self.bus, case["case_id"], to_role=role), self.llm)
+        # Verifier and IC Secretary audit the whole case; others see only their inbox.
+        inbox = messages(self.bus, case["case_id"],
+                         to_role=None if role in FULL_READ_ROLES else role)
+        out = ROLES[role](case, inbox, self.llm)
         to = out.pop("to")
         out["mtype"] = out.pop("type")
         return post(self.bus, case["case_id"], role, to, **out)

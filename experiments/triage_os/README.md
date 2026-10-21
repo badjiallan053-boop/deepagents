@@ -50,3 +50,10 @@ Native reimplementation of the patterns in the team research note (no third-part
 - Only a `human_ic` DECISION can unlock `external_action()`, and only for the actions it names. Even then the function performs nothing; it just grants permission.
 - Roles are deterministic stubs; pass `llm=callable(role, case, inbox)` to `DeskLead` to plug in a model.
 - Demo: `python demo_case.py --signals-db triage.db --workdir ./desk_run`.
+
+## Daily hunt, entity dedupe, item confirmation
+
+- `python desk.py daily-hunt --days 2 --out /workspace/triage_os_data/` runs SEC full-text (items 1.03/2.04/2.06/3.01) and CourtListener queries over the last N days, then writes `signals_top.csv` (deduped by entity) and `signals_new.csv` (only entities never seen in that DB before). Each query fails on its own and stored rows are kept. Set `COURTLISTENER_TOKEN` (optional) and `SEC_USER_AGENT`.
+- Entities are keyed by CIK when known, else by normalized name. A name-only entity merges into a matching CIK entity. Ranked/exported rows carry `signal_count`, `sources`, `signal_types` and `all_urls`.
+- SEC full-text hits are kept only if the filing's `items` in the submissions JSON contain a wanted item, so text-only mentions are dropped.
+- The Verifier and IC Secretary read every message in the case.
