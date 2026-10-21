@@ -108,6 +108,8 @@ GAZETTE = "https://www.thegazette.co.uk/insolvency/notice/data.json"
 
 def uk_procedure(category, code):
     c = (category or "").lower()
+    if "prohibited name" in c:
+        return "pre_pack"   # s.216 re-use of name: directors bought the business out of insolvency
     if "receiv" in c:
         return "receivership"
     if "administra" in c:
@@ -298,7 +300,7 @@ def rank_world(con, limit=30, since=None, per_country=None):
             continue
         if key not in best or s["score"] > best[key]["score"]:
             best[key] = s
-    ranked = sorted(best.values(), key=lambda s: (-s["score"], s.get("event_date") or ""))
+    ranked = sorted(best.values(), key=lambda s: (-s["score"], "".join(chr(255 - ord(ch)) for ch in (s.get("event_date") or ""))))
     if per_country:
         seen = {}
         ranked = [s for s in ranked if seen.setdefault(s["country"], 0) < per_country

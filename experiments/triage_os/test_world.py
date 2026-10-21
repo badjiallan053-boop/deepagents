@@ -24,6 +24,7 @@ class TestWorld(unittest.TestCase):
         self.assertEqual(len(sigs), 3)
         self.assertTrue(all(s["notice_code"].startswith("24") for s in sigs))
         self.assertEqual(world.uk_procedure("Appointment of Administrators", "2410"), "administration_reorg")
+        self.assertEqual(world.uk_procedure("Moratoria, Prohibited Names and Other: Re-use of a Prohibited Name", "2460"), "pre_pack")
         self.assertEqual(world.uk_procedure("Petitions to Wind Up (Companies)", "2450"), "winding_up_petition")
 
     def test_asx_filter(self):
