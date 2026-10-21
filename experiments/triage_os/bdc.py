@@ -132,3 +132,30 @@ def divergence(con, min_gap=8):
                         "median": statistics.median(marks),
                         "holders": sorted(((r["bdc"], r["mark"], r["url"], r["identifier"]) for r in rows), key=lambda x: x[1])})
     return sorted(out, key=lambda d: -d["gap"])
+
+def migration(con, min_drop=10, min_fv=2e6):
+    """Quarter-over-quarter mark change for the same (bdc, borrower, lien) position."""
+    per = {}
+    for bdc, key, name, ident, period, fv, par, cost, url in con.execute(
+            "SELECT bdc, borrower_key, borrower, identifier, period, fv, par, cost, source_url FROM bdc_marks"):
+        if UNFUNDED.search(ident):
+            continue
+        m = fair_mark(fv, par, cost)
+        if m is None or m > 115:
+            continue
+        k = (bdc, key + "|" + lien(ident))
+        cur = per.setdefault(k, {}).get(period)
+        if not cur or fv > cur["fv"]:
+            per[k][period] = {"name": name, "ident": ident, "fv": fv, "mark": m, "url": url}
+    out = []
+    for (bdc, key), ps in per.items():
+        if len(ps) < 2:
+            continue
+        p0, p1 = sorted(ps)[-2:]
+        a, b = ps[p0], ps[p1]
+        drop = a["mark"] - b["mark"]
+        if drop >= min_drop and b["fv"] >= min_fv:
+            out.append({"bdc": bdc, "key": key.split("|")[0], "name": b["name"], "from": p0, "to": p1,
+                        "mark_before": a["mark"], "mark_after": b["mark"], "drop": round(drop, 1),
+                        "fv": b["fv"], "url": b["url"], "url_before": a["url"]})
+    return sorted(out, key=lambda r: -r["drop"] * r["fv"])
