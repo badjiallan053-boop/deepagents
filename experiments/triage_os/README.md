@@ -33,3 +33,10 @@ The SEC company-submissions endpoint monitors **one specified public company**; 
 
 ## Next milestone
 Add state-specific property/foreclosure connectors, filing-document parser with citation offsets, entity graph, buyer mandates, review dashboard and scheduled ingestion with monitoring. Verify data licenses, API quotas and US regulatory scope before commercial deployment.
+
+## Connector notes (verified live 2026-10-22)
+
+- CourtListener: uses REST **v4** search (`type=r`, `order_by=dateFiled desc`, optional `filed_after`), follows the `next` cursor up to `--max-pages`. Anonymous search works; `COURTLISTENER_TOKEN` is optional (higher limits). Results are keyed on `docket_id` / `docket_absolute_url`; scoring uses case name, `chapter` and `recap_documents` descriptions.
+- SEC: submissions API (`--history` also pages `filings.files`) and EDGAR full-text search (`ingest-sec-fulltext`, filtered by 8-K items such as 1.03, 2.04, 2.06, 3.01). 8-K item codes add to the priority score. Requests are throttled below 10 req/s and retried with backoff on 429/5xx.
+- `export --out signals.csv` writes the top ranked signals. All signals remain `unverified`.
+- Tests are offline and use recorded fixtures in `fixtures/`.
