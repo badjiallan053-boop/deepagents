@@ -40,3 +40,13 @@ Add state-specific property/foreclosure connectors, filing-document parser with 
 - SEC: submissions API (`--history` also pages `filings.files`) and EDGAR full-text search (`ingest-sec-fulltext`, filtered by 8-K items such as 1.03, 2.04, 2.06, 3.01). 8-K item codes add to the priority score. Requests are throttled below 10 req/s and retried with backoff on 429/5xx.
 - `export --out signals.csv` writes the top ranked signals. All signals remain `unverified`.
 - Tests are offline and use recorded fixtures in `fixtures/`.
+
+## Agent team (`team.py`)
+
+Native reimplementation of the patterns in the team research note (no third-party skill code, no hooks, no outreach):
+- Append-only SQLite bus (`bus` table, UPDATE/DELETE blocked by triggers). Types: HANDOFF, REQUEST, CHALLENGE, ABSTAIN, VERIFY, DECISION. Every message: summary ≤200 tokens, claims with source_url/doc_page/as_of/confidence, mandatory `unknowns`/`skipped`/`risks`. Claims without source_url + as_of are downgraded to `unknown`.
+- `cases/<id>/case.json`, written only by `desk_lead` under an O_EXCL lock. Deadline clock fields and a standard `REJECTION_REASONS` taxonomy (kills are stored as negative outcome labels).
+- Gates: G1 provenance → G2 entity → G3 Verifier (veto) → G4 Valuation (ABSTAIN when title/debt/occupancy/legal status are unknown) → G5 Contrarian (veto, max 2 revise loops, then escalate) → G6 Buyer match → G7 IC pack → **AWAITING_HUMAN**.
+- Only a `human_ic` DECISION can unlock `external_action()`, and only for the actions it names. Even then the function performs nothing; it just grants permission.
+- Roles are deterministic stubs; pass `llm=callable(role, case, inbox)` to `DeskLead` to plug in a model.
+- Demo: `python demo_case.py --signals-db triage.db --workdir ./desk_run`.
