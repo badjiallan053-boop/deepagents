@@ -7,6 +7,7 @@ as 'unverified'.
 """
 import argparse
 import csv
+import importlib.util
 import datetime as dt
 import json
 import os
@@ -157,7 +158,7 @@ def get_json(url, headers, retries=4, backoff=1.0, opener=None, timeout=60):
             if exc.code not in (429, 500, 502, 503, 504) or attempt == retries:
                 raise
             retry_after = exc.headers.get("Retry-After") if exc.headers else None
-            delay = float(retry_after) if retry_after and retry_after.isdigit() else backoff * 2 ** attempt
+            delay = min(float(retry_after), 600.0) if retry_after and retry_after.isdigit() else backoff * 2 ** attempt
         except urllib.error.URLError:
             if attempt == retries:
                 raise
@@ -414,10 +415,27 @@ def main():
                       "TRIAGE-OS research badjiallan053@gmail.com"))
     hunt.add_argument("--court-pages", type=int, default=2)
     hunt.add_argument("--sec-pages", type=int, default=2)
+    bt = sub.add_parser("backtest")
+    bt.add_argument("--out", required=True)
+    bt.add_argument("--db", default=str(DB))
+    bt.add_argument("--user-agent", default=os.getenv("SEC_USER_AGENT",
+                    "TRIAGE-OS research badjiallan053@gmail.com"))
+    bt.add_argument("--gt-after", default=(dt.date.today() - dt.timedelta(days=730)).isoformat())
+    bt.add_argument("--gt-before", default=dt.date.today().isoformat())
+    bt.add_argument("--fp-start", default=(dt.date.today() - dt.timedelta(days=730)).isoformat())
+    bt.add_argument("--fp-end", default=(dt.date.today() - dt.timedelta(days=545)).isoformat())
+    bt.add_argument("--no-sec-replay", action="store_true")
     exp = sub.add_parser("export")
     exp.add_argument("--out", required=True)
     exp.add_argument("--limit", type=int, default=20)
     args = parser.parse_args()
+    if args.command == "backtest":
+        spec = importlib.util.spec_from_file_location("backtest", Path(__file__).with_name("backtest.py"))
+        bt_mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(bt_mod)
+        print(json.dumps(bt_mod.run(args.db, args.out, args.user_agent, args.gt_after, args.gt_before,
+                                    args.fp_start, args.fp_end, sec_replay=not args.no_sec_replay),
+                         indent=2, default=str))
+        return
     if args.command == "daily-hunt":
         print(json.dumps(daily_hunt(args.out, args.days, args.user_agent,
                                     args.court_pages, args.sec_pages), indent=2))
