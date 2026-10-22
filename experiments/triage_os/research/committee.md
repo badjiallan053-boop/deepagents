@@ -71,7 +71,7 @@ Committee BUY calls: 1753; share that beat the equal-weight month: 47%.
 
 ### PAPER-ONLY live track record (hash-chained)
 
-Ledger `track_record.jsonl`: 32 calls, chain verified = True. Each record holds entry (last public close), thesis (each agent's view), catalyst, exit rule, benchmark, previous hash and SHA-256 hash, logged in SGT. No trades placed; not advice to anyone.
+Ledger `track_record.jsonl`: 39 calls, chain verified = True. Each record holds entry (last public close), thesis (each agent's view), catalyst, exit rule, benchmark, previous hash and SHA-256 hash, logged in SGT. No trades placed; not advice to anyone.
 
 | # | Kind | Instrument | Call | Entry | Entry date | Exit rule |
 |---|---|---|---|---|---|---|
@@ -107,8 +107,15 @@ Ledger `track_record.jsonl`: 32 calls, chain verified = True. Each record holds 
 | 30 | credit-situation | VPower Group — 1608.HK shares | WATCH | 0.031 | 2026-10-22 | mark at catalyst date + 5 trading days; close  |
 | 31 | credit-situation | Branicks Group (€400m bond) — BRNK.DE shares | WATCH | 0.41 | 2026-10-22 | mark at catalyst date + 5 trading days; close  |
 | 32 | credit-situation | China Aoyuan (secured assets) — 3883.HK shares | WATCH | 0.031 | 2026-10-22 | mark at catalyst date + 5 trading days; close  |
+| 33 | committee-v2 | S6 HYG | FLAT (trigger not met) | 0 | 2026-10-23 | open only when trigger fires; hold 60d; costs  |
+| 34 | committee-v2 | S8 EEM | FLAT (trigger not met) | 0 | 2026-10-23 | open only when trigger fires; hold 20d; costs  |
+| 35 | committee-v2 | S13 BTC | FLAT (trigger not met) | 0 | 2026-10-23 | open only when trigger fires; hold 7d; costs p |
+| 36 | committee-v2 | S15 EWI | FLAT (trigger not met) | 0 | 2026-10-23 | open only when trigger fires; hold 20d; costs  |
+| 37 | committee-v2 | S16 REMX | FLAT (trigger not met) | 0 | 2026-10-23 | open only when trigger fires; hold 5d; costs p |
+| 38 | committee-v2 | S21 SPY | FLAT (trigger not met) | 0 | 2026-10-23 | open only when trigger fires; hold 20d; costs  |
+| 39 | committee-v2 | S23 SPY | FLAT (trigger not met) | 0 | 2026-10-23 | open only when trigger fires; hold 60d; costs  |
 
-First hash 891dbead90cbf53a… → last hash ce04c096409fd7d7…. To make the record externally verifiable, publish each day's last hash somewhere timestamped (e.g. a public git commit or an OpenTimestamps proof) — a user action, not done.
+First hash 891dbead90cbf53a… → last hash eceda098e4ba71ae…. To make the record externally verifiable, publish each day's last hash somewhere timestamped (e.g. a public git commit or an OpenTimestamps proof) — a user action, not done.
 
 ### Monetisation (JUDGEMENT) — the track record is the product proof
 

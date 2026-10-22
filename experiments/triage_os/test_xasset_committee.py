@@ -20,3 +20,13 @@ def test_backtest_has_baselines():
     b = json.load(open("/workspace/triage_os_data/committee/backtest.json"))
     for p in ("risk_neutral", "risk_averse"):
         assert {"committee", "equal_weight", *C.ROLES} <= set(b[p]["full"])
+def test_signal_library_kill_rule():
+    S = json.load(open("/workspace/triage_os_data/signals.json"))["signals"]
+    assert len(S) >= 15
+    for s in S:
+        o = s["oos"]
+        if s["status"] == "KEPT": assert o["n"] >= 8 and o["mean_excess"] > 0 and o["precision"] >= 52
+        if o.get("n", 0) >= 8 and (o["mean_excess"] <= 0 or o["precision"] < 52): assert s["status"] == "KILLED"
+def test_ledger_proof_files():
+    import glob
+    assert glob.glob("ledger_proofs/*.anchor.txt.ots") and os.path.exists("ledger_proofs/README.md")

@@ -59,7 +59,7 @@ def claims():
                         post_mlrs_share=round(post / max(1, len(act)), 2)))
     return dict(source=j["source"], fetched=j["fetched"][:10], sites=out,
                 caveat="Public MLRS layer has LOC_DT null for every record (count where LOC_DT IS NOT NULL = 0, both layers, checked 23 Oct 2026). "
-                       "Dated staking surges therefore cannot be backtested from this endpoint; 'Filed/Under Review' share is used as a live proxy for fresh staking.")
+                       "This MapServer has no dates; the BLM hub FeatureServers do (record 'Created'), and are used for the dated staking backtest (S17/S20) in the signal library.")
 # ---------- Sentinel-2 ----------
 def sat():
     j = json.load(open(f"{M}/stac_s2.json")); out = []
@@ -138,14 +138,14 @@ def build():
         cofer_usd=cofer().get("CI_USD", [])[-12:],
         gaps=["USGS MRDS/USMIN/NGDB bulk download: mrdata.usgs.gov returns 403 to the box (curl, 23 Oct) → deposit join uses hand-placed district centres (labelled).",
               "Geoscience Australia services.ga.gov.au 403; WA DMIRS/QLD, Ontario MLAS, BC MTO, GESTIM, BGS, EGDI, GEUS, Chile/Peru/DRC cadastres: not ingested this pass.",
-              "BLM MLRS public layer has no location dates → staking-surge backtest impossible from it; needs MLRS bulk reports (reports.blm.gov) or county recorder data.",
-              "NASA FIRMS needs a free MAP_KEY (registration = account creation, not done); VIIRS night lights not ingested.",
+              "BLM MLRS MapServer has no location dates; solved via hub FeatureServer 'Created' dates (2021+, MLRS-native serials). LR2000 legacy recordation dates still not ingested.",
+              "NASA FIRMS MAP_KEY needs an email form (not submitted); no-key 7-day VIIRS CSV ingested; Black Marble night lights need Earthdata login.",
               "WGC central-bank gold: not fetched. SEDAR+/ASX owner mapping: not done.",
               "Internet Archive: search works (leads saved) but no deposit has been matched to a lapsed claim yet."],
         archive=json.load(open(f"{M}/archive_leads.json")))
     json.dump(J, open(OUT, "w"), indent=1, ensure_ascii=False); return J
 def md(J):
-    L = ["# TRIAGE Cross-Asset Radar — Mining + Land layer and macro regime", "",
+    L = ["# TRIAGE Cross-Asset Radar", "",
          "_As of 23 Oct 2026 (SGT). Public data only. Facts carry source + fetch date; **JUDGEMENT** marks our reads. Nothing sent._", "",
          "## What this layer does", "",
          "Joins (1) export-control events from MOFCOM primary text, (2) US federal mining-claim status around documented deposits of controlled minerals (BLM MLRS), (3) Sentinel-2 scene coverage at three sites (Earth Search STAC), (4) supply concentration (USGS MCS 2026) and (5) a Dalio-style macro regime. The target signal — *staking surge or lapse near a historically documented controlled-mineral deposit* — is only partly testable today; we say exactly where.", "",
@@ -177,11 +177,13 @@ def md(J):
     return "\n".join(L)
 if __name__ == "__main__":
     J = build(); m = md(J)
+    sv = f"{R}/signals_v3.md"
+    if os.path.exists(sv): m = m.replace("## What this layer does", open(sv).read() + "\n\n## Mining + Land: what this layer does", 1)
     cm = f"{R}/committee.md"
     if os.path.exists(cm): m += "\n" + open(cm).read()
     open(f"{R}/cross_asset_mining.md", "w").write(m)
     from design import report_from_markdown
-    report_from_markdown(m, "TRIAGE Cross-Asset Radar", "Mining + Land · Macro regime · 23 Oct 2026", "Export controls, claims, satellites and the regime — public data, sourced, honest about gaps",
-        [("Layers", "Mining + Land, Macro, Alpha Committee"), ("Data", "MOFCOM · BLM MLRS · Earth Search · USGS MCS · IMF COFER · FRED"), ("Rules", "public data · nothing sent")],
+    report_from_markdown(m, "TRIAGE Cross-Asset Radar", "Signals · Mining + Land · Macro · Committee · 23 Oct 2026", "23 signals backtested with a kill rule, committee v2 net of costs, mining + land, macro regime, ledger proofs, gap audit",
+        [("Layers", "Signals, Committee, Mining + Land, Macro"), ("Data", "CFTC · EIA · Treasury · FRED · Bybit · DefiLlama · BLM · MOFCOM · USGS · IMF · FIRMS"), ("Rules", "public data · nothing sent")],
         f"{R}/TRIAGE_Cross_Asset_Radar.html", f"{R}/TRIAGE_Cross_Asset_Radar.pdf")
     print(json.dumps(J["event_summary"]), [ (d['pillar'], d['value'], d['read']) for d in J['regime']])

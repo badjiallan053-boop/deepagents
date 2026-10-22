@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { Fragment, useEffect, useMemo, useState } from "react"
 import { Activity, ChevronRight, Command as Cmd, FileText, Gavel, LayoutDashboard, Network, ScrollText, ShieldCheck, TrendingDown, Waypoints, ExternalLink, Crosshair, Radar, Globe2 } from "lucide-react"
 import { cn, fmtChg, fmtInt, fmtM, fmtPx, fmtPct, host, useApi } from "./lib"
 import { Card, DataTable, SourceProvider, SourceLink, Stat, Tag, VBadge, Wordmark, Button, statusKey, useSource, type Col } from "./components/ui"
@@ -20,6 +20,7 @@ const NAV = [
   { r: "control", label: "Control", icon: Crosshair },
   { r: "systemic", label: "Systemic radar", icon: Radar },
   { r: "world", label: "World", icon: Globe2 },
+  { r: "signals", label: "Signal Library", icon: Activity },
   { r: "radar", label: "Cross-Asset Radar", icon: Globe2 },
   { r: "committee", label: "Alpha Committee", icon: Gavel },
   { r: "graph", label: "Relationship graph", icon: Waypoints },
@@ -74,6 +75,7 @@ export default function App() {
           {top === "control" && <Control />}
           {top === "systemic" && <Systemic />}
           {top === "world" && <World />}
+          {top === "signals" && <Signals />}
           {top === "radar" && <XRadar />}
           {top === "committee" && <Committee />}
           {top === "graph" && <GraphView q={params.get("q") ?? ""} />}
@@ -188,6 +190,26 @@ function XRadar() {
     <Card title={`Claims around controlled-mineral deposits (BLM MLRS, ${J.claims.fetched})`}><table className="w-full text-[12px]"><tbody>{J.claims.sites.map(s => <tr key={s.site} className="border-t border-line"><td className="py-1 pr-3">{s.site}</td><td className="pr-3">active {s.active}</td><td className="pr-3">pending {s.filed_pending} ({Math.round(100 * s.pending_share)}%)</td><td className="pr-3">closed {s.closed}</td><td>lapse {s.lapse_ratio}</td></tr>)}</tbody></table><div className="mt-2 text-[12px] text-mute">{J.claims.caveat}</div></Card>
     <Card title="Supply concentration (USGS MCS 2026)"><ul className="text-[12px]">{J.concentration.rows.map(r => <li key={r.mineral}><b>{r.mineral}</b>: {r.quote}</li>)}</ul></Card>
     <Card title="Gaps"><ul className="list-disc pl-5 text-[12px] text-mute">{J.gaps.map(g => <li key={g}>{g}</li>)}</ul></Card>
+  </div>
+}
+
+// ---------------- Signal Library ----------------
+type SAgg = { n: number; precision?: number; mean_excess?: number; t_stat?: number | null }
+type SSig = { id: string; cls: string; asset: string; mechanism: string; trigger: string; data: string; buyer: string; h: number; status: string; in_sample: SAgg; oos: SAgg; oos_start: string; live: { fired: boolean; detail: string }; worst_oos: { date: string; x: number }[] }
+type SJ = { signals: SSig[]; v2: Record<string, any>; gaps: { gap: string; why: string; source: string; status: string }[]; agents: { name: string; charter: string }[] }
+function Signals() {
+  const { data: J } = useApi<SJ>("/api/signals")
+  const [open, setOpen] = useState<string | null>(null)
+  if (!J || !J.signals) return <div className="p-6 text-mute">Loading…</div>
+  const a = (x: SAgg) => !x.n ? "—" : `${x.n} · ${x.precision}% · ${x.mean_excess! > 0 ? "+" : ""}${x.mean_excess}% · t=${x.t_stat ?? "—"}`
+  const tone = (s: string) => s === "KEPT" ? "text-ok" : s.startsWith("KILLED") ? "text-bad" : "text-amber"
+  const v2 = J.v2
+  return <div className="space-y-5 p-6">
+    <PageHead kicker="Signal library · 23 Oct 2026" title={`${J.signals.length} signals tested — ${J.signals.filter(s => s.status === "KEPT").length} kept`} sub="Event study per signal: publication-lagged entry, drift-adjusted excess, costs deducted, OOS from 2019 (crypto 2023). Kill rule applied without re-tuning." right={<a href="/research/TRIAGE_Cross_Asset_Radar.pdf" target="_blank" className="text-[12px] text-info">Open PDF</a>} />
+    <Card title="Signals (click a row for mechanism and worst OOS events)"><table className="w-full text-[12px]"><thead><tr className="text-mute"><td>ID</td><td>Class</td><td>Trigger</td><td>IS n·prec·mean·t</td><td>OOS n·prec·mean·t</td><td>Verdict</td><td>Live</td></tr></thead><tbody>{J.signals.map(s => <Fragment key={s.id}><tr className="cursor-pointer border-t border-line" onClick={() => setOpen(open === s.id ? null : s.id)}><td className="py-1 pr-2">{s.id}</td><td className="pr-2">{s.cls}</td><td className="pr-2">{s.trigger}</td><td className="pr-2">{a(s.in_sample)}</td><td className="pr-2">{a(s.oos)}</td><td className={cn("pr-2 font-medium", tone(s.status))}>{s.status}</td><td>{s.live.fired ? <Tag>FIRED</Tag> : ""} <span className="text-mute">{s.live.detail}</span></td></tr>{open === s.id && <tr><td colSpan={7} className="bg-line/30 p-2 text-[12px]"><b>Mechanism:</b> {s.mechanism}<br /><b>Data:</b> {s.data} · <b>Buyer:</b> {s.buyer}<br /><b>Worst OOS:</b> {JSON.stringify(s.worst_oos)}</td></tr>}</Fragment>)}</tbody></table></Card>
+    <Card title="Committee v2 (signals only, net of costs) vs benchmark — OOS 2019+"><table className="w-full text-[12px]"><tbody>{Object.entries(v2).filter(([k]) => k.includes("|") && !k.endsWith("2022+")).map(([k, v]: [string, any]) => <tr key={k} className="border-t border-line"><td className="py-1 pr-3">{k}</td><td className="pr-3">CAGR {v.cagr}%</td><td className="pr-3">vol {v.vol}%</td><td className="pr-3">Sharpe {v.sharpe}</td><td>maxDD {v.maxdd}%</td></tr>)}</tbody></table><div className="mt-2 text-[12px] text-mute">No committee beats equal-weight after costs. Tier B was selected using OOS results, so treat it as an upper bound.</div></Card>
+    <Card title="Gap audit (sceptical buyer view)"><table className="w-full text-[12px]"><tbody>{J.gaps.map(g => <tr key={g.gap} className="border-t border-line"><td className="py-1 pr-3 text-ink">{g.gap}</td><td className="pr-3 text-mute">{g.why}</td><td className="pr-3">{g.source}</td><td>{g.status}</td></tr>)}</tbody></table></Card>
+    <Card title="Recommended agents (not created)"><ul className="space-y-2 text-[12px]">{J.agents.map(x => <li key={x.name}><b>{x.name}.</b> {x.charter}</li>)}</ul></Card>
   </div>
 }
 
