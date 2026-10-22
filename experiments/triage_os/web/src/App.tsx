@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { Activity, ChevronRight, Command as Cmd, FileText, Gavel, LayoutDashboard, Network, ScrollText, ShieldCheck, TrendingDown, Waypoints, ExternalLink, Crosshair } from "lucide-react"
+import { Activity, ChevronRight, Command as Cmd, FileText, Gavel, LayoutDashboard, Network, ScrollText, ShieldCheck, TrendingDown, Waypoints, ExternalLink, Crosshair, Radar } from "lucide-react"
 import { cn, fmtChg, fmtInt, fmtM, fmtPx, fmtPct, host, useApi } from "./lib"
 import { Card, DataTable, SourceProvider, SourceLink, Stat, Tag, VBadge, Wordmark, Button, statusKey, useSource, type Col } from "./components/ui"
 import { MarkChart, Sparkline, Timeline, Waterfall, type Tranche } from "./components/charts"
@@ -18,6 +18,7 @@ const NAV = [
   { r: "situations", label: "Situations", icon: Gavel },
   { r: "marks", label: "Marks monitor", icon: TrendingDown },
   { r: "control", label: "Control", icon: Crosshair },
+  { r: "systemic", label: "Systemic radar", icon: Radar },
   { r: "graph", label: "Relationship graph", icon: Waypoints },
   { r: "edges", label: "Cross-dataset edges", icon: Network },
   { r: "verify", label: "Verification ledger", icon: ShieldCheck },
@@ -68,6 +69,7 @@ export default function App() {
           {top === "situation" && sits && <SituationView s={sits.find(s => s.key === base.split("/")[1]) ?? sits[0]} />}
           {top === "marks" && <Marks />}
           {top === "control" && <Control />}
+          {top === "systemic" && <Systemic />}
           {top === "graph" && <GraphView q={params.get("q") ?? ""} />}
           {top === "edges" && <Edges />}
           {top === "verify" && <Verify />}
@@ -159,6 +161,67 @@ function Marks() {
   return <div><PageHead kicker="Private credit" title="Distressed marks monitor" sub={`Positions marked below 75 (par-weighted fair value ÷ par) in the 30 Jun 2026 BDC Schedules of Investments, with up to 13 quarters of history from the same filings. ${held} lines with currency or unit anomalies are held back for review.`} />
     <div className="flex flex-wrap gap-1 border-b border-line px-5 py-2">{["ALL", ...bdcs].map(k => <Button key={k} variant={bdc === k ? "outline" : "ghost"} onClick={() => setBdc(k)} className="h-6 px-2 font-mono text-[10.5px]">{k === "ALL" ? "All lenders" : k}</Button>)}</div>
     <div className="p-3"><Card pad={false}><DistTable rows={rows} maxHeight={700} /></Card></div>
+  </div>
+}
+
+// ---------------- Systemic radar ----------------
+type SysJ = any
+function Gauge({ label, fill, unmet }: { label: string; fill: number | null; unmet: number | null }) {
+  const f = Math.max(0, Math.min(100, fill ?? 0)); const a = Math.PI * (1 - f / 100); const x = 50 + 40 * Math.cos(a), y = 50 - 40 * Math.sin(a)
+  return <div className="flex flex-col items-center"><svg viewBox="0 0 100 58" className="w-[120px]"><path d="M10 50 A40 40 0 0 1 90 50" fill="none" stroke="#2a323c" strokeWidth="9" />
+    <path d={`M10 50 A40 40 0 0 1 ${x.toFixed(1)} ${y.toFixed(1)}`} fill="none" stroke={f < 50 ? "#e5484d" : f < 100 ? "#f5a524" : "#30a46c"} strokeWidth="9" />
+    <text x="50" y="47" textAnchor="middle" fontSize="13" fill="#e6e9ec" fontFamily="JetBrains Mono">{f.toFixed(0)}%</text></svg>
+    <div className="text-[11.5px] font-semibold text-ink">{label}</div><div className="num text-[10.5px] text-amber">{unmet ? `$${(unmet / 1000).toFixed(2)}bn unmet` : "queue cleared"}</div></div>
+}
+function Heat({ rows }: { rows: { st: string; n: number; hi: number; asset_hi: number; cre_hi: number }[] }) {
+  const top = [...rows].sort((a, b) => b.asset_hi - a.asset_hi).slice(0, 24); const mx = { hi: Math.max(...top.map(r => r.hi), 1), asset_hi: Math.max(...top.map(r => r.asset_hi), 1), share: 1 }
+  const cell = (v: number, m: number) => `rgba(245,165,36,${(0.08 + 0.9 * Math.min(1, v / m)).toFixed(2)})`
+  return <div className="grid grid-cols-[repeat(12,minmax(0,1fr))] gap-1">{top.map(r => <div key={r.st} className="rounded-[2px] p-1.5 text-center" style={{ background: cell(r.asset_hi, mx.asset_hi) }} title={`${r.st}: ${r.hi} banks >300%, $${(r.asset_hi / 1000).toFixed(1)}bn assets`}>
+    <div className="text-[11px] font-semibold text-ink">{r.st}</div><div className="num text-[10px] text-ink/80">{r.hi}/{r.n}</div><div className="num text-[9.5px] text-ink/70">${(r.asset_hi / 1000).toFixed(0)}bn</div></div>)}</div>
+}
+function Contagion({ edges }: { edges: { a: string; b: string; shared: number }[] }) {
+  const sys = ["Non-traded BDCs", "Listed BDCs", "Insurers", "Banks (CRE>300%)", "CMBS / office", "Mutual funds"]
+  const sysE: [string, string, string][] = [["Non-traded BDCs", "Listed BDCs", "shared borrowers / marks"], ["Non-traded BDCs", "Insurers", "~$32bn fund interests"], ["Banks (CRE>300%)", "CMBS / office", "office maturities"], ["Insurers", "CMBS / office", "CRE loans & CMBS"], ["Mutual funds", "CMBS / office", "$73bn CMBS-like ABS"], ["Banks (CRE>300%)", "Non-traded BDCs", "subscription / NAV lines"], ["Mutual funds", "Listed BDCs", "stressed-issuer overlap"]]
+  const bdcs = [...new Set(edges.flatMap(e => [e.a, e.b]))].slice(0, 10)
+  const pos: Record<string, [number, number]> = {}
+  sys.forEach((s, i) => { const a = (i / sys.length) * 2 * Math.PI - Math.PI / 2; pos[s] = [300 + 170 * Math.cos(a), 170 + 120 * Math.sin(a)] })
+  bdcs.forEach((s, i) => { const a = (i / bdcs.length) * 2 * Math.PI; pos[s] = [pos["Listed BDCs"][0] + 70 * Math.cos(a), pos["Listed BDCs"][1] + 45 * Math.sin(a)] })
+  return <svg viewBox="0 0 600 340" className="w-full">
+    {sysE.map(([a, b, l], i) => <g key={i}><line x1={pos[a][0]} y1={pos[a][1]} x2={pos[b][0]} y2={pos[b][1]} stroke="#f5a524" strokeOpacity="0.55" strokeWidth="2" /><text x={(pos[a][0] + pos[b][0]) / 2} y={(pos[a][1] + pos[b][1]) / 2 - 3} fontSize="8.5" fill="#8a96a3" textAnchor="middle">{l}</text></g>)}
+    {edges.filter(e => pos[e.a] && pos[e.b]).map((e, i) => <line key={"b" + i} x1={pos[e.a][0]} y1={pos[e.a][1]} x2={pos[e.b][0]} y2={pos[e.b][1]} stroke="#4c8dff" strokeOpacity="0.6" strokeWidth={Math.min(4, e.shared / 2)} />)}
+    {bdcs.map(b => <g key={b}><circle cx={pos[b][0]} cy={pos[b][1]} r="9" fill="#13202f" stroke="#4c8dff" /><text x={pos[b][0]} y={pos[b][1] + 3} fontSize="6.5" fill="#cfe0ff" textAnchor="middle">{b}</text></g>)}
+    {sys.map(s => <g key={s}><circle cx={pos[s][0]} cy={pos[s][1]} r="22" fill="#1b1508" stroke="#f5a524" /><text x={pos[s][0]} y={pos[s][1] + 34} fontSize="10" fill="#e6e9ec" textAnchor="middle">{s}</text></g>)}
+  </svg>
+}
+function Wall({ by }: { by: Record<string, Record<string, number>> }) {
+  const types = Object.keys(by).sort((a, b) => Object.values(by[b]).reduce((x, y) => x + y, 0) - Object.values(by[a]).reduce((x, y) => x + y, 0))
+  const yrs = ["2026", "2027", "2028"]; const tot = yrs.map(y => types.reduce((s, t) => s + (by[t][y] ?? 0), 0)); const mx = Math.max(...tot, 1)
+  const col: Record<string, string> = { Office: "#e5484d", Retail: "#f5a524", Other: "#5b6570", Lodging: "#a78bfa", "Mixed use": "#4c8dff", Multifamily: "#30a46c", Industrial: "#8a96a3" }
+  return <div><svg viewBox="0 0 420 220" className="w-full">{yrs.map((y, i) => { let acc = 0; return <g key={y}>{types.map(t => { const v = by[t][y] ?? 0; const h = (v / mx) * 170; acc += h; return <rect key={t} x={40 + i * 130} y={190 - acc} width="80" height={h} fill={col[t] ?? "#5b6570"}><title>{`${t} ${y}: $${v.toFixed(0)}m`}</title></rect> })}
+    <text x={80 + i * 130} y="206" fontSize="11" fill="#e6e9ec" textAnchor="middle">{y}</text><text x={80 + i * 130} y={186 - acc} fontSize="10" fill="#f5a524" textAnchor="middle" fontFamily="JetBrains Mono">${(tot[i] / 1000).toFixed(1)}bn</text></g> })}</svg>
+    <div className="flex flex-wrap gap-3 text-[10.5px] text-mute">{types.map(t => <span key={t} className="flex items-center gap-1"><span className="h-2 w-2" style={{ background: col[t] ?? "#5b6570" }} />{t}</span>)}</div></div>
+}
+function Systemic() {
+  const { data: J } = useApi<SysJ>("/api/systemic")
+  if (!J || !J.banks) return <div className="p-6 text-mute">Loading…</div>
+  const B = J.banks
+  return <div><PageHead kicker="Systemic radar · 23 Oct 2026" title="Where the next $10bn+ dislocation is" sub={`Every FDIC bank (${B.n.toLocaleString()}), every N-PORT fund series (${J.nport.series.toLocaleString()}), 40 BDCs' marks and non-traded BDC tender results. Probabilities are judgement.`} right={<a href="/research/Where_the_next_dislocation_is.pdf" target="_blank" className="text-[12px] text-info">Open PDF</a>} />
+    <div className="grid grid-cols-5 gap-3 p-3">
+      <Card title="Unmet BDC redemptions"><div className="num text-[22px] text-amber">${J.unmet_bn.toFixed(1)}bn</div><div className="text-[11px] text-dim">of ${J.requested_bn.toFixed(1)}bn requested, latest round, 6 funds</div></Card>
+      <Card title="Banks CRE >300% capital"><div className="num text-[22px] text-ink">{B.hi}</div><div className="text-[11px] text-dim">${B.hi_asset_bn.toFixed(0)}bn assets · {B.hi_prev} a year ago</div></Card>
+      <Card title="Unrealised securities losses"><div className="num text-[22px] text-ink">${(-(B.afs_ul + B.htm_ul)).toFixed(0)}bn</div><div className="text-[11px] text-dim">vs ${B.t1.toFixed(0)}bn tier 1, all banks</div></Card>
+      <Card title="CMBS delinquency"><div className="num text-[22px] text-ink">8.02%</div><div className="text-[11px] text-dim">office 12.16% · Trepp Sep 2026</div></Card>
+      <Card title="HY OAS"><div className="num text-[22px] text-ink">{J.fred.BAMLH0A0HYM2.value}%</div><div className="text-[11px] text-dim">counter-signal: spreads tight</div></Card>
+    </div>
+    <div className="grid grid-cols-[1.1fr_1fr] gap-3 px-3">
+      <Card title="Redemption-queue gauges" right="fill = accepted ÷ requested, latest final tender"><div className="grid grid-cols-3 gap-y-3 py-2">{[...J.tender_latest].sort((a: any, b: any) => (b.unmet_usd_m ?? 0) - (a.unmet_usd_m ?? 0)).map((r: any) => <Gauge key={r.ticker} label={`${r.ticker} · ${r.expired}`} fill={r.fill} unmet={r.unmet_usd_m} />)}</div></Card>
+      <Card title="Contagion network" right="amber = system channels · blue = BDC pairs sharing 3+ stressed borrowers"><Contagion edges={J.cascade.edges} /></Card>
+    </div>
+    <div className="grid grid-cols-[1.4fr_1fr] gap-3 p-3">
+      <Card title="Heatmap: banks above 300% CRE/capital by state" right="shade = assets of high-CRE banks · n above / screened"><Heat rows={J.states} /></Card>
+      <Card title="Maturity wall (ABS-EE sample)" right={`${J.maturity.trusts} trusts · ${J.maturity.loans.toLocaleString()} loans`}><Wall by={J.maturity.by_type} /></Card>
+    </div>
+    <div className="px-3 pb-3"><Card title="Ranked theses (judgement)" pad={false}><table className="w-full text-[12px]"><tbody>{J.theses.map((t: any) => <tr key={t.rank} className="border-b border-line align-top"><td className="num w-8 p-2 text-amber">{t.rank}</td><td className="p-2 text-ink"><div className="font-semibold">{t.name}</div><div className="text-[11px] text-mute">{t.evidence}</div></td><td className="w-[220px] p-2 text-ink">{t.size}</td><td className="w-[200px] p-2 text-amber">{t.prob}</td><td className="w-[260px] p-2 text-mute">{t.buyers}</td></tr>)}</tbody></table></Card></div>
   </div>
 }
 
@@ -329,6 +392,7 @@ function HitLog() {
 // ---------------- Research ----------------
 function Research() {
   const docs = [
+    { href: "/research/Where_the_next_dislocation_is.pdf", kicker: "Systemic radar · 23 Oct 2026", title: "Where the next dislocation is", desc: "Bank CRE concentration across all FDIC banks, non-traded BDC redemption queues, the CRE maturity wall, insurer exposure and fund-overlap cascades, ranked." },
     { href: "/research/Control_Bottleneck.pdf", kicker: "Control analysis · 22 Oct 2026", title: "Control bottleneck: who decides, and what a seat costs", desc: "Hughes voting math and blocking costs, eight paths to control, five capital playbooks; Fresno CMBS, Loparex, BayWa, Branicks; CMBS directing holders." },
     { href: "/research/Hughes_Satellite_Note.pdf", kicker: "Situation note · 22 Oct 2026", title: "Hughes Satellite Systems (Case 26-90739): the fight is over who owns the litigation", desc: "Capital structure and recovery scenarios, holder map, 1 Dec exclusivity hearing, plan-fight dynamics, catalysts, risks and a line-by-line verification appendix." },
     { href: "/research/TRIAGE_Master_Report.pdf", kicker: "Desk report · 22 Oct 2026", title: "TRIAGE master report: private-credit distress, court calendar and the verification ledger", desc: "BDC marks, top-15 capital structures, claims calendar, cross-dataset edges and the signal track record." },
