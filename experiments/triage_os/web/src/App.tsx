@@ -167,30 +167,45 @@ function Marks() {
 }
 
 // ---------------- World ----------------
-type WSit = { id: string; country: string; entity: string; stage: string; chokepoint: string; date: string; basis: string; url: string; size: string; status: string }
-type WJ = { asof: string; situations: WSit[]; buyers: { firm: string; base: string; situation: string; why: string }[]; backers: { name: string; type: string; region: string; evidence: string; cheque: string; why: string; status: string; url: string }[] }
+type WChk = { url: string; fetched: string; token: string; found: boolean; quote: string; grade: string }
+type WPx = { instrument: string; value: number; unit: string; kind: string; date: string; source: string } | null
+type WSit = { id: string; country: string; entity: string; stage: string; chokepoint: string; date: string; basis: string; url: string; status: string; note: string; checks: WChk[]; price: WPx; recovery: { value: number; basis: string } | null; gap: number | null }
+type WJ = { asof: string; situations: WSit[]; killed: { name: string; why: string }[]; forced: { topic: string; fact: string; grade: string; check: WChk }[]; buyers: { firm: string; base: string; situation: string }[]; backers: { name: string; type: string; evidence: string; check: WChk }[]; passes: string[]; scenarios: { name: string; arr: number }[] }
 function World() {
   const { data: J } = useApi<WJ>("/api/world")
   const [mkt, setMkt] = useState("All")
+  const [open, setOpen] = useState<string | null>(null)
   if (!J) return <div className="text-mute text-[12px]">Loading…</div>
   const mkts = ["All", ...Array.from(new Set(J.situations.map(s => s.country)))]
   const rows = J.situations.filter(s => mkt === "All" || s.country === mkt)
   const dated = J.situations.filter(s => s.date !== "TBC").sort((a, b) => a.date.localeCompare(b.date))
   return <div>
-    <PageHead kicker={`World desk · ${J.asof}`} title="25 non-US situations: who decides, and when" sub="Each row is checked against a primary filing, or against a secondary source where it is labelled. Ranking and buyer fit are judgement." right={<a href="/research/TRIAGE_World.pdf" target="_blank" className="text-[12px] text-info">Open PDF</a>} />
-    <div className="mb-3 grid grid-cols-4 gap-3">
-      <Stat label="Situations" value={String(J.situations.length)} />
-      <Stat label="Verified (primary)" value={String(J.situations.filter(s => s.status === "VERIFIED").length)} />
-      <Stat label="Dated catalysts" value={String(dated.length)} />
-      <Stat label="Markets" value={String(mkts.length - 1)} />
+    <PageHead kicker={`World desk · v2 · ${J.asof}`} title="25 live non-US situations: who decides, when, and the price" sub="Every fact was fetched again today from a primary source, and each one is logged with its URL, fetch time and exact quote. Secondary-only items are labelled. Gaps are computed only where a current price and a recovery figure both exist." right={<a href="/research/TRIAGE_World.pdf" target="_blank" className="text-[12px] text-info">Open PDF</a>} />
+    <div className="mb-3 grid grid-cols-5 gap-3">
+      <Stat label="Live situations" value={String(J.situations.length)} />
+      <Stat label="Primary-verified" value={String(J.situations.filter(s => s.status === "VERIFIED-PRIMARY").length)} />
+      <Stat label="With public price" value={String(J.situations.filter(s => s.price).length)} />
+      <Stat label="Killed" value={String(J.killed.filter(k => !k.name.includes("NOT")).length)} />
+      <Stat label="Base ARR (judgement)" value={`£${J.scenarios.find(x => x.name === "Base")?.arr}k`} />
     </div>
-    <Card title="Catalyst calendar"><div className="flex flex-wrap gap-2 p-3">{dated.map(s => <a key={s.id} href={s.url} target="_blank" className="rounded-[3px] border border-line px-2 py-1 text-[11.5px] hover:text-ink"><b className="text-amber">{s.date}</b> {s.country} · {s.entity}</a>)}</div></Card>
+    <div className="grid grid-cols-2 gap-3">
+      <Card title="Court calendar"><div className="flex flex-wrap gap-2 p-3">{dated.map(s => <a key={s.id} href={s.url} target="_blank" className="rounded-[3px] border border-line px-2 py-1 text-[11.5px] hover:text-ink"><b className="text-amber">{s.date}</b> {s.country} · {s.entity.split(" (")[0]}</a>)}</div></Card>
+      <Card title="Forced sellers (weekly layer)"><div className="p-2 text-[11.5px]">{J.forced.map(f => <div key={f.topic} className="border-b border-line py-1"><b>{f.topic}</b>: {f.fact} <span className="text-mute">· {f.grade.split(".")[0]}</span></div>)}</div></Card>
+    </div>
     <div className="my-3 flex gap-1">{mkts.map(m => <button key={m} onClick={() => setMkt(m)} className={cn("rounded-[3px] px-2 py-1 text-[11.5px]", mkt === m ? "bg-line text-ink" : "text-mute")}>{m}</button>)}</div>
-    <Card title="Situations and control chokepoints"><table className="w-full text-[11.5px]"><thead><tr className="text-left text-mute"><th className="p-2">#</th><th>Mkt</th><th>Situation</th><th>Stage</th><th>Chokepoint</th><th>Catalyst</th><th>Check</th></tr></thead>
-      <tbody>{rows.map(s => <tr key={s.id} className="border-t border-line align-top"><td className="p-2 text-mute">{s.id}</td><td>{s.country}</td><td><a href={s.url} target="_blank" className="text-info">{s.entity}</a><div className="text-mute">{s.size}</div></td><td>{s.stage}</td><td>{s.chokepoint}</td><td><b>{s.date}</b><div className="text-mute">{s.basis}</div></td><td><Tag>{s.status}</Tag></td></tr>)}</tbody></table></Card>
-    <div className="mt-3 grid grid-cols-2 gap-3">
-      <Card title="Buyers fitted to situations (judgement)"><div className="max-h-[360px] overflow-auto p-2 text-[11.5px]">{J.buyers.map(b => <div key={b.firm} className="border-b border-line py-1"><b>{b.firm}</b> <span className="text-mute">{b.base}</span> → {b.situation}</div>)}</div></Card>
-      <Card title="Backers, top 15 checked"><div className="max-h-[360px] overflow-auto p-2 text-[11.5px]">{J.backers.map(b => <div key={b.name} className="border-b border-line py-1"><a href={b.url} target="_blank" className="text-info">{b.name}</a> <span className="text-mute">{b.type} · {b.cheque}</span> <Tag>{b.status}</Tag><div className="text-mute">{b.evidence}</div></div>)}</div></Card>
+    <Card title="Situations, chokepoints, prices (click a row for the sourcing quotes)"><table className="w-full text-[11.5px]"><thead><tr className="text-left text-mute"><th className="p-2">#</th><th>Mkt</th><th>Situation</th><th>Who decides</th><th>Catalyst</th><th>Price</th><th>Recovery</th><th>Gap</th><th>Check</th></tr></thead>
+      <tbody>{rows.map(s => <>
+        <tr key={s.id} onClick={() => setOpen(open === s.id ? null : s.id)} className="cursor-pointer border-t border-line align-top hover:bg-line/30"><td className="p-2 text-mute">{s.id}</td><td>{s.country}</td><td><a href={s.url} target="_blank" className="text-info">{s.entity}</a><div className="text-mute">{s.stage}</div></td><td>{s.chokepoint}</td><td><b>{s.date}</b><div className="text-mute">{s.basis}</div></td>
+          <td>{s.price ? <><b>{s.price.value}</b> {s.price.unit}<div className="text-mute">{s.price.kind.split(" (")[0]} · {s.price.date}</div></> : <span className="text-mute">none</span>}</td>
+          <td>{s.recovery ? <>{s.recovery.value}%<div className="text-mute">{s.recovery.basis.slice(0, 60)}</div></> : <span className="text-mute">—</span>}</td>
+          <td>{s.gap !== null ? <b className={s.gap < 0 ? "text-down" : "text-up"}>{s.gap > 0 ? "+" : ""}{s.gap} pts</b> : <span className="text-mute">abstain</span>}</td>
+          <td><Tag>{s.status}</Tag></td></tr>
+        {open === s.id && <tr key={s.id + "q"}><td colSpan={9} className="bg-line/20 p-2 text-[11px]">{s.note && <div className="mb-1 text-amber">{s.note}</div>}{s.checks.map((c, i) => <div key={i} className="mb-1"><Tag>{c.grade}</Tag> <a href={c.url} target="_blank" className="text-info">{host(c.url)}</a> <span className="text-mute">fetched {c.fetched.slice(0, 16)}</span> — “…{c.quote.slice(80, 320)}…”</div>)}</td></tr>}
+      </>)}</tbody></table></Card>
+    <div className="mt-3 grid grid-cols-3 gap-3">
+      <Card title="Killed or kept (changelog)"><div className="p-2 text-[11.5px]">{J.killed.map(k => <div key={k.name} className="border-b border-line py-1"><b>{k.name}</b><div className="text-mute">{k.why}</div></div>)}</div></Card>
+      <Card title="Buyers fitted to situations (judgement)"><div className="max-h-[300px] overflow-auto p-2 text-[11.5px]">{J.buyers.map(b => <div key={b.firm} className="border-b border-line py-1"><b>{b.firm}</b> <span className="text-mute">{b.base}</span> → {b.situation}</div>)}</div></Card>
+      <Card title="Backers (no raise until milestones)"><div className="max-h-[300px] overflow-auto p-2 text-[11.5px]">{J.backers.map(b => <div key={b.name} className="border-b border-line py-1"><a href={b.check.url} target="_blank" className="text-info">{b.name}</a> <Tag>{b.check.found ? "VERIFIED" : "NOT FOUND"}</Tag><div className="text-mute">{b.evidence}</div></div>)}<div className="mt-1 text-mute">Passes: {J.passes.join("; ")}</div></div></Card>
     </div>
   </div>
 }

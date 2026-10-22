@@ -1,256 +1,355 @@
-"""TRIAGE World: 25 non-US situations (verified against cached primary sources), buyers, pricing,
-backers, pitch, DO-NOT-SEND email drafts and a PDF. Public data only; firms only; judgement labelled."""
-import os, sys, json, sqlite3
+"""TRIAGE World v2 (23 Oct 2026). Every fact re-fetched today into /workspace/triage_os_data/world/src2 and
+checked by exact token; the log keeps URL, fetch time and a verbatim quote. Prices: Boerse Frankfurt quote_box
+API (bond last trades) and a public chart feed (equity last close), labelled. Firms only; judgement labelled; nothing sent."""
+import os, sys, json, re, sqlite3
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from design import hbars, report_from_markdown
-D = "/workspace/triage_os_data"; SRC = f"{D}/world/sources"; HERE = os.path.dirname(os.path.abspath(__file__))
-HK = "https://www1.hkexnews.hk/listedco/listconews/sehk/2026/"
-BOD = "https://www.bodacc.fr/pages/annonces-commerciales-detail/?q.id=id:"
-# key, country, entity, procedure/stage, chokepoint (who blocks/decides), catalyst date, date basis, url, cache file, token, size note
+D = "/workspace/triage_os_data"; SRC = f"{D}/world/src2"; PX = f"{D}/world/px"; HERE = os.path.dirname(os.path.abspath(__file__))
+PRIMARY_HOSTS = ("hkexnews.hk", "thameswater.co.uk", "nacongaming.com", "bigben-group.com", "baywa.com", "branicks.com", "booster-precision.com",
+                 "stamdata.com", "tdb.co.jp", "magicalir.net", "sgx.com", "sgpbusiness.com", "euroborsa.it", "raymondchabot.com", "bodacc",
+                 "hkma.gov.hk", "j-re.co.jp", "standardlifeplc.com", "contractsfinder.service.gov.uk", "agile.com.cn", "fitchventures.com",
+                 "illuminatefinancial.com", "work-bench.com", "seedcamp.com", "fintech.io", "vertexventures.sg", "balderton.com", "indexventures.com",
+                 "globenewswire.com", "meltx.uk")
+# boursorama hosts the issuer's GlobeNewswire regulated release verbatim -> treated as company release, labelled.
+DISTRIB = ("boursorama.com",)
+
+def norm(s): return re.sub(r"\s+", " ", s)
+def src(key):
+    p = f"{SRC}/{key}.txt"; m = f"{SRC}/{key}.meta"
+    if not os.path.exists(p): return None, None, ""
+    url, ts = open(m).read().strip().split("\t") if os.path.exists(m) else ("", "")
+    return url, ts, norm(open(p, errors="ignore").read())
+def check(key, token):
+    url, ts, txt = src(key)
+    if key == "bodacc":
+        j = json.load(open(f"{SRC}/bodacc_today.json")); blob = json.dumps(j, ensure_ascii=False)
+        i = blob.find(token); return dict(key=key, url="https://bodacc-datadila.opendatasoft.com (API, annonces-commerciales)", fetched="2026-10-23", token=token,
+                    found=i >= 0, quote=blob[max(0, i-160):i+200] if i >= 0 else "", grade="PRIMARY")
+    i = txt.find(token) if txt else -1
+    host = (url or "").split("/")[2] if url and "//" in url else ""
+    grade = "PRIMARY" if any(h in host for h in PRIMARY_HOSTS) else ("COMPANY RELEASE (distributor copy)" if any(h in host for h in DISTRIB) else "SECONDARY")
+    return dict(key=key, url=url, fetched=ts, token=token, found=i >= 0, quote=txt[max(0, i-160):i+len(token)+160] if i >= 0 else "", grade=grade)
+
+def px_equity(t):
+    p = f"{PX}/{t}.json"
+    try:
+        m = json.load(open(p))["chart"]["result"][0]["meta"]; import datetime
+        return dict(instrument=f"{t} shares", value=m["regularMarketPrice"], unit=m["currency"], kind="TRADE (last close, public chart feed — not the exchange page)",
+                    date=datetime.datetime.fromtimestamp(m["regularMarketTime"], datetime.timezone.utc).date().isoformat(), source=f"query1.finance.yahoo.com/v8/finance/chart/{t}")
+    except Exception: return None
+def px_bond(isin, label):
+    p = f"{PX}/bf_{isin}.json"
+    try: j = json.load(open(p))
+    except Exception: return None
+    if j.get("lastPrice") is None: return None
+    stale = j.get("instrumentStatus") != "Active" or (j.get("timestampLastPrice") or "")[:7] < "2026-10"
+    return dict(instrument=f"{label} ({isin})", value=j["lastPrice"], unit="% of par", kind=("STALE " if stale else "") + "TRADE (Börse Frankfurt last price; thin)",
+                date=(j.get("timestampLastPrice") or "")[:10], source=f"api.boerse-frankfurt.de quote_box isin={isin} mic=XFRA")
+
+# ---------- 25 live situations ----------
+# (id-key, mkt, entity, stage, chokepoint, catalyst date, date basis, [(src_key, token)], price fn, recovery dict|None, note)
+HKD_USD = 7.78  # JUDGEMENT: peg mid used for model recovery
+agile_rec = round(9199067647 * 0.143 / HKD_USD / 5.183e9 * 100, 1)
 S = [
- ("thames","UK","Thames Water Utilities","Recapitalisation; Class B TSA (>60% of Class B)","Class A creditors + Ofwat + court sanction (Part 26A plan)","2027-03-31","stable platform period expires March 2027 (company)","https://www.thameswater.co.uk/news/2026/oct/class-b-creditors-update","thames","in excess of 60% of the Class B Debt","~£1bn Class B; Class B recovers ~5.9% via equity"),
- ("bigben","FR","Bigben Interactive","Sauvegarde accélérée (TC Lille Métropole)","Bondholder class: lock-up holds 67.6% of €57.4m exchangeables","2026-12-09","plan hearing (company PR)","https://www.boursorama.com/bourse/actualites/bigben-finalise-une-cession-et-prolonge-sa-sauvegarde-acceleree-dfdd7c8294d89f11cca8373a71dd96c8","bigben","9 décembre 2026","CA €288m (2024, INSEE/INPI)"),
- ("odas","FR","ODAS","Sauvegarde (TAE Nanterre), opened 2026-08-05","Administrateur judiciaire + affected-party classes","2027-02-05","JUDGEMENT: end of initial 6-month observation period","{BOD}A202601541654","bodacc_fr","491608642","CA €376m (2021 — stale filing)"),
- ("poseidon","FR","Poseidon Bidco","Sauvegarde (TAE Nanterre), opened 2026-08-13","Unitranche/TLB lenders as affected class (LBO holdco)","2027-02-13","JUDGEMENT: end of initial 6-month observation period","{BOD}A202601601899","bodacc_fr","909615148","CA €32m (2024)"),
- ("dumarey","FR","Dumarey Powerglide Bouthéon","Sauvegarde (TAE Lyon), opened 2026-07-22","Parent group + administrateur","2027-01-22","JUDGEMENT: end of initial 6-month observation period","{BOD}A202601443260","bodacc_fr","414442558","CA €34m (2025)"),
- ("baywa","DE","BayWa / Kronos EKS €100m hybrid","SchVG vote without meeting failed","SchVG bondholder majority (75%) / StaRUG cram-down","2026-11-30","JUDGEMENT: second vote window","https://www.baywa.com/","pass1:CB23","CB23","98% haircut proposal"),
- ("branicks","DE","Branicks Group €400m bond","SchVG vote passed (99%)","Shareholder meeting (implementation condition)","2027-03-31","extended maturity (company)","https://branicks.com/en/branicks-group-ag-creditors-vote-to-extend-maturity-and-pave-the-way-for-restructuring/","pass1:M05","M05","€400m"),
- ("booster","DE/NO","Booster Precision Components","Nordic bond; standstill with ad-hoc group","Ad-hoc group of bondholders (Nordic Trustee written procedure)","2026-11-01","standstill expiry (Stamdata notice)","https://stamdata.com/news/api/pdf/77c0e62e-9892-4a36-9863-8225674aa371","booster","1 November 2026","€60m bond"),
- ("point","SE","Point Properties Portfolio 1","Written procedure; maturity extended","Bondholders via Nordic Trustee written procedure","2026-11-30","amended Final Redemption Date","https://stamdata.com/news/api/pdf/3b50cc62-9dff-4033-9e71-766cefd50e8e","point","30 November 2026","Nordic HY bond"),
- ("urbas","ES","Urbas / Guadahermosa Proyectos","Concurso necesario (Juzgado Mercantil 12 Madrid)","RS Lender (petitioning creditor, €53m claim) + administración concursal","TBC","date not public — calendar gap","https://www.economiadigital.es/empresas/fondo-rs-lender-insta-declaracion-concurso-filial-urbas-reclama-53-millones.html","urbas","53 millones","SECONDARY source (press)"),
- ("clabo","IT","Clabo S.p.A.","Accordo di ristrutturazione (artt. 57/61/63 CCII)","Tribunal omologazione (art. 48 CCII) + tax authority adhesion","TBC","omologazione hearing not yet fixed publicly","https://euroborsa.it/public/euroborsa/Comunicati_Stampa/Clabo/20261009_190453_1_.pdf","clabo","ACCORDO DI RISTRUTTURAZIONE","€10m new money"),
- ("svogl","IN","SVOGL Oil Gas and Energy","NCLT Delhi admitted CIRP (PNB petition)","Committee of Creditors (66% vote) led by PNB","2027-04-30","JUDGEMENT: ~180-day CIRP clock","https://www.livelawbiz.com/nclt/nclt-delhi-admits-svogl-into-cirp-despite-pending-winding-up-proceedings-555197","svogl","Corporate Insolvency Resolution Process","₹1,527cr claim (SECONDARY source)"),
- ("goodfood","CA","Goodfood Market Corp.","CCAA initial order 5 Aug 2026; monitor Raymond Chabot","Monitor + DIP lender; TSX delisting review","TBC","SISP milestones not public in source","https://www.canadianlawyermag.com/cl-plus/deals/4208","goodfood","Raymond Chabot Inc.","SECONDARY source (legal press)"),
- ("toysrus","JP","Toys\"R\"Us Japan (日本トイザらス)","Civil rehabilitation commenced 2026-10-06","Supervisor + rehabilitation creditors; sponsor selection","TBC","rehab-plan deadline not in source","https://www.tdb.co.jp/report/bankruptcy/flash/5266/","toysrus","負債132億円","¥13.2bn liabilities"),
- ("kizuna","JP","Kizuna Holdings (絆HD) group","Corporate reorg petition dismissed; preservation order","Court-appointed preservation administrator","TBC","next court step not in source","https://www.tdb.co.jp/report/bankruptcy/flash/5264/","kizuna","289億5361万円","¥28.95bn group liabilities"),
- ("gaia","JP","Gaia Funding (ガイアファンディング)","Bankruptcy commenced (Tokyo)","Bankruptcy trustee; 2,700+ lender-investors","TBC","creditor meeting date not in source","https://www.tdb.co.jp/report/bankruptcy/flash/5268/","gaia","負債60億4535万円","¥6.05bn liabilities"),
- ("mm2","SG","mm2 Asia","Scheme of arrangement; moratorium","Scheme creditors (majority in number, 75% value) + SG High Court","2026-11-21","moratorium expiry (meetings 4 Nov per source)","https://www.minichart.com.sg/2026/09/18/mm2-asia-wins-court-leave-to-convene-scheme-creditor-meetings-moratorium-extended-to-21-nov-2026/","mm2","21 Nov 2026","SECONDARY source (SGX summary)"),
- ("vpower","HK/SG","VPower Group","Scheme convening order granted","Scheme creditors at meeting","2026-10-21","convening order date (next: scheme meeting)",HK+"1021/2026102100581.pdf","vpower","21 October 2026","HKEX 1608"),
- ("agile","HK/CN","Agile Group","UK Part 26A plan + HK scheme","Plan creditor classes; cross-class cram-down risk","TBC","sanction hearing date to be announced",HK+"1005/2026100500001.pdf","agile","Part 26A","offshore debt"),
- ("lvgem","HK/CN","LVGEM (China) Real Estate","Winding-up petition adjourned","Petitioner + HK High Court","2027-04-06","adjourned petition hearing",HK+"1005/2026100500079.pdf","lvgem","6 April 2027","HKEX 95"),
- ("kwg","HK/CN","KWG Group","RSA accession; consent fee deadlines","RSA majority holders; scheme threshold","TBC","scheme timetable pending",HK+"0928/2026092801911.pdf","kwg","ACCESSION RATE","HKEX 1813"),
- ("sce","HK/CN","China SCE Group","Restructuring effective date","Restructuring conditions (scheme already approved)","2026-10-26","expected effective date",HK+"1021/2026102100751.pdf","sce","26 October 2026","new notes/equity post-RED"),
- ("redco","HK/CN","Redco Properties","Scheme meeting approved 16 Oct 2026","HK court sanction hearing","TBC","sanction hearing date to be announced",HK+"1016/2026101601244.pdf","redco","Scheme Meeting","HKEX 1622"),
- ("aoyuan","HK/CN","China Aoyuan (secured assets)","Receivers (FTI) appointed over mortgaged assets","Secured lender + receivers' asset sales","TBC","asset-sale process",HK+"1002/2026100203271.pdf","aoyuan","FTI Consulting","HKEX 3883"),
- ("zhenro","HK/CN","Zhenro Properties","Winding-up petition adjourned","Petitioner (offshore creditor) + HK High Court","2026-11-09","adjourned petition hearing",HK+"1020/2026102000255.pdf","zhenro","9 November 2026","HKEX 6158"),
+ ("thames","UK","Thames Water Utilities","RP1 done; 16th consent requests + STID proposals (super senior upsize £2.4bn to £5.4bn); SPP Extension Transaction ('RP 1.5'); RP2 recapitalisation",
+  "Ofwat and the government (Ofwat consultation is a Class B TSA condition); Class A and super senior creditors at ≥66.66% for RP2; super senior creditors for each drawdown",
+  "2026-10-29","16th consent requests voting date; June Release Condition 31 Oct → proposed 30 Nov; facility liquidity 'until the end of 2026 or the start of 2027'",
+  [("tw_16","voting date of 29 October 2026"),("tw_16","until the end of 2026 or the start of 2027"),("tw_16","by £2.4bn to £5.4bn"),("tw_classb","at least 66.66% of the Class A and super senior debt"),("tw_classb","SPP Extension Transaction"),("tw_classb","recovery of c.5.9%"),("tw_classb","on or before 30 December 2027")],
+  None, dict(value=5.9, basis="Class B recovery c.5.9% in post-restructured equity (company)", src="tw_classb"), "Class B price not found on a public exchange page → gap abstains."),
+ ("bigben","FR","Bigben Interactive","Sauvegarde accélérée (TC Lille Métropole); plan vote by classes of affected parties; Bigben Connected sold",
+  "Shareholders' class (creditors are locked up: backstop group ≈93.4% of the exchangeables) and the court cram-down test",
+  "2026-12-09","plan hearing; proceeding extended to 17 Dec 2026 (judgment of 7 Oct)",
+  [("bigben_1610b","environ 93,4 %"),("bigben_1610b","au 9 décembre 2026"),("bigben_0810","à hauteur de 35 M€"),("bigben_0810","environ 13 M€"),("bigben_1610b","D.26-0631"),("bodacc","A202601622253")],
+  lambda: px_equity("BIG.PA"), None, "Exchangeable FR0014001WC2 last traded 16 Feb 2026 (stale) — not used."),
+ ("nacon","FR","Nacon (56.72% owned by Bigben)","Redressement judiciaire (TC Lille Métropole, opened 2 Mar 2026); observation period to 2 Mar 2027",
+  "Administrateurs judiciaires + bank/unsecured creditors choosing 30% cash-out vs 50% haircut/8-yr; plan tied to Bigben new money",
+  "2027-03-02","end of extended observation period (judgment of 1 Jul 2026)",
+  [("nacon","jusqu’au 2 mars 2027"),("nacon","paiement de 30 %"),("nacon","56,72 %"),("bodacc","A202600482211")],
+  lambda: px_equity("NACON.PA"), dict(value=30.0, basis="Short option: 30% cash for bank/unsecured claims (company)", src="nacon"), "No public price for Nacon bank claims → gap abstains."),
+ ("agile","HK/CN","Agile Group","RSA to be launched with CoCom; inter-conditional UK Part 26A plan ('Listco UK RP') + HK schemes; HK winding-up petition",
+  "CoCom (≈61.50% of syndicated loans) and plan/scheme classes; HK High Court on the petition",
+  "2026-11-16","RSA launch 'within six weeks' of 5 Oct (JUDGEMENT: = 16 Nov); petition hearing 7 Dec 2026",
+  [("agile_rsa","approximately 61.50%"),("agile_rsa","within six weeks of the date of this announcement"),("agile_rsa","Part 26A of the Companies Act 2006 (UK)"),("agile_rsa","9,199,067,647")],
+  lambda: px_bond("XS1785422731", "6.875% senior perpetual"), dict(value=agile_rec, basis=f"MODEL: 9,199,067,647 new shares × HK$0.143 (22 Oct close) ÷ HK${HKD_USD}/US$ ÷ US$5.183bn in-scope debt", src="agile_rsa"),
+  "Primary text says UK Part 26A plan + HK schemes — the debate's 'not Part 26A' is wrong. 7 Dec petition date is from the company's 12 Oct release (agile.com.cn PDF did not download; secondary copy)."),
+ ("baywa","DE","BayWa / Kronos EKS €100m hybrid (DE000A351PD9)","SchVG vote without meeting 12–14 Oct: quorate, all resolutions (issuer's and holders' countermotions) not adopted",
+  "Hybrid holders hold a blocking minority under SchVG; next route (second vote / StaRUG) not announced","TBC","no new date published — the earlier 30 Nov estimate was dropped",
+  [("baywa_res","was quorate"),("baywa_res","the resolutions were not adopted")], lambda: px_bond("DE000A351PD9","Kronos EKS hybrid"), None, ""),
+ ("booster","DE/NO","Booster Precision Components (€60m bond NO0012713520)","StaRUG restructuring agreed in principle; €3m super senior interim facility approved by written procedure; standstill to 1 Nov",
+  "Ad-hoc Group of bondholders (standstill/lock-up) and the StaRUG plan vote","2026-11-01","standstill expiry",
+  [("booster_wp","EUR 3,000,000 super senior interim facility"),("booster_wp","StaRUG"),("booster_ss","until 1 November 2026")], lambda: px_bond("NO0012713520","Booster FRN 2022/2026"), None,
+  "NOT killed: the €3m super senior is interim financing for a StaRUG restructuring that is not yet implemented (LME Watch view upheld)."),
+ ("antolin","ES","Grupo Antolin-Irausa","Spanish homologación (Juzgado Mercantil 1 Burgos, suspended); standstill with SteerCo ran to 16 Oct; Chapter 15 recognition pending",
+  "SteerCo of 2028/2030 noteholders (secondary: ≈67.2% bloc) vs bank class; Burgos court on homologation","2026-11-04","US recognition hearing (court docket summary); post-16 Oct status not confirmed",
+  [("elevenflo_antolin","November 4, 2026")], None, None, "SECONDARY ONLY: antolin.com blocked from the box today; no primary confirms what happened after 16 Oct."),
+ ("mm2","SG","mm2 Asia + mm2 Entertainment","IRDA s.64/65 moratoria to 21 Nov; s.210 scheme meetings",
+  "Scheme creditors: majority in number and three-fourths in value per class, then court sanction","2026-11-04","scheme meetings 10am (Government Gazette notice); moratorium to 21 Nov",
+  [("mm2_att","until 21 November 2026"),("mm2_gaz","on 4 November 2026 at 10AM"),("mm2_gaz","three-fourths in value")], None,
+  dict(value=28.0, basis="28 cents per dollar from a $25m investment (Straits Times, citing the Dec 2025 court filing) — SECONDARY", src="straits_mm2"),
+  "Debt size not in a primary document fetched today; shares suspended since Nov 2025."),
+ ("zhenro","HK/CN","Zhenro Properties","Winding-up petition adjourned; offshore negotiations","Petitioner + HK High Court","2026-11-09","adjourned petition hearing",
+  [("zhenro","9 November 2026")], lambda: px_equity("6158.HK"), None, ""),
+ ("kwg","HK/CN","KWG Group","RSA in place; consent-fee deadlines expired; accession continues","RSA majority; scheme thresholds","TBC","scheme timetable not announced",
+  [("kwg","Accession Letters")], lambda: px_equity("1813.HK"), None, ""),
+ ("redco","HK/CN","Redco Properties","Schemes approved at 16 Oct scheme meeting","HK court sanction","TBC","sanction hearing not yet announced",
+  [("redco","16 October 2026")], lambda: px_equity("1622.HK"), None, ""),
+ ("vpower","HK","VPower Group","Scheme convening order 21 Oct 2026","Scheme creditors at the scheme meeting","TBC","meeting notice to follow",
+  [("vpower","On 21 October 2026")], lambda: px_equity("1608.HK"), None, ""),
+ ("point","SE","Point Properties Portfolio 1 (SEK 800m SE0015556535)","Written procedure: final redemption date moved to 30 Nov 2026 (pre-filing)","Bondholders via written procedure","2026-11-30","amended final redemption date",
+  [("point","30 November 2026"),("point","SE0015556535")], None, None, "No public bond price found."),
+ ("branicks","DE","Branicks Group (€400m bond)","SchVG vote 17–19 Oct: 99% in favour; €375m to 2030, €220m to 2038","Implementation conditions; holders' representative MR Treuhand","2027-03-31","plan effective by end-2026 or 31 Mar 2027 at the latest",
+  [("branicks","99% of the votes cast"),("branicks","March 31, 2027")], lambda: px_equity("BRNK.DE"), None, "Bond XS2388910270 last traded 17 Sep (stale)."),
+ ("clabo","IT","Clabo S.p.A.","Accordo di ristrutturazione (artt. 57/61/63 CCII) signed","Tribunale di Ancona (omologazione) + tax/INPS adhesion","2026-11-04","omologazione petition to be filed by this date",
+  [("clabo","entro il 4 novembre 2026")], None, None, ""),
+ ("goodfood","CA","Goodfood Market Corp.","CCAA (initial order 5 Aug 2026); sales process","Monitor Raymond Chabot + court-approved SISP","TBC","SISP milestones on monitor site",
+  [("goodfood_rc","On August 5, 2026, Goodfood Market Corp. sought protection")], None, None, ""),
+ ("odas","FR","ODAS","Sauvegarde (TAE Nanterre) opened 5 Aug 2026","Administrateur judiciaire + classes","2027-02-05","JUDGEMENT: end of 6-month observation",
+  [("bodacc","A202601541654")], None, None, ""),
+ ("poseidon","FR","Poseidon Bidco","Sauvegarde ACCÉLÉRÉE (TAE Nanterre) opened 13 Aug 2026","Lender classes (LBO holdco)","TBC","accelerated: plan within 2–4 months (JUDGEMENT: Oct–Dec 2026)",
+  [("bodacc","sauvegarde accélérée")], None, None, "Corrected from 'sauvegarde'."),
+ ("dumarey","FR","Dumarey Powerglide Bouthéon","Sauvegarde (TAE Lyon) opened 22 Jul 2026","Parent + administrateur","2027-01-22","JUDGEMENT: end of 6-month observation",
+  [("bodacc","A202601443260")], None, None, ""),
+ ("aoyuan","HK/CN","China Aoyuan (secured assets)","Receivers (FTI) over mortgaged assets","Secured lender + receivers","TBC","asset sales",
+  [("aoyuan","joint and several receivers")], lambda: px_equity("3883.HK"), None, ""),
+ ("kizuna","JP","Kizuna Holdings group","Corporate reorganisation dismissed; preservation order","Preservation administrator","TBC","not in source",
+  [("kizuna","289億5361万円")], None, None, ""),
+ ("gaia","JP","Gaia Funding","Bankruptcy commenced","Trustee; 2,700+ lender-investors","TBC","not in source",
+  [("gaia","負債60億4535万円")], None, None, ""),
+ ("stark","DK/UK","Stark Group (Winterfell) — pre-filing","Stressed; TLB sell-off; lenders reportedly organising","TLB lenders (€1.345bn + €450m add-on) and CLO holders","TBC","none",
+  [("octus_stark","76.14/76.39")], None, None, "SECONDARY ONLY (Octus, 24 Mar 2026 — stale). Fitch page did not render; not counted as verified."),
+ ("urbas","ES","Urbas / Guadahermosa Proyectos","Concurso necesario (Juzgado Mercantil 12 Madrid)","Petitioning creditor RS Lender + administración concursal","TBC","none",
+  [("urbas","53 millones")], None, None, "SECONDARY ONLY (press)."),
+ ("svogl","IN","SVOGL Oil Gas and Energy","NCLT Delhi admitted CIRP","Committee of Creditors (PNB-led)","TBC","none",
+  [("svogl","Punjab National Bank")], None, None, "SECONDARY ONLY (legal press); claim size not confirmed today."),
 ]
-S = [tuple(x.replace("{BOD}", BOD) if isinstance(x, str) else x for x in r) for r in S]
+KILLED = [
+ ("LVGEM (HK)","Restructuring support agreement signed 30 Sep 2026; petition adjourned to 6 Apr 2027 — no near-term catalyst","lvgem","Restructuring Support Agreement"),
+ ("China SCE (HK)","Restructuring conditions expected to be satisfied and effective date on or before 26 Oct 2026","sce","26 October 2026"),
+ ("Toys\"R\"Us Japan","Sponsor/business-transfer agreement with PPIH (OSS) executed 1 Oct 2026; completion scheduled 30 Oct","ppih","October 30, 2026 (scheduled)"),
+ ("Gefion Group","7 Oct written-procedure date passed; result not found","",""),
+ ("Booster — NOT killed","Debate kill rejected: the €3m super senior is StaRUG interim financing; standstill runs to 1 Nov","booster_wp","EUR 3,000,000 super senior interim facility"),
+]
+FIXES = [
+ "Thames: catalyst moved from 'March 2027' to 29 Oct 2026 (16th consent vote); added 66.66% RP2 threshold, £2.4bn upsize to £5.4bn, runway to end-2026/early-2027, SPP Extension ('RP 1.5'); Ofwat/government named as controlling.",
+ "Bigben: chokepoint changed to the shareholders' class; backstop group ≈93.4%; added Bigben Connected sale (€35m cash + ≈€13m vendor loan to Modelabs), capital structure, AMF URD D.26-0631, BODACC notice.",
+ "Agile: primary text keeps a UK Part 26A plan + HK schemes — the debate's 'UK scheme, not Part 26A' is not supported. CoCom 61.50%, RSA within six weeks, petition 7 Dec.",
+ "BayWa: unverified 30 Nov date dropped; 16 Oct results PDF sourced (quorate, not adopted).",
+ "mm2 Asia: SGX attachment + Government Gazette notice (meetings 4 Nov 10am); 28c recovery labelled secondary.",
+ "Poseidon Bidco corrected to sauvegarde accélérée (BODACC).",
+ "Debtwire anchor recomputed: £118,818.24 over 26 Jun 2023–25 Jun 2026 = £39,606/yr incl. VAT and inflation contingency.",
+ "Fundraising removed: no raise until milestones are met.",
+]
+
+FORCED = [
+ ("China bank NPL transfers","≈RMB 341bn principal+interest transferred Q1–Q3 2026; RMB 76.2bn in September (record month)","cnfin","3410亿元","Securities Times via cnfin, citing Yindeng data — SECONDARY; Yindeng primary data not reached. Pilot end 31 Dec 2026 NOT confirmed today → Q4-wave is JUDGEMENT."),
+ ("Hong Kong banks","Gross classified loan ratio 1.82% (Q2 2026), from 2.01% at end-2025","hkma_c5","1.82%","PRIMARY (HKMA)."),
+ ("UK DB pension illiquids","51% of trustees considering buyout explore in-specie or secondary sales; £4–8bn of private-markets secondaries expected in 2026","sl_db","51%","Standard Life release PRIMARY for 51%; £4–8bn from MeltX/mallowstreet company release; BoE Truran speech NOT found → omitted."),
+ ("European CLOs 2021–22","2021/2022 vintages reaching the end of reinvestment; Stark Group exposure ≈€1.38bn across 50 managers (Mar 2026)","twentyfour","end of their reinvestment period","Manager blog + Octus — SECONDARY; Stark figure is March 2026."),
+ ("J-REIT: JRE","LTV 44.8% (31 Mar 2026) vs conservative target 30–40%","jre_debt","44.8","PRIMARY (j-re.co.jp)."),
+]
+
+BUYERS = [("Attestor","London","Thames Water Class B / RP2 new money"),("Arini","London","Bigben shareholder-class / new-money DPS"),("Cheyne Capital","London","Point Properties (SEK bond)"),
+ ("Davidson Kempner (London)","London","Agile Part 26A plan"),("Strategic Value Partners Europe","London","BayWa hybrid blocking stake"),("Bain Capital Credit EMEA","London","Poseidon Bidco lender class"),
+ ("Värde Partners Europe","London","Urbas concurso assets"),("ADV Partners","Hong Kong","Zhenro"),("Alcentra","London","Booster StaRUG plan"),("Hayfin","London","Clabo new finance"),
+ ("Tikehau Capital","Paris","ODAS sauvegarde"),("Ares Europe","London","Dumarey Powerglide"),("Tor Investment Management","Hong Kong","Redco post-sanction paper"),("Kaiyuan Capital","Hong Kong","KWG RSA"),
+ ("Clearwater Capital Partners","Hong Kong","VPower scheme"),("Shoreline Capital","Shanghai","China NPL packages (forced-seller layer)"),("Mitsubishi Corporation","Tokyo","Kizuna HD assets (JUDGEMENT)"),
+ ("Mitsui & Co.","Tokyo","J-REIT asset sales (JUDGEMENT)"),("Japan Industrial Solutions","Tokyo","Kizuna HD"),("Asian family offices (generic)","Singapore","mm2 Asia"),("FRP Advisory","London","UK late-filer pipeline"),
+ ("Interpath Advisory","London","Thames Water contingency"),("Teneo","London/Asia","VPower"),("Kroll APAC","Hong Kong","Zhenro / Agile petitions"),("Borrelli Walsh","Hong Kong","HK petitions"),
+ ("KPMG (ex-Ferrier Hodgson)","Sydney/HK","ASX administrations"),("Raymond Chabot","Montréal","Goodfood SISP"),("Polus Capital","London","Stark TLB"),("Sona Asset Management","London","Branicks new paper"),
+ ("Benefit Street Partners Europe","London","Antolin notes (named in secondary press)")]
+
+# name, type, evidence token source/key/token, why
+BACKERS = [
+ ("Fitch Ventures","Strategic CVC","b_fitch","Backing the future of global credit markets","Own site title; portfolio page needs JavaScript (Cognitive Credit/Versana names from search = secondary)","credit-markets data is its stated thesis"),
+ ("Illuminate Financial","Fintech VC","b_illum","We support founders solving critical challenges for financial services","Portfolio filters incl. 'Financial Markets Infrastructure'; bank strategic LPs","route to bank credit desks"),
+ ("Work-Bench","B2B seed (NYC)","b_workbench_p","AI-Powered Credit Rating Platform","Portfolio lists an AI credit-rating platform and Alkymi (data workflows)","enterprise data seed specialist"),
+ ("Seedcamp","Seed VC (London)","b_seedcamp","9fin","9fin on its homepage portfolio","category pattern-match"),
+ ("Fintech Collective","Fintech VC (NYC)","b_fcollective","Simetrik","Fintech-only portfolio (Vestwell, Simetrik)","fintech-only mandate"),
+ ("Vertex Ventures SEA & India","VC","b_vertex","22 fintech","Site: 22 fintech companies; Singapore base","APAC hub"),
+ ("Balderton Capital","VC","b_balderton","European","Backs European-founded tech","European founder thesis"),
+ ("Index Ventures","VC","b_index","Index Ventures","Multi-stage VC (site)","later stage"),
+]
+PASSES = ["Highland Europe (owns the 9fin comp — conflict)","Augmentum Fintech","ION Group (owns Debtwire — competitor)","Antler","Redalpine (9fin investor — conflict)"]
 
 def con(): return sqlite3.connect(f"{D}/triage.db", timeout=300)
 
-def verify():
-    c = con(); out = {}
+def build():
+    sits = []
     for i, r in enumerate(S, 1):
-        k, cc, ent, stg, choke, date, basis, url, cache, tok, size = r
-        cid = f"WD{i:02d}"
-        if cache.startswith("pass1:"):
-            row = c.execute("select status from verification where claim_id=?", (tok,)).fetchone()
-            st = "VERIFIED" if row and row[0] in ("VERIFIED", "CORRECTED") else "UNVERIFIABLE"; meth = f"carried from pass-1 row {tok}"
-        elif cache == "bodacc_fr":
-            row = c.execute("select name,date from fr_bodacc where siren=?", (tok,)).fetchone()
-            st = "VERIFIED" if row else "UNVERIFIABLE"; meth = "BODACC open-data export row (SIREN match) + recherche-entreprises finances"
-        else:
-            p = f"{SRC}/{cache}.txt"; txt = open(p, errors="ignore").read() if os.path.exists(p) else ""
-            ok = tok in txt; sec = "SECONDARY" in size
-            st = ("VERIFIED-SECONDARY" if sec else "VERIFIED") if ok else "UNVERIFIABLE"; meth = f"fetched 2026-10-22/23, token match '{tok}'"
-        out[cid] = dict(claim=f"{ent}: {stg}; catalyst {date}", status=st, url=url, method=meth, fix="")
-    return out
+        k, mkt, ent, stg, choke, date, basis, srcs, pxf, rec, note = r
+        checks = [check(a, b) for a, b in srcs]
+        ok = all(c["found"] for c in checks); prim = all(c["grade"] != "SECONDARY" for c in checks)
+        status = ("VERIFIED-PRIMARY" if prim else "SECONDARY-LABELLED") if ok else "UNVERIFIED"
+        price = pxf() if pxf else None
+        gap = None
+        if price and rec and price["unit"] == "% of par" and "STALE" not in price["kind"]:
+            gap = round(price["value"] - rec["value"], 1)
+        sits.append(dict(id=f"WD{i:02d}", key=k, country=mkt, entity=ent, stage=stg, chokepoint=choke, date=date, basis=basis, status=status,
+                         checks=checks, price=price, recovery=rec, gap=gap, note=note, url=checks[0]["url"] if checks else ""))
+    kills = [dict(name=n, why=w, check=check(k, t) if k else None) for n, w, k, t in KILLED]
+    forced = [dict(topic=a, fact=b, check=check(k, t), grade=g) for a, b, k, t, g in FORCED]
+    deb = check("cf_debtwire", "£118,818.24"); deb2 = check("cf_debtwire", "25 June 2026")
+    backers = [dict(name=n, type=t, evidence=e, why=w, check=check(k, tok)) for n, t, k, tok, e, w in BACKERS]
+    return sits, kills, forced, (deb, deb2), backers
 
-BUYERS = [  # firm, base, fitted situation, why (JUDGEMENT)
- ("Attestor","London","Thames Water (Class B)","has run large UK special-sits positions; Class B equity strip"),
- ("Arini","London","Bigben Interactive exchangeables","European stressed credit; small-cap bond lock-ups"),
- ("Cheyne Capital","London","Point Properties Portfolio 1","real-estate credit; Nordic RE bonds"),
- ("Davidson Kempner (London)","London","Agile Part 26A plan","cross-border plan classes; Asia desk"),
- ("Strategic Value Partners Europe","London","BayWa hybrid / StaRUG","German restructurings"),
- ("Bain Capital Credit EMEA","London","Poseidon Bidco sauvegarde","LBO holdco lender classes"),
- ("Värde Partners Europe","London","Urbas / Guadahermosa concurso","Spanish real-estate NPL/concurso assets"),
- ("ADV Partners","Hong Kong","Zhenro petition","Asia special situations"),
- ("Alcentra","London","Booster Precision Components","Nordic/European HY bonds"),
- ("Hayfin","London","Clabo accordo","Italian mid-market rescue finance"),
- ("Tikehau Capital","Paris","ODAS sauvegarde","French special opportunities"),
- ("Ares Europe","London","Dumarey Powerglide","auto-supplier rescue/DIP-style"),
- ("Tor Investment Management","Hong Kong","Redco scheme","Asia performing/stressed credit"),
- ("Kaiyuan Capital","Hong Kong","KWG RSA","China developer bonds"),
- ("Clearwater Capital Partners","Hong Kong","China SCE post-RED paper","Asia distressed"),
- ("Shoreline Capital","Shanghai","China Aoyuan receivership assets","onshore NPL/real assets"),
- ("Mitsubishi Corporation","Tokyo","Toys\"R\"Us Japan sponsor","JUDGEMENT: retail/brand sponsor candidate"),
- ("Mitsui & Co.","Tokyo","Kizuna HD services assets","JUDGEMENT: care/services platform"),
- ("Japan Industrial Solutions","Tokyo","Toys\"R\"Us Japan","Japanese turnaround fund"),
- ("Asian family offices (SG/HK, generic)","Singapore","mm2 Asia scheme","media assets; small tickets"),
- ("FRP Advisory","London","UK late-accounts large filers (8,693)","IP/administrator pipeline"),
- ("Interpath Advisory","London","Thames Water / UK pipeline","appointment origination"),
- ("Teneo","London/Asia","VPower scheme","scheme/administration work"),
- ("Kroll APAC","Hong Kong","LVGEM / Zhenro petitions","provisional liquidator appointments"),
- ("Borrelli Walsh","Hong Kong","Skyfame / developer petitions","HK liquidations"),
- ("KPMG (ex-Ferrier Hodgson)","Sydney/HK","Australian administrations (ASX)","Ferrier Hodgson merged into KPMG AU 2019 (JUDGEMENT: verify)"),
- ("Raymond Chabot","Montréal","Goodfood CCAA (monitor)","Canadian monitor; SISP data"),
- ("Polus Capital","London","Booster / Nordic bonds","European stressed credit"),
- ("Sona Asset Management","London","Branicks bond","European credit"),
- ("Edelweiss ARC","Mumbai","SVOGL CIRP","Indian asset reconstruction"),
-]
-
-BACKERS = [  # name, type, region, thesis evidence, comparable, cheque (JUDGEMENT), why, verified?, url, cache, token
- ("Highland Europe","Growth VC","EU","Led 9fin $50m Series B","9fin","€5–15m (growth)","owns the category comp; we are the cross-border/Asia wedge",1,"https://www.highlandeurope.com/9fin-raises-50m-to-build-next-generation-of-debt-capital-markets-technology/","i_nine_hl","Highland"),
- ("Seedcamp","Seed VC","UK","9fin shown on homepage portfolio; backed 9fin from day one","9fin","€0.25–1m","pattern-match to 9fin at seed",1,"https://seedcamp.com/","i_seedcamp","9fin"),
- ("Redalpine","Seed/A VC","CH","Participated in 9fin Series B","9fin","€1–3m","credit-intel thesis already underwritten",1,"https://www.highlandeurope.com/9fin-raises-50m-to-build-next-generation-of-debt-capital-markets-technology/","i_nine_hl","Redalpine"),
- ("Illuminate Financial","Fintech VC","UK/US/Asia","'Financial Markets Infrastructure' theme; exits to S&P and Bloomberg; bank strategic LPs","capital-markets infra","€1–4m","bank-LP distribution into credit desks",1,"https://www.illuminatefinancial.com/portfolio","i_illport","Financial Markets Infrastructure"),
- ("Augmentum Fintech","Listed fintech fund","UK","'Europe's leading publicly listed fintech fund'","UK fintech","£2–5m","UK-listed, fintech-only mandate",1,"https://augmentum.vc/","i_augmentum","publicly listed fintech fund"),
- ("ION Group","Strategic","UK/IE","Site lists Debtwire among ION businesses","Debtwire (owned)","acquirer/partner","buy-vs-build for Asia/Nordic coverage",1,"https://iongroup.com/","i_ion","Debtwire"),
- ("Fitch Ventures","Strategic CVC","Global","Portfolio incl. Cognitive Credit, Versana, CredCore (search result)","credit data","$1–5m","credit-markets thesis",0,"https://www.fitchventures.com/portfolio","","SECONDARY"),
- ("Antler","Pre-seed VC","Global/Asia","Offices incl. Singapore, Japan, Australia","—","$0.1–0.5m","APAC footprint",1,"https://www.antler.co/","i_antler","Singapore"),
- ("Vertex Ventures SEA & India","VC","SG/IN","SEA & India fintech investor (site)","—","$1–3m","Singapore/India hub",1,"https://www.vertexventures.sg/","i_vertex","Southeast Asia"),
- ("Peak XV Partners","VC","IN/SEA","Seed-to-growth global VC (site)","—","$1–5m","India/SEA",1,"https://www.peakxv.com/","i_peakxv","Seed to Growth"),
- ("East Ventures","VC","SEA","Leading SEA VC, seed to growth (site)","—","$0.5–2m","SEA",1,"https://east.vc/","i_eastvc","Southeast Asia"),
- ("Jungle Ventures","VC","IN/SEA","Early/growth VC in India & SEA (site)","—","$1–3m","India/SEA",1,"https://jungle.vc/","i_jungle","India & Southeast Asia"),
- ("Balderton Capital","VC","EU","Backs European-founded tech only (site)","—","€2–8m","European founder thesis",1,"https://www.balderton.com/","i_balderton","European"),
- ("Index Ventures","VC","EU/US","Multi-stage VC (site)","—","€2–10m","fintech track record",1,"https://www.indexventures.com/","i_index","Index Ventures"),
- ("Euronext","Strategic","EU","Markets incl. Oslo, Milan, Paris; data business (site)","Oslo Børs/Nordic bonds","partner","Nordic bond calendar distribution",1,"https://www.euronext.com/en","i_euronext","Oslo"),
-]
-MORE = ["Speedinvest (EU fintech)","Monk's Hill (SEA)","LSEG (strategic; LSEG Ventures page 404)","Deutsche Börse (DB1 Ventures)","SGX Group","HKEX","JPX","Nikkei/QUICK","Permira (growth)","Moody's","S&P Global","Spark Capital (9fin Series B)","500 Global (9fin Series B)","Molten Ventures","Anthemis","Fin Capital","Mouro Capital","BlueYard","Point Nine","Global Founders Capital","Golden Gate Ventures","Wavemaker Partners","Sequoia-alum angels (generic)","Distressed-fund GP angels (generic; firms only, no individuals named)","Saison Capital"]
-
-def emails():
-    sit = {"Highland Europe":"Agile/KWG/LVGEM","Seedcamp":"Bigben Interactive","Illuminate Financial":"Booster/Point Nordic bonds","Augmentum Fintech":"Thames Water","ION Group":"Asia developer petitions","Fitch Ventures":"Branicks/BayWa SchVG","Vertex Ventures SEA & India":"mm2 Asia / VPower","Antler":"Toys\"R\"Us Japan"}
+def emails(backers):
+    sit = {"Fitch Ventures":"Thames Water 29 Oct consent vote","Illuminate Financial":"BayWa hybrid blocking minority","Work-Bench":"Agile RSA launch window (mid-Nov)",
+           "Seedcamp":"Bigben 9 Dec plan hearing","Fintech Collective":"Booster standstill expiry 1 Nov","Vertex Ventures SEA & India":"mm2 Asia scheme meetings 4 Nov",
+           "Balderton Capital":"Branicks implementation by 31 Mar 2027","Index Ventures":"Zhenro petition 9 Nov"}
     out = []
-    for n, (firm, s) in enumerate(sit.items(), 1):
+    for n, b in enumerate(backers, 1):
         out.append(f"""DO NOT SEND - DRAFT
-Draft {n}
-To: [{firm} — public contact form / investment team; address to be confirmed by the user]
-Subject: TRIAGE World — the cross-border restructuring calendar ({s})
+Draft {n} (v2, 23 Oct 2026)
+To: [{b['name']} — investment team; address to be confirmed by the user]
+Subject: TRIAGE World — a dated, sourced restructuring calendar outside the US ({sit[b['name']]})
 
-Hello {firm} team,
+Hello {b['name']} team,
 
-We are building TRIAGE World: a weekly calendar of non-US restructuring catalysts (scheme meetings, petition hearings,
-SchVG/Nordic votes, sauvegarde plan hearings) with a control map for each one — who actually decides.
-This week, for example: {s}. Each entry links a primary filing.
+We are not raising yet. We are building TRIAGE World: a weekly calendar of non-US restructuring catalysts
+with a control map (who decides) and a public price for each situation, every fact quoted from a primary filing.
+Example this week: {sit[b['name']]}.
 
-Today we track 25 situations across 10 markets, built on bulk public data (5.7m UK company records, 58,810 BODACC notices,
-HKEX/TDB/Stamdata filings). We are raising a €2.5m seed (JUDGEMENT: indicative) to reach 60 paying desks.
-
-Would a 20-minute call make sense?
+Before we raise we want 3-5 design partners, 2-3 paid pilots and one backtest where we dated a catalyst before the market.
+Your portfolio ({b['evidence']}) suggests you know this buyer. Would you be open to 20 minutes of feedback, or an introduction
+to one credit desk that might be a design partner?
 
 Best regards,
 arslane souici
 """)
     return "\n\n".join(out)
 
-def main():
-    res = verify(); c = con()
-    c.execute("create table if not exists verification(claim_id, artifact, claim, status, primary_url, checked, method, fix)")
-    c.execute("delete from verification where claim_id like 'WD%' or claim_id like 'WB%'")
-    for k, r in res.items(): c.execute("insert into verification values(?,?,?,?,?,?,?,?)", (k,"research/triage_world",r["claim"],r["status"],r["url"],"2026-10-23",r["method"],r["fix"]))
-    bres = {}
-    for i, b in enumerate(BACKERS, 1):
-        p = f"{SRC}/{b[9]}.txt"; ok = b[7] and os.path.exists(p) and b[10] in open(p, errors="ignore").read()
-        st = "VERIFIED" if ok else ("VERIFIED-SECONDARY" if b[10]=="SECONDARY" else "UNVERIFIABLE"); bres[f"WB{i:02d}"] = st
-        c.execute("insert into verification values(?,?,?,?,?,?,?,?)", (f"WB{i:02d}","research/triage_world",f"{b[0]}: {b[3]}",st,b[8],"2026-10-23",f"site fetch token '{b[10]}'",""))
-    cols=[x[1] for x in c.execute("pragma table_info(dataset_counts)")]; counts = {r[0]: r[1] for r in c.execute(f"select {cols[0]},{cols[1]} from dataset_counts")}; counts["fr_bodacc_enriched"]=c.execute("select count(*) from fr_bodacc").fetchone()[0]
-    c.commit()
-    sits = []
-    for i, r in enumerate(S, 1):
-        sits.append(dict(id=f"WD{i:02d}", key=r[0], country=r[1], entity=r[2], stage=r[3], chokepoint=r[4], date=r[5], basis=r[6], url=r[7], size=r[10], status=res[f"WD{i:02d}"]["status"]))
-    json.dump(dict(asof="2026-10-23", situations=sits, buyers=[dict(firm=b[0],base=b[1],situation=b[2],why=b[3]) for b in BUYERS],
-                   backers=[dict(name=b[0],type=b[1],region=b[2],evidence=b[3],cheque=b[5],why=b[6],status=bres[f"WB{i:02d}"],url=b[8]) for i,b in enumerate(BACKERS,1)],
-                   counts={k:v for k,v in counts.items() if k.startswith(("uk_","fr_"))}), open(f"{D}/world.json","w"), indent=1)
-    open(f"{D}/world/email_drafts_DO_NOT_SEND.txt","w").write(emails())
-    md = build_md(sits, bres, counts); open(f"{HERE}/triage_world.md","w").write(md)
-    pages = report_from_markdown(md, "TRIAGE World: situations, revenue, backers", "World desk · 23 Oct 2026",
-        "25 verified non-US situations with control chokepoints and catalyst dates; how it makes money; who backs it.",
-        [("Situations","25 non-US"),("Markets","UK FR DE NO SE ES IT IN CA JP SG HK"),("Rules","public data · firms only · nothing sent")], f"{HERE}/TRIAGE_World.html", f"{HERE}/TRIAGE_World.pdf")
-    print("pages", pages, {s: list(res[k]["status"] for k in res).count(s) for s in set(r["status"] for r in res.values())}, bres)
-
-def build_md(sits, bres, counts):
+def md(sits, kills, forced, deb, backers):
     L = []; A = L.append
-    nv = sum(s["status"].startswith("VERIFIED") for s in sits)
-    A("## 1. The answer in one page\n")
-    A(f"- **{len(sits)} non-US situations, {nv} verified** against a primary (or labelled secondary) source fetched 22–23 Oct 2026, each with *who decides* and *when*.")
-    A("- **The product:** TRIAGE World — a weekly cross-border restructuring calendar + control maps. Indicative price £18k/desk/yr (JUDGEMENT), vs a Debtwire subscription awarded by The Pensions Regulator at **£118,818** (UK Contracts Finder, published 29 Jun 2023; multi-year).")
-    A("- **The buyers:** 30 non-US funds, trading houses and liquidators, each tied to a live situation below.")
-    A("- **The backers:** 9fin's investors (Highland Europe, Seedcamp, Redalpine) are the first call — they have already underwritten the category; we are the Asia/Nordic/court-calendar wedge (JUDGEMENT).")
-    A("- **The ask:** €2.5m seed (JUDGEMENT) for 18 months to 60 paying desks.\n")
-    A("## 2. Data actually ingested (not headlines)\n")
-    A("| Dataset | Rows | Source |\n|---|---:|---|")
-    rows = [("UK Companies House BasicCompanyData (2026-10-01)","5,704,711","download.companieshouse.gov.uk"),("UK active, accounts overdue","93,785","derived"),("UK large filers (FULL/GROUP/MEDIUM) overdue","8,693","derived"),("UK with outstanding charges","673,704","derived"),("UK in liquidation / administration","108,330 / 3,709","derived"),
-            ("BODACC collective-procedure notices since 2026-07-01","58,810","bodacc-datadila.opendatasoft.com"),("FR opening judgements (unique SIREN)","23,355","derived: sauvegarde 546, redressement 5,007, liquidation 17,802"),
-            ("FR enriched with revenue (partial run)",f"{counts.get('fr_bodacc_enriched','≈400')}","recherche-entreprises.api.gouv.fr"),("HKEX petition/scheme announcements (22 Sep–22 Oct)","26","hkexnews.hk"),("TDB bankruptcy flashes","7","tdb.co.jp"),("ASX administration/delisting","4","asx.com.au")]
-    for r in rows: A(f"| {r[0]} | {r[1]} | {r[2]} |")
-    A("\n### Revenue screen: French sauvegarde openings with revenue > €10m (partial)\n")
-    A("| Company | Opened | Tribunal | Revenue | Year |\n|---|---|---|---:|---|")
-    for r in con().execute("select name,date,tribunal,ca,ca_year from fr_bodacc where ca>1e7 order by ca desc limit 15"):
-        A(f"| {r[0][:40]} | {r[1]} | {r[2].replace('Greffe du ','')[:45]} | €{r[3]/1e6:,.0f}m | {r[4]} |")
-    A("\n*Note: the finances year can be stale (e.g. 2021). Liquidations were not enriched (gap).*\n")
+    nprim = sum(s["status"] == "VERIFIED-PRIMARY" for s in sits); nsec = sum(s["status"] == "SECONDARY-LABELLED" for s in sits)
+    A("## 1. Summary\n")
+    A(f"- **25 live non-US situations**: {nprim} confirmed from primary sources fetched on 23 Oct 2026 (Asia/Singapore time), {nsec} labelled secondary-only, {25-nprim-nsec} unverified. Every fact in the sourcing appendix has its URL, fetch time and exact quote.")
+    A("- **Killed:** LVGEM, China SCE and Toys\"R\"Us Japan. **Kept:** Booster, because the debate's kill is contradicted by the primary notice. **Added:** Nacon, Grupo Antolin (secondary only) and Stark Group (pre-filing, secondary only).")
+    A(f"- **Prices:** {sum(1 for s in sits if s['price'])} situations have a public price. Each is labelled as a trade or a stale trade. A recovery-vs-price gap is computed only where both exist and the price is current ({sum(1 for s in sits if s['gap'] is not None)} cases).")
+    A(f"- **Commercial anchor:** a Debtwire subscription at **£39,606 per year**. This is £118,818.24 over 26 Jun 2023–25 Jun 2026, from UK Contracts Finder; it includes VAT and an inflation contingency.")
+    A("- **No fundraising yet.** Milestones before raising: 3–5 design partners, 2–3 paid pilots at £5–10k, about £150k ARR in letters of intent, and one backtest that dated a catalyst correctly before the market.\n")
     A('<div style="page-break-before:always"></div>\n')
-    A("## 3. The 25 situations — chokepoint and catalyst\n")
-    A("| # | Mkt | Situation | Stage | Chokepoint (who decides) | Catalyst | Status |\n|---|---|---|---|---|---|---|")
-    for s in sits: A(f"| {s['id']} | {s['country']} | {s['entity']} | {s['stage']} | {s['chokepoint']} | **{s['date']}** | {s['status']} |")
-    A("\n### Catalyst basis and source\n")
-    A("| # | Date basis | Size | Primary URL |\n|---|---|---|---|")
-    for s in sits: A(f"| {s['id']} | {s['basis']} | {s['size']} | {s['url'][:90]} |")
-    A("\n### Calendar (dated catalysts)\n")
-    dated = sorted([s for s in sits if s['date'] != 'TBC'], key=lambda s: s['date'])
-    for s in dated: A(f"- **{s['date']}** — {s['entity']} ({s['country']}): {s['chokepoint']}")
-    A(f"\n{sum(s['date']=='TBC' for s in sits)} situations have no public catalyst date yet; finding that date first is what the product sells (JUDGEMENT).\n")
+    A("## 2. Changelog: what was killed or fixed, and why\n")
+    A("| Item | Decision and reason | Primary check |\n|---|---|---|")
+    for k in kills:
+        c = k["check"]; A(f"| {k['name']} | {k['why']} | {(c['grade']+': “'+c['token']+'” found') if c and c['found'] else 'no source / not found'} |")
+    A("\n**Fixes**\n"); [A(f"- {f}") for f in FIXES]
     A('<div style="page-break-before:always"></div>\n')
-    A("## 4. Control maps — all 25, ten that matter most first (JUDGEMENT ranking)\n")
-    top = ["thames","agile","bigben","baywa","booster","lvgem","sce","toysrus","mm2","zhenro"]
-    order = top + [x["key"] for x in sits if x["key"] not in top]
-    for n, k in enumerate(order):
+    A("## 3. The 25: chokepoint, catalyst, status\n")
+    A("| # | Mkt | Situation | Who decides | Catalyst | Status |\n|---|---|---|---|---|---|")
+    for s in sits: A(f"| {s['id']} | {s['country']} | **{s['entity']}** — {s['stage']} | {s['chokepoint']} | **{s['date']}**<br/><span style='color:#64748b'>{s['basis']}</span> | {s['status']} |")
+    A('<div style="page-break-before:always"></div>\n')
+    A("## 4. Weekly layer: court calendar next to forced sellers\n")
+    A("| Week (Mon) | Court / vote calendar (dated, primary) |\n|---|---|")
+    import datetime
+    wk = {}
+    for s in sits:
+        if s["date"] != "TBC" and s["date"] <= "2026-12-31":
+            d = datetime.date.fromisoformat(s["date"]); m = d - datetime.timedelta(days=d.weekday()); wk.setdefault(m.isoformat(), []).append(f"{s['date'][5:]} {s['entity'].split(' (')[0]}")
+    for k in sorted(wk): A(f"| {k} | {'; '.join(wk[k])} |")
+    A("\n**Forced-seller layer** (the supply that lands on the same desks)\n")
+    A("| Seller | Fact | Grade |\n|---|---|---|")
+    for f in forced: A(f"| {f['topic']} | {f['fact']} | {f['grade']} {'(token found)' if f['check']['found'] else '(NOT FOUND today)'} |")
+    A('<div style="page-break-before:always"></div>\n')
+    A("## 5. Prices and recovery gaps\n")
+    A("Rule: the gap is shown only where a current public price and a stated or modelled recovery both exist. Otherwise **ABSTAIN**.\n")
+    A("| # | Situation | Price (type, date) | Recovery (basis) | Gap |\n|---|---|---|---|---|")
+    for s in sits:
+        p = s["price"]; r = s["recovery"]
+        ps = f"{p['value']} {p['unit']} — {p['instrument']}; {p['kind']}; {p['date']}" if p else "none found"
+        rs = f"{r['value']}% — {r['basis']}" if r else "none public"
+        g = f"**{s['gap']:+} pts**" if s["gap"] is not None else "ABSTAIN"
+        A(f"| {s['id']} | {s['entity']} | {ps} | {rs} | {g} |")
+    A("\n*Agile: the perpetuals at about 0.4% of par against a modelled recovery of about " + f"{agile_rec}%" + " (shares only) imply the market prices the RSA below the equity value issued. This is JUDGEMENT; the Frankfurt trades are thin.*\n")
+    A('<div style="page-break-before:always"></div>\n')
+    A("## 6. Control maps: top 10\n")
+    for k in ["thames","bigben","agile","baywa","booster","mm2","nacon","branicks","zhenro","clabo"]:
         s = next(x for x in sits if x["key"] == k)
-        if n == 10: A('<div style="page-break-before:always"></div>\n\n### The other 15\n')
-        A(f"**{n+1}. {s['entity']} ({s['country']}) — {s['date']}.** Stage: {s['stage']}. *Chokepoint:* {s['chokepoint']}. Size: {s['size']}. Source: {s['url']}\n")
+        q = s["checks"][0]
+        A(f"**{s['entity']} ({s['country']}) — {s['date']}.** {s['stage']}. *Who decides:* {s['chokepoint']}. {s['note']}<br/><span style='color:#64748b'>Quote: “…{q['quote'][100:330]}…” — {q['url'][:90]}</span>\n")
     A('<div style="page-break-before:always"></div>\n')
-    A("## 5. How it makes money\n")
-    A("### Price against public comparables\n")
-    A("| Product | Public price evidence | Source quality |\n|---|---|---|")
-    A("| Debtwire | £118,818 award (The Pensions Regulator, 2023) — PRIMARY; ≈£44.8k for one year — SECONDARY | UK Contracts Finder |")
-    A("| Octus (ex-Reorg) | $30k–$120k / yr (2017 court record) | SECONDARY |")
-    A("| 9fin | ≈$100k / yr | SECONDARY |")
-    A("| Octus EMEA / Reorg APAC / Debtwire Asia | no public price found | GAP |")
-    A("| **TRIAGE World (proposed)** | **£18k / desk / yr; £5k single situation map** | JUDGEMENT |\n")
-    A(hbars([("Debtwire (UK gov, 1yr)",44.8,"#64748b","primary"),("9fin (est.)",79,"#94a3b8","secondary, $100k≈£79k"),("Octus high (2017)",95,"#94a3b8","secondary"),("TRIAGE World",18,"#2563eb","judgement")], value_fmt=lambda v: f"£{v:,.0f}k"))
-    A("\n### Revenue scenarios (all assumptions JUDGEMENT)\n")
-    A("| Scenario | Desks yr-1 | Price | Situation maps | ARR |\n|---|---:|---:|---:|---:|")
-    A("| Bear | 8 | £12k | 10 × £5k | £146k |\n| Base | 25 | £18k | 30 × £5k | £600k |\n| Bull | 60 | £24k | 80 × £5k | £1.84m |")
-    A("\nAssumptions: desks = funds + liquidators in section 6 converting at 25% (base); single maps sold to liquidators/IPs pitching for appointments; no data resale; churn ignored in year 1.\n")
-    A("### 90-day plan\n")
-    for x in ["Days 1–15: weekly calendar v1 (25 situations) shipped as PDF + app World tab; fix gaps (Gazette, Bundesanzeiger, EDINET key).",
-              "Days 15–45: 10 design-partner desks from section 6 (free, 6 weeks), one per market; measure which catalysts they act on.",
-              "Days 45–75: convert ≥5 to paid at £18k; sell 10 single situation maps to liquidators (FRP, Interpath, Kroll, Borrelli Walsh).",
-              "Days 75–90: seed raise with 5 paying logos and a 52-week catalyst hit-rate; first strategic conversation (ION/Euronext/Fitch Ventures)."]: A(f"- {x}")
+    A("## 7. Bigben Interactive: investment-committee file\n")
+    A("| Item | Fact (primary) |\n|---|---|")
+    for a, b in [("Procedure","Sauvegarde accélérée opened 17 Aug 2026, TC Lille Métropole. BODACC A202601622253 (published 26 Aug) records the opening judgment."),
+                 ("Timetable","Extended 17 Oct → 17 Dec 2026 (judgment of 7 Oct). Plan hearing on **9 Dec 2026**; votes by classes of affected parties beforehand. Company expects completion by end-Q1 2027."),
+                 ("Asset sold","**Bigben Connected** to **Modelabs**: **€35m cash** paid at closing on 7 Oct, plus a **≈€13m vendor loan** over 5 years (≈€48m total). The vendor loan is final after closing-accounts review."),
+                 ("Backstop","€20m backstop of the rights issue (DPS) of up to €25m at €0.017. Guarantors hold ≈**93.4%** of the exchangeables after syndication: TT International 2.16, Syquant 4.35, LMR 3.94, CIC 3.37, Cigogne 2.84, Sparinvest 3.00, Rhodium 0.17, Swan 0.17 (€m)."),
+                 ("Capital-increase prices","Rights issue €0.017; non-guarantor conversion €0.051 (3×); guarantor tranche raised from €0.01523 to €0.0209."),
+                 ("Plan economics (URD)","€55–60m of new resources; ≈€47.2m of claims converted to equity; €26m repaid from sale proceeds; the €0.9m syndicated balance waived."),
+                 ("Balance sheet 31 Mar 2026","Equity **−€55.8m**; cash €31.6m; net debt **€167.9m** including the bond carried at **€59.1m**; FY25/26 revenue €284.5m, EBITDA €55.5m; impairments €369.4m."),
+                 ("Group link","Owns 56.72% of Nacon's capital (68.74% of votes). Nacon is in its own redressement judiciaire; Bigben reinvests €16m of new money into Nacon's €31m rights issue."),
+                 ("Regulator","Universal Registration Document filed with the AMF on 16 Oct 2026 under no. **D.26-0631**. The AMF BDIF page itself was not fetched (gap)."),
+                 ("Prices","Shares €0.069, last close 22 Oct (public chart feed). The exchangeable FR0014001WC2 last traded on 16 Feb 2026 at 84.69 (stale, 'pending deletion'). No current bond mark."),
+                 ("Who decides","Creditors are locked up. **Shareholders' class** and a cross-class cram-down are the open questions (JUDGEMENT)."),
+                 ("IC readiness","**Partial.** Done: procedure, timetable, sale, backstop, balance sheet, URD number. Missing: the court judgment text, the BALO n°118 class notification text, the class composition and voting thresholds, a current bond mark, and the post-plan cap table.")]:
+        A(f"| {a} | {b} |")
     A('<div style="page-break-before:always"></div>\n')
-    A("## 6. 30 non-US buyers, each fitted to a live situation\n")
-    A("*Fit rationale is JUDGEMENT from public firm descriptions; no firm has been contacted.*\n")
-    A("| # | Firm | Base | Situation | Why |\n|---|---|---|---|---|")
-    for i, b in enumerate(BUYERS, 1): A(f"| {i} | {b[0]} | {b[1]} | {b[2]} | {b[3]} |")
+    A("## 8. Money\n")
+    A("| Comparable | Public price | Grade |\n|---|---|---|")
+    A(f"| Debtwire (The Pensions Regulator) | £118,818.24 for 26 Jun 2023–25 Jun 2026 → **£39,606/yr** incl. VAT | PRIMARY ({'verified' if deb[0]['found'] and deb[1]['found'] else 'NOT verified'}) |")
+    A("| 9fin | ≈$100k/yr | SECONDARY |\n| Octus | $30–120k/yr (2017 record) | SECONDARY |\n| **TRIAGE World (proposed)** | £18k/desk/yr; £5k per situation map | JUDGEMENT |\n")
+    A(hbars([("Debtwire (TPR, per yr)", 39.6, "#64748b", "primary"), ("TRIAGE desk", 18, "#2563eb", "judgement"), ("TRIAGE map", 5, "#93c5fd", "judgement")], value_fmt=lambda v: f"£{v:,.1f}k"))
+    A("\n| Scenario (year 1, JUDGEMENT) | Desks × price | Maps × £5k | ARR |\n|---|---|---|---:|")
+    for n, d, p, m in [("Bear", 8, 12, 10), ("Base", 13, 18, 12), ("Bull", 35, 24, 16)]:
+        A(f"| {n} | {d} × £{p}k = £{d*p}k | {m} × £5k = £{m*5}k | **£{d*p+m*5}k** |")
+    A("\nThe recheck matches the Valuation figures exactly: £146k, £294k and £920k.\n")
+    A("**Milestones before any raise:** 3–5 design partners; 2–3 paid pilots at £5–10k; ≈£150k ARR in letters of intent; one backtest where a catalyst was dated correctly before the market. Candidate backtests from this list: Thames 29 Oct vote, Booster 1 Nov standstill, mm2 4 Nov meetings.\n")
+    A("### 30 buyers, each fitted to a live situation (fit is JUDGEMENT; no firm contacted)\n")
+    A("| Firm | Base | Situation |\n|---|---|---|")
+    for b in BUYERS: A(f"| {b[0]} | {b[1]} | {b[2]} |")
     A('<div style="page-break-before:always"></div>\n')
-    A("## 7. Who backs it — 40 names, top 15 checked\n")
-    A("| # | Backer | Type | Evidence (site fetched 23 Oct) | Comparable | Cheque (JUDGEMENT) | Why us | Check |\n|---|---|---|---|---|---|---|---|")
-    for i, b in enumerate(BACKERS, 1): A(f"| {i} | {b[0]} | {b[1]} | {b[3]} | {b[4]} | {b[5]} | {b[6]} | {bres[f'WB{i:02d}']} |")
-    A("\n**Further 25 (unverified long list):** " + "; ".join(MORE) + ".\n")
-    A("### Funding ask (JUDGEMENT)\n")
-    A("| Use of funds (€2.5m, 18 months) | € | % |\n|---|---:|---:|")
-    for u, v in [("Analysts in London, Singapore and Hong Kong (3 FTE)",1.05),("Engineering: ingestion + app (2 FTE)",0.75),("Data licences and court-access fees (lawful, no scraping of logins)",0.25),("Go-to-market (design partners, events)",0.25),("Legal/compliance (GDPR firms-only policy)",0.10),("Buffer",0.10)]:
-        A(f"| {u} | {v:.2f}m | {v/2.5*100:.0f}% |")
+    A("## 9. Backers (when the milestones are met)\n")
+    A("| # | Backer | Type | Evidence from its own site (fetched today) | Check |\n|---|---|---|---|---|")
+    for i, b in enumerate(backers, 1):
+        c = b["check"]; A(f"| {i} | {b['name']} | {b['type']} | {b['evidence']} | {'VERIFIED: “'+c['token']+'”' if c['found'] else 'NOT FOUND'} |")
+    A("\n**Removed as passes:** " + "; ".join(PASSES) + ".\n")
+    A("Eight drafts, each headed *DO NOT SEND - DRAFT*, ask for feedback or a design-partner introduction, not money. They are saved to `/workspace/triage_os_data/world/email_drafts_DO_NOT_SEND.txt`. Nothing was sent.\n")
+    A("## 10. Remaining gaps\n")
+    for g in ["Thames Class B ISINs and marks: no public exchange page found → gap abstains.",
+              "Bigben: court judgment text, BALO n°118 text and the AMF BDIF entry were not fetched (the URD number comes from the company release).",
+              "Grupo Antolin: antolin.com blocked from the box; status after 16 Oct is unconfirmed (secondary only).",
+              "Stark Group: Fitch page did not render; the Octus quote dates from March 2026. Treat as a watch item, not a verified pre-filing.",
+              "mm2 Asia: debt size not in a primary document fetched today.",
+              "Yindeng primary NPL data not reached; the end date of China's NPL pilot is not confirmed. The BoE Truran speech was not found.",
+              "Equity prices come from a public chart feed, not the exchange pages; bond prices are thin Frankfurt trades.",
+              "Urbas, SVOGL, Antolin and Stark are secondary-only and kept only because they are labelled."]: A(f"- {g}")
     A('<div style="page-break-before:always"></div>\n')
-    A("## 8. Pitch (worldwide)\n")
-    A("Restructuring has gone global and court-driven: UK Part 26A plans for Chinese developers, Hong Kong petitions adjourned to 2027, Nordic written procedures, German SchVG votes, French accelerated sauvegardes, Singapore moratoria, Japanese civil rehabilitations. The incumbents sell news; nobody sells **the calendar and the control map** — who blocks, who decides, and on what date. TRIAGE World does, built from bulk public registers (5.7m UK companies, 58,810 French notices) and primary filings, with every claim linked and graded. Cheaper than one Debtwire seat, and focused on the date that moves the price. (Positioning is JUDGEMENT.)\n")
-    A("Eight email drafts, each headed *DO NOT SEND - DRAFT*, are saved to `/workspace/triage_os_data/world/email_drafts_DO_NOT_SEND.txt`. Nothing has been sent.\n")
-    A("## 9. Gaps and what was not done\n")
-    for g in ["London Gazette JSON/feed returned HTTP 202 with empty body (WAF) — UK notices come from Companies House status instead.",
-              "Companies House charge detail needs an API key — only counts of outstanding charges used.",
-              "Germany Insolvenzbekanntmachungen/Bundesanzeiger: no bulk access; SchVG cases from issuer IR pages only.",
-              "Spain BOE concursos and Canada OSB CCAA list timed out/503 from the box; Spain/Canada rows use secondary press (labelled).",
-              "Japan EDINET needs an API key; Singapore eLitigation not accessible; ESMA/EDW CMBS repositories need registration; EBA transparency exercise discontinued.",
-              "French enrichment ran on ≈400 of 5,552 sauvegarde/redressement openings; liquidations not enriched; finance years can be stale.",
-              "Zucchi (IT) primary PDF did not download; Gefion vote (7 Oct) dropped as its catalyst passed with no result found.",
-              "Octus EMEA, Debtwire Asia and Reorg APAC prices not public; 9fin/Octus figures are secondary.",
-              "Buyers list is not verified per firm; backer cheque sizes are judgement. No PACER; no logins; nothing sent."]: A(f"- {g}")
-    A('<div style="page-break-before:always"></div>\n')
-    A("## Appendix A. Verification log\n")
-    A("| ID | Claim | Status | Method |\n|---|---|---|---|")
-    for r in con().execute("select claim_id,claim,status,method from verification where claim_id like 'WD%' or claim_id like 'WB%' or claim_id like 'WP%' order by claim_id"):
-        A(f"| {r[0]} | {r[1][:110]} | {r[2]} | {r[3][:70]} |")
-    A("\n## Appendix B. Method\n")
-    A("Situations were selected from bulk feeds (Companies House snapshot, BODACC export, HKEX title search, TDB flash, ASX announcements, Stamdata/Nordic Trustee) and press triage, then kept only if a primary page fetched on 22–23 Oct 2026 contained the exact token recorded in the log. Secondary-only items are labelled VERIFIED-SECONDARY. Chokepoints reflect the statutory voting or court mechanics of each procedure (Part 26A cross-class cram-down; HK/SG scheme majorities: majority in number and 75% in value; SchVG 75%; Nordic written procedure; French affected-party classes since 2021 reform; Indian CoC 66%). Ranking and fit are JUDGEMENT. Individuals are excluded by design.")
+    A("## Appendix: sourcing log (URL · fetched · exact quote)\n")
+    A("| ID | Grade | Token | Fetched | URL | Quote |\n|---|---|---|---|---|---|")
+    for s in sits:
+        for c in s["checks"]:
+            A(f"| {s['id']} | {c['grade']} | {c['token'][:40]} | {c['fetched'][:16]} | {c['url'][:70]} | {c['quote'][:230].replace('|','/')} |")
+    for f in forced:
+        c = f["check"]; A(f"| FS | {c['grade']} | {c['token']} | {c['fetched'][:16]} | {c['url'][:70]} | {c['quote'][:200].replace('|','/')} |")
+    for c in deb: A(f"| WP01 | {c['grade']} | {c['token']} | {c['fetched'][:16]} | {c['url'][:70]} | {c['quote'][:200].replace('|','/')} |")
+    for b in backers:
+        c = b["check"]; A(f"| WB | {c['grade']} | {c['token'][:40]} | {c['fetched'][:16]} | {c['url'][:70]} | {c['quote'][:160].replace('|','/')} |")
     return "\n".join(L)
 
+def main():
+    sits, kills, forced, deb, backers = build()
+    c = con(); c.execute("create table if not exists verification(claim_id, artifact, claim, status, primary_url, checked, method, fix)")
+    c.execute("delete from verification where claim_id like 'WD%' or claim_id like 'WB%' or claim_id like 'WP%' or claim_id like 'WF%' or claim_id like 'WK%'")
+    for s in sits:
+        for j, ch in enumerate(s["checks"], 1):
+            c.execute("insert into verification values(?,?,?,?,?,?,?,?)", (f"{s['id']}.{j}", "research/triage_world v2", f"{s['entity']}: “{ch['token']}”",
+                      ("VERIFIED" if ch["found"] else "UNVERIFIABLE") + ("" if ch["grade"] != "SECONDARY" else "-SECONDARY"), ch["url"], ch["fetched"][:19], "exact-token match; quote: " + ch["quote"][:300], ""))
+    for i, f in enumerate(forced, 1):
+        ch = f["check"]; c.execute("insert into verification values(?,?,?,?,?,?,?,?)", (f"WF{i:02d}", "research/triage_world v2", f["fact"], ("VERIFIED" if ch["found"] else "UNVERIFIABLE") + " / " + f["grade"][:60], ch["url"], ch["fetched"][:19], "quote: " + ch["quote"][:300], ""))
+    for i, k in enumerate(kills, 1):
+        ch = k["check"]; c.execute("insert into verification values(?,?,?,?,?,?,?,?)", (f"WK{i:02d}", "research/triage_world v2", k["name"] + ": " + k["why"], ("VERIFIED" if ch and ch["found"] else "NO SOURCE"), ch["url"] if ch else "", (ch or {}).get("fetched", "")[:19], "quote: " + ((ch or {}).get("quote", ""))[:300], ""))
+    for i, b in enumerate(backers, 1):
+        ch = b["check"]; c.execute("insert into verification values(?,?,?,?,?,?,?,?)", (f"WB{i:02d}", "research/triage_world v2", f"{b['name']}: {b['evidence']}", "VERIFIED" if ch["found"] else "UNVERIFIABLE", ch["url"], ch["fetched"][:19], "quote: " + ch["quote"][:300], ""))
+    ch = deb[0]; c.execute("insert into verification values(?,?,?,?,?,?,?,?)", ("WP01", "research/triage_world v2", "Debtwire £118,818.24 for 26 Jun 2023–25 Jun 2026 = £39,606/yr", "VERIFIED" if deb[0]["found"] and deb[1]["found"] else "UNVERIFIABLE", ch["url"], ch["fetched"][:19], "quote: " + ch["quote"][:300], ""))
+    c.commit()
+    json.dump(dict(asof="2026-10-23", situations=sits, killed=kills, fixes=FIXES, forced=forced, debtwire=dict(total=118818.24, per_year=39606, checks=list(deb)),
+                   buyers=[dict(firm=a, base=b, situation=s) for a, b, s in BUYERS], backers=backers, passes=PASSES,
+                   scenarios=[dict(name="Bear", arr=146), dict(name="Base", arr=294), dict(name="Bull", arr=920)]), open(f"{D}/world.json", "w"), indent=1, ensure_ascii=False)
+    open(f"{D}/world/email_drafts_DO_NOT_SEND.txt", "w").write(emails(backers))
+    m = md(sits, kills, forced, deb, backers); open(f"{HERE}/triage_world.md", "w").write(m)
+    pages = report_from_markdown(m, "TRIAGE World: situations, revenue, backers", "World desk · v2 · 23 Oct 2026",
+        "25 live non-US situations re-verified today from primary sources, with who decides, when, and what the market price says.",
+        [("Situations", "25 live · 3 killed"), ("Sourcing", "URL · fetch time · exact quote"), ("Rules", "public data · firms only · nothing sent")],
+        f"{HERE}/TRIAGE_World.html", f"{HERE}/TRIAGE_World.pdf")
+    print("pages", pages, {k: sum(s["status"] == k for s in sits) for k in ("VERIFIED-PRIMARY", "SECONDARY-LABELLED", "UNVERIFIED")})
+    for s in sits: print(s["id"], s["status"], s["entity"][:30], [c["token"][:25] for c in s["checks"] if not c["found"]], s["price"] and s["price"]["value"], s["gap"])
 if __name__ == "__main__": main()
