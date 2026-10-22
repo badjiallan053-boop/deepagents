@@ -188,12 +188,48 @@ FIRMS = [
 ]
 
 def bdc_match(con, ticker):
+    try: return _bdc_match(con, ticker)
+    except sqlite3.OperationalError: return None
+
+def _bdc_match(con, ticker):
     r = con.execute("""select borrower, mark, source_url from bdc_marks where bdc=? and period='2026-06-30' and par>1e6
-        and mark is not null order by mark asc limit 1""", (ticker,)).fetchone()
+        and mark > 0 and mark is not null and borrower not like 'Investment%' order by mark asc limit 1""", (ticker,)).fetchone()
     return r
 
-def build(db, out):
+# firm -> (manager domain for job data, 13F filer name prefix)
+ALIAS = {"Ares Capital (ARCC)": ("aresmgmt.com", "ares management"), "Blackstone Secured Lending (BXSL)": ("blackstone.com", "blackstone"),
+         "FS KKR Capital (FSK)": ("fsinvestments.com", "fs kkr"), "Blue Owl Capital Corp (OBDC/OTF)": ("blueowl.com", "blue owl"),
+         "Golub Capital BDC (GBDC)": ("golubcapital.com", "golub"), "New Mountain Finance (NMFC)": ("newmountaincapital.com", "new mountain"),
+         "Nuveen Churchill Direct Lending (NCDL)": ("nuveen.com", "nuveen"), "Prospect Capital (PSEC)": ("prospectcap.com", "prospect"),
+         "Goldman Sachs BDC (GSBD)": ("goldmansachs.com", "goldman sachs"), "Apollo Global Management": ("apollo.com", "apollo"),
+         "Oaktree Capital Management": ("oaktreecapital.com", "oaktree"), "Elliott Management": ("elliottmgmt.com", "elliott investment")}
+OUR = ("echostar", "nfe", "clear_channel_outdoor", "qvc", "trinseo")
+
+def evidence(con, firm, url, jobs):
+    from urllib.parse import urlparse
+    import re
+    dom, pref = ALIAS.get(firm, (urlparse(url).netloc.replace("www.", ""), None))
+    if not pref:
+        toks = re.sub(r"[^a-z0-9 ]", " ", firm.split("(")[0].lower()).split()
+        stop = {"capital", "management", "partners", "group", "advisors", "asset", "investment", "global", "the", "&", "co"}
+        toks = [t for t in toks if t not in stop] or toks
+        pref = " ".join(toks[:2])
+    ev = {"data_role_jobs": jobs.get(dom, 0), "f13_filer": "", "f13_aum_usd_m": 0.0, "f13_our_names": "", "f13_our_usd_m": 0.0, "f13_url": ""}
+    if con is None: return ev
+    try:
+        r = con.execute("select filer, max(value_total) from f13_filers where lower(filer) like ? group by filer order by 2 desc limit 1", (pref + "%",)).fetchone()
+        if r: ev["f13_filer"], ev["f13_aum_usd_m"] = r[0], round(r[1] / 1e6, 1)
+        q = f"select issuer_key, max(value), min(source_url) from f13_holdings where lower(filer) like ? and issuer_key in ({','.join('?'*len(OUR))}) and putcall='' group by issuer_key"
+        hs = con.execute(q, (pref + "%", *OUR)).fetchall()
+        if hs:
+            ev["f13_our_names"] = "; ".join(f"{k} ${v/1e6:.0f}m" for k, v, _ in hs); ev["f13_our_usd_m"] = round(sum(v for _, v, _ in hs) / 1e6, 1); ev["f13_url"] = hs[0][2]
+    except Exception:
+        pass
+    return ev
+
+def build(db, out, jobs=None):
     con = sqlite3.connect(db) if db else None
+    jobs = jobs or {}
     rows = []
     for firm, t, region, url, match in FIRMS:
         sig, tier, score, why = TYPES[t]
@@ -203,16 +239,26 @@ def build(db, out):
             if r:
                 match = f"Lowest Q2-26 mark: {r[0]} @ {r[1]:.1f}"; evidence = r[2]; score += 5
         elif match:
-            match = "fit hypothesis (holding NOT evidenced): " + match
+            match = "fit hypothesis: " + match
+        ev = globals()["evidence"](con, firm, url, jobs)
+        if t == "bdc_manager":  # BDCs hold loans; a parent-bank/manager 13F is not the BDC's own holding
+            ev.update(f13_our_names="", f13_our_usd_m=0.0, f13_url="")
+        if ev["f13_our_usd_m"]: score += 8 + min(ev["f13_our_usd_m"] / 100, 5); match = f"13F holds {ev['f13_our_names']} (Q2-26)" + ("; " + match if match else "")
+        if ev["data_role_jobs"]: score += 3 + min(ev["data_role_jobs"] / 25, 3)
+        if ev["f13_filer"]: score += 1
+        data_ev = f"{ev['data_role_jobs']} data/quant/analytics postings (Crustdata)" if ev["data_role_jobs"] else "no data-role postings found (Crustdata)" if jobs else "not checked"
         rows.append({"firm": firm, "type": t, "region": region, "signals": sig, "price_tier": tier,
-                     "why": why, "db_match": match, "data_buying_evidence": "not yet checked (no vendor case study pulled)",
-                     "evidence_url": evidence, "score": score, "src_date": "2026-10-22", "status": "UNVERIFIED"})
-    rows.sort(key=lambda r: -r["score"])
+                     "why": why, "db_match": match, "data_buying_evidence": data_ev,
+                     "f13_filer": ev["f13_filer"], "f13_aum_proxy_usd_m": ev["f13_aum_usd_m"], "f13_our_names_usd_m": ev["f13_our_usd_m"],
+                     "evidence_url": ev["f13_url"] or evidence, "score": round(score, 2), "src_date": "2026-10-22", "status": "UNVERIFIED"})
+    rows.sort(key=lambda r: (-r["score"], -r["f13_our_names_usd_m"], -r["f13_aum_proxy_usd_m"], r["firm"]))
     for i, r in enumerate(rows, 1): r["rank"] = i
     with open(out, "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=["rank"] + [k for k in rows[0] if k != "rank"]); w.writeheader(); w.writerows(rows)
     return rows
 
 if __name__ == "__main__":
-    ap = argparse.ArgumentParser(); ap.add_argument("--db"); ap.add_argument("--out", required=True); a = ap.parse_args()
-    print(len(build(a.db, a.out)), "buyers")
+    ap = argparse.ArgumentParser(); ap.add_argument("--db"); ap.add_argument("--out", required=True); ap.add_argument("--jobs")
+    a = ap.parse_args(); import json
+    jobs = json.load(open(a.jobs))["counts"] if a.jobs else None
+    print(len(build(a.db, a.out, jobs)), "buyers")

@@ -14,6 +14,16 @@ class T(unittest.TestCase):
         c.execute("create table cmbs_loans (trust,propertyName,propertyCity,reportPeriodEndActualBalanceAmount,stress_score,mostRecentSpecialServicerTransferDate,source_url)")
         c.executemany("insert into cmbs_loans values (?,?,?,?,?,?,?)", [("T1","Mall","Fresno","5e7",40,"2026-09-01","u"),("T2","Mall ","Fresno","5e7",40,"","u")])
         c.commit(); c.close()
+    def test_f13_and_preserve_lei(self):
+        c = sqlite3.connect(self.db)
+        c.execute("create table f13_holdings (accession, filer, issuer_key, issuer, cusip, value real, shares real, putcall, period, source_url, status)")
+        c.executemany("insert into f13_holdings values (?,?,?,?,?,?,?,?,?,?,?)", [("a","W","echostar","E","c",5e6,1,"","Q","u",""),("b","W","echostar","E","c",3e6,1,"","Q","u",""),("c","S","echostar","E","c",5e5,1,"","Q","u","")])
+        c.execute(hg.DDL); c.execute("insert into holdings_graph (edge_type,src,dst) values ('lei_parent','x','y')"); c.commit()
+        hg.build(self.db)
+        f = c.execute("select src,weight from holdings_graph where edge_type='f13_holder'").fetchall()
+        self.assertEqual(f, [("W", 5.0)])
+        self.assertEqual(c.execute("select count(*) from holdings_graph where edge_type='lei_parent'").fetchone()[0], 1)
+
     def test_build(self):
         hg.build(self.db); c = sqlite3.connect(self.db)
         types = {r[0]: r[1] for r in c.execute("select edge_type,count(*) from holdings_graph group by 1")}

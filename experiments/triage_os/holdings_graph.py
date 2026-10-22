@@ -58,9 +58,20 @@ def cre_pari(con):
                     lst[0][4], ""))
     return out
 
+def f13_holders(con, keys=("echostar", "nfe", "clear_channel_outdoor", "qvc", "trinseo"), min_usd=1e6):
+    try:
+        rows = con.execute(f"""select filer, issuer_key, max(value), putcall, source_url, period from f13_holdings
+            where issuer_key in ({','.join('?' * len(keys))}) group by filer, issuer_key, putcall having max(value) >= ?""", (*keys, min_usd)).fetchall()
+    except sqlite3.OperationalError:
+        return []
+    return [("f13_holder", f, k, k, round(v / 1e6, 2), f"13F {pc or 'long'} ${v/1e6:.1f}m", url, per) for f, k, v, pc, url, per in rows]
+
+OWN = ("mark_dispersion", "crossholder", "forced_seller", "cre_pari_passu", "f13_holder")
+
 def build(db):
-    con = sqlite3.connect(db); con.execute(DDL); con.execute("delete from holdings_graph")
-    edges = mark_dispersion(con) + crossholders(con) + forced_sellers(con) + cre_pari(con)
+    con = sqlite3.connect(db); con.execute(DDL)
+    con.execute(f"delete from holdings_graph where edge_type in ({','.join('?' * len(OWN))})", OWN)
+    edges = mark_dispersion(con) + crossholders(con) + forced_sellers(con) + cre_pari(con) + f13_holders(con)
     con.executemany("insert into holdings_graph (edge_type,src,dst,issuer_key,weight,detail,evidence_url,period) values (?,?,?,?,?,?,?,?)", edges)
     con.commit(); con.close(); return len(edges)
 
