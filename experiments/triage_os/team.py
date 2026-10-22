@@ -294,10 +294,62 @@ def ic_secretary(case, inbox, llm=None):
                 next_action="Human IC: approve research conclusions / further diligence, or kill with reason",
                 payload={"recommendation": "REQUEST_DOCUMENTS" if unk else "REVIEW"})
 
+# --- Specialist roles (signal pack 2) -----------------------------------------
+# Each reads case["signal"]["evidence"]: a list of signals2-style rows
+# {signal, entity, value, detail, source_url, as_of}. Read-only; no contact.
+def _ev(case, *kinds):
+    return [e for e in case["signal"].get("evidence", []) if e.get("signal") in kinds]
+
+def _ev_claims(rows, confidence="inferred"):
+    return [{"text": f"{r['signal']}: {r.get('entity')}", "value": r.get("detail"), "source_url": r.get("source_url"),
+             "doc_page": "n/a", "as_of": r.get("as_of"), "confidence": confidence} for r in rows]
+
+def forced_seller_monitor(case, inbox, llm=None):
+    rows = _ev(case, "bdc_asset_coverage", "nport_outflow_stressed", "cross_markdown", "forced_seller")
+    hot = [r for r in rows if "BELOW" in (r.get("detail") or "") or "FORCED-SELLER" in (r.get("detail") or "") or r["signal"] == "cross_markdown"]
+    extra = _hook(llm, "forced_seller_monitor", case, inbox)
+    return dict(type="HANDOFF" if hot else "ABSTAIN", phase="ANALYZE",
+                summary=f"{len(hot)} forced-seller indicator(s) of {len(rows)} checked (coverage <170%, fund outflow + stressed holding, multi-holder markdown).",
+                claims=_ev_claims(hot) + extra.get("claims", []), unknowns=["actual sale intent", "covenant headroom in credit facility"],
+                skipped=["did not read BDC credit agreements"], risks=[] if hot else ["no seller constraint evidenced"],
+                to=["buyer_matcher", "verifier"], payload={"forced_seller_count": len(hot)})
+
+def trade_claims_desk(case, inbox, llm=None):
+    rows = _ev(case, "trade_claims_top20")
+    free = [r for r in rows if r.get("value")]
+    return dict(type="HANDOFF" if free else "ABSTAIN", phase="ANALYZE",
+                summary=f"{len(free)} free RECAP document(s) that may carry the top unsecured creditor list; creditor table not parsed.",
+                claims=_ev_claims(free), unknowns=["claim amounts", "disputed/contingent flags", "503(b)(9) status"],
+                skipped=["no PACER purchase (declined)", "no contact with any creditor"], risks=["individual creditors must be excluded"],
+                to=["buyer_matcher", "verifier"], payload={"free_docs": len(free)})
+
+def exposure_mapper(case, inbox, llm=None):
+    rows = _ev(case, "exposure_10k_mention", "cmbs_tenant_distress")
+    cps = sorted({r.get("entity") for r in rows})
+    return dict(type="HANDOFF" if rows else "ABSTAIN", phase="RESOLVE",
+                summary=f"{len(cps)} counterparty/property exposure candidate(s) from 10-K concentration text and CMBS rent rolls.",
+                claims=_ev_claims(rows), unknowns=["revenue share actually attributable", "lease guarantees"],
+                skipped=["did not read full 10-K concentration notes"], risks=["name-match false positives"],
+                to=["credit_analyst", "verifier"], payload={"exposed": cps})
+
+def investor_relations(case, inbox, llm=None):
+    """Drafts an internal/investor update from the case; never sends. Human gate required."""
+    cited = [c for m in inbox for c in m["claims"] if c.get("source_url")]
+    draft = "DO NOT SEND - DRAFT\n" + f"Case {case['case_id']} ({case['signal'].get('entity')}): {len(cited)} cited claim(s); status {case['status']}."
+    return dict(type="REQUEST", phase="IC_PACK", summary="Investor-update draft prepared (DO NOT SEND). Human approval required before any external use.",
+                claims=[], unknowns=[], skipped=["no email or post sent"], risks=["MNPI / selective-disclosure review needed"],
+                to=[HUMAN], requires_human=True, next_action="Human: review draft; only a DECISION may approve external use",
+                payload={"draft": draft})
+
+SPECIALISTS = ("forced_seller_monitor", "trade_claims_desk", "exposure_mapper", "investor_relations")
+
 ROLES = {"signal_scout": signal_scout, "entity_graph": entity_graph,
          "credit_analyst": credit_analyst, "property_analyst": property_analyst,
          "valuation": valuation, "contrarian": contrarian, "verifier": verifier,
-         "buyer_matcher": buyer_matcher, "ic_secretary": ic_secretary}
+         "buyer_matcher": buyer_matcher, "ic_secretary": ic_secretary,
+         "forced_seller_monitor": forced_seller_monitor, "trade_claims_desk": trade_claims_desk,
+         "exposure_mapper": exposure_mapper, "investor_relations": investor_relations}
+FULL_READ_ROLES = FULL_READ_ROLES | {"investor_relations"}
 
 # --- Desk Lead -----------------------------------------------------------------
 class DeskLead:
@@ -316,6 +368,10 @@ class DeskLead:
     def _set(self, case, **changes):
         case.update(changes)
         return self.store.write(case["case_id"], DESK_LEAD, case)
+
+    def specialist_pass(self, case):
+        """Run the four specialist roles on an existing case; posts to the bus only."""
+        return [self._run(r, case) for r in SPECIALISTS]
 
     def kill(self, case, reason, note):
         if reason not in REJECTION_REASONS:
@@ -385,3 +441,10 @@ def external_action(bus, case_id, action):
         if m["from"] == HUMAN and p.get("decision") == "APPROVE" and action in p.get("approved_actions", []):
             return {"permitted": True, "action": action, "approver": p["approver"]}
     raise HumanGateRequired(f"'{action}' blocked: no human DECISION approving it")
+
+
+def evidence_from_db(con, like):
+    """signals2 rows whose entity/key matches `like` (SQL LIKE), as role evidence dicts."""
+    cur = con.execute("select signal, entity, value, detail, source_url, as_of from signals2 where lower(entity) like ? or lower(key) like ?",
+                      (like.lower(), like.lower()))
+    return [dict(zip(("signal", "entity", "value", "detail", "source_url", "as_of"), r)) for r in cur]

@@ -141,5 +141,32 @@ class HumanGateTests(Base):
         c = team.record_decision(self.bus, self.store, case["case_id"], "arslane", "REJECT", note="no asset")
         self.assertEqual(c["rejection_reason"], "HUMAN_REJECTED")
 
+class SpecialistTests(Base):
+    def test_specialists_post_and_gate(self):
+        ev = [{"signal": "bdc_asset_coverage", "entity": "X", "value": 145, "detail": "BELOW 170%", "source_url": "https://data.sec.gov/x", "as_of": "2026-06-30"},
+              {"signal": "trade_claims_top20", "entity": "X", "value": 1, "detail": "free", "source_url": "https://www.courtlistener.com/d", "as_of": "2026-07-01"},
+              {"signal": "exposure_10k_mention", "entity": "Y Corp", "value": 1, "detail": "10%", "source_url": "https://www.sec.gov/y", "as_of": "2026-02-01"}]
+        lead = team.DeskLead(self.bus, self.store)
+        case = team.new_case(dict(SIGNAL, evidence=ev))
+        self.store.root.joinpath(case["case_id"]).mkdir(parents=True, exist_ok=True)
+        case = lead._set(case)
+        out = lead.specialist_pass(case)
+        self.assertEqual([m["from"] for m in out], list(team.SPECIALISTS))
+        self.assertEqual(out[0]["type"], "HANDOFF"); self.assertEqual(out[0]["payload"]["forced_seller_count"], 1)
+        self.assertEqual(out[2]["payload"]["exposed"], ["Y Corp"])
+        ir = out[3]
+        self.assertTrue(ir["requires_human"]); self.assertTrue(ir["payload"]["draft"].startswith("DO NOT SEND - DRAFT"))
+        with self.assertRaises(team.GateError):
+            team.external_action(self.bus, case["case_id"], "send_investor_update")
+    def test_abstain_without_evidence(self):
+        case = team.new_case(SIGNAL)
+        self.assertEqual(team.forced_seller_monitor(case, [])["type"], "ABSTAIN")
+        self.assertEqual(team.trade_claims_desk(case, [])["type"], "ABSTAIN")
+    def test_evidence_from_db(self):
+        con = sqlite3.connect(":memory:")
+        con.execute("create table signals2 (signal, entity, key, value, detail, source_url, as_of, status)")
+        con.execute("insert into signals2 values ('cross_markdown','Pluralsight','pluralsight',19,'d','https://x','2026-06-30','U')")
+        self.assertEqual(team.evidence_from_db(con, "%pluralsight%")[0]["signal"], "cross_markdown")
+
 if __name__ == "__main__":
     unittest.main()
