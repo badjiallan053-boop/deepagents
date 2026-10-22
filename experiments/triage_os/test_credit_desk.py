@@ -1,0 +1,13 @@
+import json, os, subprocess, sys
+HERE = os.path.dirname(os.path.abspath(__file__))
+def test_flagship_json():
+    d = json.load(open("/workspace/triage_os_data/flagship.json"))
+    assert len(d["partners"]) == 10 and len(d["tiers"]) >= 3 and d["ledger"]["ok"]
+def test_quant_gate():
+    sys.path.insert(0, HERE); import team
+    assert team.quant_validation_gate(dict(status="KILLED", oos=dict(n=50), oos_start="2019-01-01", pit=True))[0] is False
+    assert len(team.DESK_AGENTS) == 6
+def test_anchor_idempotent():
+    r1 = subprocess.run([sys.executable, "anchor_ledger.py"], cwd=HERE, capture_output=True, text=True, timeout=300)
+    r2 = subprocess.run([sys.executable, "anchor_ledger.py"], cwd=HERE, capture_output=True, text=True, timeout=300)
+    assert r1.returncode == 0 and r2.returncode == 0 and "unchanged" in r2.stdout

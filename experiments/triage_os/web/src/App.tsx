@@ -14,6 +14,7 @@ type Edge = { edge_id: string; type: string; src: string; dst: string; detail: s
 type Hit = { seq: number; ts_utc: string; entity: string; kind: string; prediction: string; value: number; source_url: string; hash: string }
 
 const NAV = [
+  { r: "home", label: "Credit & Forced Sellers", icon: Crosshair },
   { r: "overview", label: "Overview", icon: LayoutDashboard },
   { r: "situations", label: "Situations", icon: Gavel },
   { r: "marks", label: "Marks monitor", icon: TrendingDown },
@@ -33,7 +34,7 @@ const MARK_KW: Record<string, string> = { medallia: "Medallia", omnis: "Omnis", 
 const SIT_META: Record<string, { court: string; stage: string }> = { hughes: { court: "Bankr. S.D. Tex.", stage: "Ch. 11 · exclusivity contested" } }
 
 function useRoute(): [string, (r: string) => void] {
-  const get = () => decodeURIComponent(location.hash.replace(/^#\/?/, "")) || "overview"
+  const get = () => decodeURIComponent(location.hash.replace(/^#\/?/, "")) || "home"
   const [r, setR] = useState(get())
   useEffect(() => { const h = () => setR(get()); window.addEventListener("hashchange", h); return () => window.removeEventListener("hashchange", h) }, [])
   return [r, (n: string) => { location.hash = "/" + n }]
@@ -50,7 +51,7 @@ export default function App() {
     {params.get("src") && sits && <OpenSource id={params.get("src")!} sits={sits} />}
     <div className="flex h-full flex-col">
       <header className="flex h-11 shrink-0 items-center gap-4 border-b border-line bg-panel px-4">
-        <a href="#/overview"><Wordmark /></a>
+        <a href="#/home"><Wordmark /></a>
         <span className="h-4 w-px bg-line2" />
         <span className="text-[11px] uppercase tracking-[0.14em] text-mute">Special Situations Terminal</span>
         <button onClick={() => setPal(true)} className="ml-6 flex h-7 w-[380px] items-center gap-2 rounded-[3px] border border-line2 bg-bg px-2.5 text-[12px] text-dim hover:border-amber/50"><Cmd size={13} />Search issuers, holders, situations…<kbd className="ml-auto rounded border border-line2 px-1 font-mono text-[10px]">Ctrl K</kbd></button>
@@ -68,6 +69,7 @@ export default function App() {
           <div className="border-t border-line px-4 pt-2 text-[10px] leading-relaxed text-dim">Companies only. Public, primary sources. Not investment advice.</div>
         </nav>
         <main className="min-w-0 flex-1 overflow-auto">
+          {top === "home" && <Home />}
           {top === "overview" && <Overview sits={sits} stats={stats} />}
           {top === "situations" && <Situations sits={sits} />}
           {top === "situation" && sits && <SituationView s={sits.find(s => s.key === base.split("/")[1]) ?? sits[0]} />}
@@ -218,6 +220,21 @@ type CStat = { cagr: number; vol: number; sharpe: number; maxdd: number }
 type CJ = { paper: string; chain_ok: boolean; n: number; roles: string[]; backtest: Record<string, { full: Record<string, CStat>; oos_2021: Record<string, CStat>; committee_calls: number; committee_beat_ew_pct: number }>;
   ledger: { kind: string; instrument: string; call: string; entry: number; entry_date: string; thesis: string; exit_rule: string; benchmark: string; hash: string; logged_at: string }[];
   licensing: { jur: string; url: string; grade: string; quote: string; meaning: string }[] }
+type FJ = { asof: string; positioning: string; tiers: [string, string][]; partners: { region: string; firm: string; situation: string }[]; crowded: { name: string; country: string; short_pct: number; asof: string }[]; ledger: { n: number; ok: boolean }; kept: string[]; killed: string[]; pit: Record<string, any>; situations: { entity: string; country: string; date: string; basis: string }[] }
+function Home() {
+  const { data: J } = useApi<FJ>("/api/flagship")
+  if (!J || !J.tiers) return <div className="p-6 text-mute">Loading…</div>
+  return <div className="space-y-5 p-6">
+    <PageHead kicker={`TRIAGE OS · Credit & Forced-Seller Intelligence · ${J.asof}`} title={J.positioning} sub="Worldwide restructuring calendar, control maps and forced sellers. The cross-asset radar is macro and forced-flow context, not an alpha claim. Public sources; not investment advice." />
+    <Card title={`Restructuring calendar — next ${J.situations.length} dated catalysts`}><table className="w-full text-[12px]"><tbody>{J.situations.map((s, i) => <tr key={i} className="border-t border-line"><td className="num py-1 pr-3 text-amber">{s.date}</td><td className="pr-3">{s.entity}</td><td className="pr-3 text-mute">{s.country}</td><td className="text-mute">{s.basis}</td></tr>)}</tbody></table></Card>
+    <div className="grid grid-cols-2 gap-5">
+      <Card title="Crowded shorts — forced buy-in watch (AMF / AFM registers)"><table className="w-full text-[12px]"><tbody>{J.crowded.map(c => <tr key={c.name} className="border-t border-line"><td className="py-1">{c.name}</td><td className="text-mute">{c.country}</td><td className="num text-right">{c.short_pct.toFixed(2)}%</td><td className="num pl-3 text-mute">{c.asof}</td></tr>)}</tbody></table><div className="mt-2 text-[11px] text-dim">Risk flag only: the &gt;5% crossing signal was killed out of sample.</div></Card>
+      <Card title="Credibility"><ul className="space-y-1.5 text-[12px]"><li>Forward ledger: <b>{J.ledger.n}</b> paper calls, hash chain {J.ledger.ok ? "verified" : "BROKEN"}, anchored daily (OpenTimestamps).</li><li>Kept signals: <b>{J.kept.join(", ") || "none"}</b></li><li>Killed (shown, not hidden): {J.killed.join(", ")}</li><li>Point-in-time: {J.pit?.summary ?? "pending"}</li></ul></Card>
+      <Card title="Pricing (judgement)"><table className="w-full text-[12px]"><tbody>{J.tiers.map(t => <tr key={t[0]} className="border-t border-line"><td className="py-1">{t[0]}</td><td className="num text-right">{t[1]}</td></tr>)}</tbody></table></Card>
+      <Card title="First 10 design-partner targets (firms only, nothing sent)"><table className="w-full text-[12px]"><tbody>{J.partners.map(p => <tr key={p.firm} className="border-t border-line"><td className="py-1 pr-2 text-mute">{p.region}</td><td className="pr-2">{p.firm}</td><td className="text-mute">{p.situation}</td></tr>)}</tbody></table></Card>
+    </div>
+  </div>
+}
 function Committee() {
   const { data: J } = useApi<CJ>("/api/committee")
   if (!J || !J.backtest) return <div className="p-6 text-mute">Loading…</div>

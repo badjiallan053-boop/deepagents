@@ -448,3 +448,32 @@ def evidence_from_db(con, like):
     cur = con.execute("select signal, entity, value, detail, source_url, as_of from signals2 where lower(entity) like ? or lower(key) like ?",
                       (like.lower(), like.lower()))
     return [dict(zip(("signal", "entity", "value", "detail", "source_url", "as_of"), r)) for r in cur]
+
+# --- Desk agents added 23 Oct 2026 (created by the user; roles recorded here) ---------------------------
+DESK_AGENTS = {
+    "quant_validation": dict(veto=True, owns=["signals.py", "committee_v2.py", "backtest hygiene"],
+        charter="Backtest hygiene for every signal and committee: point-in-time data (ALFRED vintages), publication lags, "
+                "survivorship, multiple testing, costs and capacity, kill rule. May only veto, never add. Nothing reaches the "
+                "PDF, the app or the ledger without its pass."),
+    "commodities_shipping": dict(veto=False, owns=["EIA", "SHFE/CME/LME stocks", "Comtrade", "AIS (gap)"],
+        charter="Physical-flow data and commodity signals; weekly balances and squeeze watchlist."),
+    "crypto_flows": dict(veto=False, owns=["stablecoins", "funding/OI", "ETF flows", "unlocks", "estate & government wallets"],
+        charter="Mechanical crypto supply/demand, including estate distributions as forced sellers."),
+    "macro_regime": dict(veto=False, owns=["regime dashboard", "ALFRED vintages"],
+        charter="Dalio-style regime with point-in-time data; supplies the macro context to the credit product."),
+    "mining_geologist": dict(veto=False, owns=["BLM MLRS", "USGS/GA deposits", "Sentinel/FIRMS sites"],
+        charter="Joins deposits, tenure and owners; maintains staking and site-activity layers."),
+    "ledger_compliance": dict(veto=True, owns=["anchor_ledger.py", "verify_ledger.py", "licensing memo"],
+        charter="Daily OpenTimestamps anchor (routine 23:30 SGT), chain checks, keeps output impersonal; vetoes anything that "
+                "reads as personalised advice."),
+}
+
+def quant_validation_gate(signal):
+    """Veto unless a signal is KEPT, has >= 8 OOS events, states its OOS start, and declares point-in-time handling.
+    Returns (passed, reasons). Used before a signal is shown as a recommendation-grade item."""
+    reasons = []
+    if signal.get("status") != "KEPT": reasons.append(f"status {signal.get('status')}")
+    if (signal.get("oos") or {}).get("n", 0) < 8: reasons.append("fewer than 8 OOS events")
+    if not signal.get("oos_start"): reasons.append("no stated OOS period")
+    if not signal.get("pit"): reasons.append("not point-in-time (revised data or undeclared)")
+    return (not reasons), reasons
