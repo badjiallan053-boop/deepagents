@@ -21,6 +21,7 @@ const NAV = [
   { r: "control", label: "Control", icon: Crosshair },
   { r: "systemic", label: "Systemic radar", icon: Radar },
   { r: "world", label: "World", icon: Globe2 },
+  { r: "bottleneck", label: "Bottleneck Hunt", icon: Network },
   { r: "signals", label: "Signal Library", icon: Activity },
   { r: "radar", label: "Cross-Asset Radar", icon: Globe2 },
   { r: "committee", label: "Alpha Committee", icon: Gavel },
@@ -70,6 +71,7 @@ export default function App() {
         </nav>
         <main className="min-w-0 flex-1 overflow-auto">
           {top === "home" && <Home />}
+          {top === "bottleneck" && <Bottleneck />}
           {top === "overview" && <Overview sits={sits} stats={stats} />}
           {top === "situations" && <Situations sits={sits} />}
           {top === "situation" && sits && <SituationView s={sits.find(s => s.key === base.split("/")[1]) ?? sits[0]} />}
@@ -233,6 +235,17 @@ function Home() {
       <Card title="Pricing (judgement)"><table className="w-full text-[12px]"><tbody>{J.tiers.map(t => <tr key={t[0]} className="border-t border-line"><td className="py-1">{t[0]}</td><td className="num text-right">{t[1]}</td></tr>)}</tbody></table></Card>
       <Card title="First 10 design-partner targets (firms only, nothing sent)"><table className="w-full text-[12px]"><tbody>{J.partners.map(p => <tr key={p.firm} className="border-t border-line"><td className="py-1 pr-2 text-mute">{p.region}</td><td className="pr-2">{p.firm}</td><td className="text-mute">{p.situation}</td></tr>)}</tbody></table></Card>
     </div>
+  </div>
+}
+type BC = { t: string; name: string; choke: string; chain: string; fact: string; cat: [string, string]; risks: string; kill: string; mcap_usd: number; r12m: number | null; score: number; grade: string; contrarian: string; ev: string[] }
+function Bottleneck() {
+  const { data: J } = useApi<{ top: BC[]; base: { sub300: Record<string, number> }; ledger_ok: boolean }>("/api/bottleneck")
+  if (!J || !J.top) return <div className="p-6 text-mute">Loading…</div>
+  const b = J.base.sub300
+  return <div className="space-y-5 p-6">
+    <PageHead kicker="Bottleneck Hunt · research only · paper WATCH calls" title="Small companies inside supply chokepoints" sub="Asymmetric setups, not promises. Nothing here claims 100x. Every name is vetoed by Quant Validation as recommendation-grade." />
+    <Card title="Base rate: chokepoint small caps, entry cap under $300m, 12-month window (survivorship-biased upward)"><div className="grid grid-cols-5 gap-4 text-[12px]"><Stat label="Touched 10x" value={`${b.touch_10x_pct}%`} /><Stat label="Still ≥10x at 12m" value={`${b.hold_10x_pct}%`} /><Stat label="Touched 2x" value={`${b.touch_2x_pct}%`} /><Stat label="Lost ≥50%" value={`${b.lose_50_pct}%`} /><Stat label="Median max drawdown" value={`${b.median_maxdd}%`} /></div></Card>
+    <Card title={`Top 15 (ledger chain ${J.ledger_ok ? "verified" : "BROKEN"})`}><table className="w-full text-[12px]"><thead><tr className="text-mute"><td>#</td><td>Company</td><td>Chain</td><td className="text-right">Mcap $m</td><td className="text-right">12m</td><td className="text-right">Score</td><td>Grade</td><td>Catalyst</td><td>Kill if</td></tr></thead><tbody>{J.top.map((c, i) => <tr key={c.t} className="border-t border-line align-top"><td className="py-1 pr-2">{i + 1}</td><td className="pr-2"><b>{c.name}</b><div className="text-mute">{c.t}</div></td><td className="pr-2 text-mute">{c.chain}<div className="mt-1">{c.ev.map(u => <a key={u} className="mr-2 text-info" href={u} target="_blank">src</a>)}</div></td><td className="num text-right">{c.mcap_usd}</td><td className="num text-right">{c.r12m ?? "–"}%</td><td className="num text-right">{c.score}</td><td>{c.grade}</td><td className="pr-2"><span className="num text-amber">{c.cat[0]}</span> {c.cat[1]}</td><td className="text-mute">{c.kill}</td></tr>)}</tbody></table></Card>
   </div>
 }
 function Committee() {

@@ -11,3 +11,7 @@ def test_anchor_idempotent():
     r1 = subprocess.run([sys.executable, "anchor_ledger.py"], cwd=HERE, capture_output=True, text=True, timeout=300)
     r2 = subprocess.run([sys.executable, "anchor_ledger.py"], cwd=HERE, capture_output=True, text=True, timeout=300)
     assert r1.returncode == 0 and r2.returncode == 0 and "unchanged" in r2.stdout
+def test_bottleneck():
+    d = json.load(open("/workspace/triage_os_data/bottleneck.json"))
+    assert len(d["top"]) == 15 and d["ledger_ok"] and all(c["kill"] and c["cat"][0] for c in d["top"])
+    assert "100x" not in json.dumps(d["top"]).replace("claims 100x", "")
