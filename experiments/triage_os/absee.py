@@ -72,3 +72,42 @@ def store(con, rows):
     con.executemany(f"insert or replace into cmbs_loans values ({','.join('?' * len(COLS))})",
                     [[r[c] for c in COLS] for r in rows])
     return len(rows)
+
+
+# --- wider coverage: discover recent CMBS ABS-EE filings and roll up per trust ---------
+def discover(ua, start, end, fetch_json, max_pages=10):
+    """EDGAR full-text search for ABS-EE filings; returns [(entity, cik, accession)] newest first."""
+    import urllib.parse
+    seen, out = set(), []
+    for page in range(max_pages):
+        q = urllib.parse.urlencode({"q": '"mortgage trust"', "forms": "ABS-EE", "startdt": start, "enddt": end, "from": page * 100})
+        hits = fetch_json(f"https://efts.sec.gov/LATEST/search-index?{q}", {"User-Agent": ua}).get("hits", {}).get("hits", [])
+        if not hits:
+            break
+        for h in hits:
+            s = h["_source"]
+            acc = h["_id"].split(":")[0]
+            cik = str(int(s["ciks"][0]))
+            if acc in seen:
+                continue
+            seen.add(acc)
+            out.append((s["display_names"][0], cik, acc, s.get("file_date", "")))
+    return sorted(out, key=lambda x: x[3], reverse=True)
+
+
+def trust_rollup(con, asof="2026-10-22", fresh_days=120):
+    """Per trust: loans, balance, share of balance in special servicing / delinquent, and fresh SS transfers."""
+    import datetime as dt
+    cutoff = (dt.date.fromisoformat(asof) - dt.timedelta(days=fresh_days)).isoformat()
+    rows = con.execute("""select trust, count(*), sum(cast(reportPeriodEndActualBalanceAmount as real)),
+        sum(case when mostRecentSpecialServicerTransferDate<>'' then cast(reportPeriodEndActualBalanceAmount as real) else 0 end),
+        sum(case when paymentStatusLoanCode not in ('','0','A','B') then cast(reportPeriodEndActualBalanceAmount as real) else 0 end),
+        sum(case when mostRecentSpecialServicerTransferDate>=? then 1 else 0 end), max(source_url)
+        from cmbs_loans group by trust""", (cutoff,)).fetchall()
+    out = []
+    for t, n, bal, ss, dq, fresh, url in rows:
+        bal = bal or 0
+        out.append({"trust": t, "loans": n, "balance_m": round(bal / 1e6, 1),
+                    "ss_pct": round(100 * (ss or 0) / bal, 1) if bal else 0.0,
+                    "dq_pct": round(100 * (dq or 0) / bal, 1) if bal else 0.0, "fresh_ss": fresh, "url": url})
+    return sorted(out, key=lambda r: (-r["ss_pct"], -r["dq_pct"]))

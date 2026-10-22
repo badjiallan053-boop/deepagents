@@ -33,13 +33,13 @@ SEC_ITEMS = {
     "1.03": 40,  # Bankruptcy or receivership
     "2.04": 30,  # Triggering events accelerating an obligation
     "2.06": 20,  # Material impairments
-    "3.01": 20,  # Delisting / failure to satisfy listing rule
+    "3.01": 8,   # Delisting notice: 13% precision in backtest; text decides (see score_301)
     "4.02": 15,  # Non-reliance on prior financials
     "2.05": 10,  # Exit or disposal costs
     "5.02": 5,   # Officer/director departures
     "1.02": 10,  # Termination of a material definitive agreement
 }
-CHAPTER_POINTS = {7: 15, 11: 20, 15: 10}
+CHAPTER_POINTS = {7: 20, 11: 20, 15: 10}   # ch7 trustee sales: 11/11 missed at 15 in backtest
 SEC_FORMS = {"8-K", "10-K", "10-Q", "6-K", "20-F"}
 
 def now():
@@ -101,8 +101,26 @@ def score(title):
     value = sum(points for term, points in TERMS.items() if term in (title or "").lower())
     return min(100, value)
 
-def score_sec_items(items):
-    return sum(SEC_ITEMS.get(str(i).strip(), 0) for i in (items or []))
+# Item 3.01 is mostly benign (listing transfers, mergers, cured bid-price notices).
+# Only distress wording lifts it over the flag threshold.
+BENIGN_301 = re.compile(r"transfer (?:its|the) listing|voluntar(?:il)?y (?:to )?delist|in connection with the (?:merger|closing)|"
+                        r"regained compliance|completion of the (?:merger|acquisition)|uplist", re.I)
+DISTRESS_301 = re.compile(r"chapter 11|bankruptcy|stockholders.? equity requirement|suspend(?:ed)? trading|trading (?:will be|was) suspended|"
+                          r"determin(?:ed|ation) to delist|form 25|hearings panel (?:denied|determined)|going concern|"
+                          r"failure to (?:timely )?file|market value of listed securities", re.I)
+
+def score_301(text):
+    text = text or ""
+    if BENIGN_301.search(text):
+        return 0
+    return 25 if DISTRESS_301.search(text) else SEC_ITEMS["3.01"]
+
+def score_sec_items(items, text=None):
+    total = 0
+    for i in (items or []):
+        i = str(i).strip()
+        total += score_301(text) if i == "3.01" and text is not None else SEC_ITEMS.get(i, 0)
+    return total
 
 def score_court_item(item):
     text = " ".join(filter(None, [item.get("caseName"), item.get("cause"),
@@ -118,7 +136,7 @@ def score_court_item(item):
 
 def signal_score(source, title, raw):
     if source == "sec":
-        return min(100, score(title) + score_sec_items(raw.get("items")))
+        return min(100, score(title) + score_sec_items(raw.get("items"), raw.get("text") or title))
     if source == "courtlistener":
         return min(100, score_court_item(raw))
     return score(title)

@@ -21,5 +21,20 @@ class T(unittest.TestCase):
         self.assertEqual(absee.store(con, rows), 2)
 
 
+
+
+
+class Rollup(unittest.TestCase):
+    def test_trust_rollup(self):
+        import sqlite3
+        con = sqlite3.connect(":memory:")
+        base = {c: "" for c in absee.COLS}
+        r1 = dict(base, trust="T", accession="a", assetNumber="1", reportPeriodEndActualBalanceAmount="100",
+                  mostRecentSpecialServicerTransferDate="2026-09-01", paymentStatusLoanCode="3")
+        r2 = dict(base, trust="T", accession="a", assetNumber="2", reportPeriodEndActualBalanceAmount="300", paymentStatusLoanCode="0")
+        absee.store(con, [r1, r2])
+        r = absee.trust_rollup(con, asof="2026-10-22")[0]
+        self.assertEqual((r["ss_pct"], r["dq_pct"], r["fresh_ss"]), (25.0, 25.0, 1))
+
 if __name__ == "__main__":
     unittest.main()

@@ -129,3 +129,36 @@ def export(rows, path, n=50):
             w.writerow([i, e["score"], e["name"], e["key"], ";".join(sorted(e["signals"])), e["n_types"],
                         round(e["debt"] / 1e6) if e["debt"] else "", round(e["lender_fv"] / 1e6, 1) if e["lender_fv"] else "",
                         e["filed"], *(ev + ["", "", ""])[:3], "unverified"])
+
+def load_exclusions(path):
+    """CSV key,reason,source_url,date - names a human or evidence removed (e.g. acquisition closed)."""
+    import os
+    if not path or not os.path.exists(path):
+        return {}
+    return {r["key"]: r for r in csv.DictReader(open(path, encoding="utf-8"))}
+
+def export_filtered(con, path, user_agent, n=50, fetch=None, bdc_ciks=(), exclusions=None):
+    """Rebuild, drop names already in Chapter 11 (8-K 1.03 / XBRL LSTC / DIP) and evidenced
+    exclusions (acquired, refinanced), export top n."""
+    import desk, inch11
+    ex = exclusions or {}
+    rows = [e for e in build(con, bdc_ciks) if e["key"] not in ex]
+    log = []
+    kept = inch11.filter_watchlist(rows, fetch or desk.get_json, desk._sec_headers(user_agent), n=n, log=log)
+    for e in kept:
+        e["filed"] = False
+    export(kept, path, n)
+    return kept, log
+
+if __name__ == "__main__":
+    import argparse, sqlite3
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--db", required=True); ap.add_argument("--out", required=True)
+    ap.add_argument("--user-agent", required=True); ap.add_argument("-n", type=int, default=50)
+    ap.add_argument("--exclusions", default=None)
+    a = ap.parse_args()
+    kept, log = export_filtered(sqlite3.connect(a.db), a.out, a.user_agent, a.n, exclusions=load_exclusions(a.exclusions))
+    for name, r in log:
+        if r["status"] != "clear":
+            print(r["status"], name, r["evidence"][:2])
+    print("kept", len(kept))
