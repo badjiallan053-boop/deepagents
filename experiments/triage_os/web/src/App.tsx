@@ -263,13 +263,14 @@ function Live() {
   </div>
 }
 function EdgeLab() {
-  const { data: J } = useApi<{ playbook: Record<string, string>[]; results: Record<string, any>; overlooked: Record<string, string>[]; live: Record<string, any>[] }>("/api/edge")
+  const { data: J } = useApi<{ playbook: Record<string, string>[]; results: Record<string, any>; overlooked: Record<string, string>[]; live: Record<string, any>[]; pass5?: string[] }>("/api/edge")
   if (!J || !J.playbook) return <div className="p-6 text-mute">Loading…</div>
   const tone = (s: string) => s.startsWith("KEPT") ? "text-up" : s.startsWith("KILLED") ? "text-down" : "text-amber"
   return <div className="space-y-5 p-6">
     <PageHead kicker="Edge Lab · research only · paper ledger" title="How the big funds find edge, and what survives our tests" sub="Filing-date point-in-time events from EDGAR, costs, out-of-sample from 2022, kill rule enforced. One mechanism survives; it is an avoid/risk signal because borrow is scarce." />
     <Card title="Backtests"><table className="w-full text-[12px]"><thead><tr className="text-mute"><td>Mechanism</td><td>Status</td><td className="text-right">OOS n</td><td className="text-right">OOS prec</td><td className="text-right">OOS mean</td><td className="text-right">OOS median</td><td className="text-right">IS mean</td></tr></thead><tbody>{Object.entries(J.results).map(([k, v]) => <tr key={k} className="border-t border-line"><td className="py-1 pr-2">{k}</td><td className={tone(v.status)}>{v.status}</td><td className="num text-right">{v.OOS?.n ?? "–"}</td><td className="num text-right">{v.OOS?.precision ?? "–"}%</td><td className="num text-right">{v.OOS?.mean ?? "–"}%</td><td className="num text-right">{v.OOS?.median ?? "–"}%</td><td className="num text-right">{v.IS?.mean ?? "–"}%</td></tr>)}</tbody></table></Card>
     <Card title="Big-funds playbook"><table className="w-full text-[12px]"><tbody>{J.playbook.map(p => <tr key={p.fund} className="border-t border-line align-top"><td className="py-1 pr-2 font-semibold">{p.fund}</td><td className="pr-2">{p.mechanism}</td><td className="pr-2 text-mute">{p.free}</td><td>{p.grade}</td></tr>)}</tbody></table></Card>
+    {J.pass5 && <Card title="Pass 5: substitutes, non-US insiders, connector checks"><ul className="space-y-1.5 text-[12px]">{J.pass5.filter(l => l.startsWith("- ") || l.startsWith("| PEAD")).map((l, i) => <li key={i}>{l.replace(/^- /, "").replace(/\*\*/g, "")}</li>)}</ul></Card>}
     <Card title="Overlooked audit"><ul className="space-y-1.5 text-[12px]">{J.overlooked.map(o => <li key={o.item}><b>{o.item}</b>: {o.why} <span className="text-amber">{o.status}</span></li>)}</ul></Card>
     <Card title="Live AVOID / paper SHORT-WATCH (M5 late filers)"><table className="w-full text-[12px]"><tbody>{J.live.map(r => <tr key={r.ticker} className="border-t border-line"><td className="py-1 pr-2">{r.ticker}</td><td className="pr-2">{r.company}</td><td className="num pr-2">{r.filed}</td><td className="pr-2 text-mute">{r.deadline_note}</td><td><a className="text-info" href={r.src} target="_blank">filing</a></td></tr>)}</tbody></table></Card>
   </div>

@@ -240,7 +240,22 @@ Paper AVOID / SHORT-WATCH calls from M5 (NT 10-K filed in the last 60 days, pric
 ## 9. Gaps and access notes
 
 - **London Strategic Edge:** the free key is issued only through the website sign-up at https://londonstrategicedge.com/data. There is no programmatic issuance in the client (lse-data, MIT). Stopped for the user. Once a key is saved under /workspace/triage_os_data/.secrets, LSE can fill the survivorship gap (delisted US names back to 2003), add options greeks and insider data, and cross-check macro history.
-- **Non-US insider data (UK PDMR, ASX Appendix 3Y, Japan large-holder reports):** not ingested this pass; Apify actors not run. Apify $0 and Crustdata 0 credits spent.
-- **Not built:** PEAD (XBRL EPS vs seasonal random walk), fallen angels from rating-agency releases, index deletions from S&P DJI / FTSE Russell notices, and merger arb (8-K 1.01 + DEFM14A). All are queued.
-- **Connector checks** (Crustdata/Apollo/Clay headcount, X crowding, Ahrefs traffic): not run this pass.
+- **This pass (5):** see section 10.
 - **Live layer:** live_service.py polls Yahoo every 2 min in market hours and every 30 min otherwise. Quotes may be delayed 15–20 min (shown per symbol). Served at /api/live and in the Live tab.
+
+## 10. Pass 5: free substitutes, non-US insiders, connector checks (23 Oct 2026, 04:47–05:10 SGT)
+
+| Test | Status | IS n / prec / mean / median | OOS n / prec / mean / median | OOS t | Coverage |
+|---|---|---|---|---|---|
+| PEAD long, top-decile SUE (60d vs IWM, 20bp) | **KILLED** | 244 / 46% / 0.57% / -1.07% | 556 / 45% / -0.38% / -2.69% | -0.31 | 89% |
+| PEAD short, bottom-decile SUE (60d vs IWM, 20bp) | **KEPT** | 232 / 59% / 1.77% / 3.98% | 548 / 59% / 3.33% / 4.45% | 2.69 | 88% |
+
+- **PEAD build:** SEC XBRL frames (EarningsPerShareBasic, quarterly), surprise = seasonal random walk scaled by the stdev of the last 8 seasonal changes; dated by the 10-Q filing date from form.idx; decile within filing month. Q4 is omitted (10-K frames are annual). The short leg is KEPT before borrow costs; tickers come from today's SEC list, so dead firms are missing and the short result is biased DOWN (conservative). The long leg is KILLED.
+- **Fallen angels, index deletions, merger arb:** NOT built. S&P and Moody's press-release archives need a login; S&P DJI/FTSE Russell notice pages are JS-only; merger-arb targets are exactly the names Yahoo drops on completion, so a test without delisted prices would be meaningless. LSE was meant to fix that (below).
+- **London Strategic Edge:** LSE_API_KEY is set, but its value is a template line (an 'export ...="lse_..."' with a '...' placeholder and a comment), not a key. The API answered 'invalid api key' on /vault/usage. 0 of 10 hourly downloads used. Survivorship, greeks and insider data via LSE were NOT done.
+- **UK PDMR (Investegate company pages, FTSE 100 sample, 2020–2026):** scraping runs in the background at about 1 request/s; the cluster test is pending. The search page is reCAPTCHA-protected and was not bypassed. The purchase parser is noisy (award and acquisition wording).
+- **Apify (spend log):** Japan 5% large-holder filings, Oct 1–22 2026, 37 rows (11 flagged potential activist), about $1.85. ASX announcements for 20 critical-minerals names, 50 rows (2 'Final Director's Interest Notice', no 3Y buys), about $0.25. **Total about $2.10 of $15.** These are recent snapshots only, so they cannot backtest; none of the 37 Japan issuers is a BNF watch, so the BNF-JP insider filter is UNTESTED. Historical EDINET needs a free key, which requires a sign-up.
+- **Crustdata (18 of 300 credits; the account balance was only 30, now 12):** headcount YoY: SoftBank +6.7%, SMIC +1.3%, Kokusai +9.0%, Furukawa +7.0%, Coherent +8.2%, Lumentum +3.8%, Lynas +5.2%. Kioxia and SUMCO matched European sales subsidiaries, so ignore them. Web traffic MoM (from Crustdata, standing in for Ahrefs): SMIC +11%, Lynas +12%, Kokusai −14%, SUMCO −33% (subsidiary site).
+- **X crowding (7-day post counts, free):** Furukawa about 2.8k with a step-up from Oct 19; Lynas about 1.5k with a spike on Oct 21–22; SUMCO rising; Coherent high and steady; SMIC and Kokusai quiet. Judgement only; not a tested signal.
+- **Not run:** Apollo/Clay headcount (redundant with Crustdata, saves credits), Ahrefs (Crustdata traffic used instead), Context monitors (creating monitors is a persistent external setup; left for the user to approve).
+- **TOPIX survivorship:** NOT fixed. Yahoo has no prices for delisted .T names, so a rebuilt membership list cannot be priced without LSE or J-Quants. The BNF JP result keeps its survivorship caveat (long-side, biased UP).

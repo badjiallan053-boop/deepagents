@@ -14,6 +14,18 @@ def parse(t):
             m = re.findall(r"\b\d{1,3}(?:,\d{3})+\b|\b\d+\b(?=\s*$)", l)
             if m: rr = num(m[-1])
     return ta, rr
+def parse2(t):
+    t2 = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", t).replace("&#xa0;", " ").replace("&nbsp;", " "))
+    def first(lbl):
+        i = t2.find(lbl)
+        if i < 0: return None
+        m = re.search(r"\b\d{1,3}(?:,\d{3})+\b", t2[i + len(lbl):i + len(lbl) + 200]); return num(m.group()) if m else None
+    return first("Total assets"), first("Reverse repurchase agreements")
+_p1 = parse
+def parse(t):
+    a, b = _p1(t)
+    if a is None: a2, b2 = parse2(t); return a2, (b if b is not None else b2)
+    return a, b
 def main():
     out = json.load(open(OUT)) if os.path.exists(OUT) else {}
     d = datetime.date(2015, 1, 1)
