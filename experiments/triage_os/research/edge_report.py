@@ -95,6 +95,32 @@ def pass5():
           "- **X crowding (7-day post counts, free):** Furukawa about 2.8k with a step-up from Oct 19; Lynas about 1.5k with a spike on Oct 21–22; SUMCO rising; Coherent high and steady; SMIC and Kokusai quiet. Judgement only; not a tested signal.",
           "- **Not run:** Apollo/Clay headcount (redundant with Crustdata, saves credits), Ahrefs (Crustdata traffic used instead), Context monitors (creating monitors is a persistent external setup; left for the user to approve).",
           "- **TOPIX survivorship:** NOT fixed. Yahoo has no prices for delisted .T names, so a rebuilt membership list cannot be priced without LSE or J-Quants. The BNF JP result keeps its survivorship caveat (long-side, biased UP)."]
+    return L + portfolio_md()
+def portfolio_md():
+    P = json.load(open("/workspace/triage_os_data/portfolio.json")); S21 = json.load(open("/workspace/triage_os_data/s21_h41.json")); O = json.load(open("/workspace/triage_os_data/lse_options_summary.json"))
+    L = ["", "## 11. Portfolio: can the KEPT edges make a Sharpe-2 book? (No.)", "",
+         "**Bottom line.** Combined, beta-hedged and vol-targeted, the book **loses money out of sample**: the core book has a net OOS Sharpe of −0.55 (gross −0.01), and adding Taiwan, Korea and Australia gives −0.75. **No combination reaches a Sharpe of 2.** Only BNF Japan has a positive net OOS Sharpe: 1.99 on the days it is invested, which is about **0.7 in calendar time** (it holds positions on only about 13% of OOS days), and it is survivorship-biased upward.", "",
+         "| Sleeve | Trades | IS net Sharpe | OOS gross | OOS net | OOS net max DD |", "|---|---|---|---|---|---|"]
+    for k, v in P["sleeves"].items(): L.append(f"| {k} | {v['trades']} | {v['IS_net'].get('sharpe')} | {v['OOS_gross'].get('sharpe')} | {v['OOS_net'].get('sharpe')} | {v['OOS_net'].get('max_dd')}% |")
+    L += ["", "| Book | IS net Sharpe | OOS gross Sharpe | OOS net Sharpe | OOS net return / vol | Max DD | Bootstrap 95% | Deflated Sharpe P (N=60) |", "|---|---|---|---|---|---|---|---|"]
+    for k, v in P["book"].items():
+        b = v.get("bootstrap95_oos_net_sharpe", v.get("boot")); d = v.get("deflated", v.get("dsr"))
+        L.append(f"| {k} | {v['IS_net'].get('sharpe')} | {v['OOS_gross'].get('sharpe')} | {v['OOS_net'].get('sharpe')} | {v['OOS_net'].get('ann_ret')}% / {v['OOS_net'].get('ann_vol')}% | {v['OOS_net'].get('max_dd')}% | {b} | {d['dsr_prob']} |")
+    jp = P["book"].get("BNF JP alone (the only sleeve with positive net OOS)", {})
+    L += ["", f"- **Walk-forward (BNF JP, net Sharpe by year, active days):** {', '.join(f'{y}: {s}' for y, s in jp.get('wf', {}).items() if s is not None)}. Blank years had too few active days. The sign flips from year to year, and 2016 and 2020 were bad.",
+          "- **Why the event-study winners died in the book.** Measured as daily P&L with borrow, a 20% name cap and vol targeting: the late-filer short is wrecked by squeezes in micro-caps (net −1.85), and the PEAD short's +3.3% mean per event turns into a net Sharpe of −0.11 once overlapping 60-day positions, a 3% a year borrow fee and costs are added. BNF HK, which was KEPT on event means, is flat out of sample.",
+          "- **Breadth did not help.** The new sleeves are uncorrelated (|ρ| ≤ 0.21), but Taiwan, Korea and Australia BNF are ≤ 0 net out of sample, and averaging in negative-Sharpe sleeves lowers the book's Sharpe.",
+          f"- **Capacity:** median BNF ADV is ${P['capacity']['median_bnf_adv_musd']}m, which gives about ${P['capacity']['est_book_usd_m']}m at 5% of ADV. The shorts are micro-cap and borrow-limited.",
+          "- **Costs used:** spread of 15–45bp per round trip (includes the TW and KR sell taxes), plus square-root impact (100bp at 100% of ADV for a $250k ticket), plus borrow of 3% a year (PEAD) or 20% a year (late filers).",
+          "- **What a Sharpe of 2 would need:** about 10 or more independent, positively-performing sleeves at about 0.6 Sharpe each, or intraday or overnight execution on BNF Japan (not tested; needs open prices), point-in-time universes with dead names (CRSP, J-Quants), and real borrow data. On free data we have one weak edge, not a book.",
+          "- **Not done:** PEAD outside the US (no free earnings-date feed was found that was worth the Apify spend), overnight/intraday split, and KOSPI beyond 40 large caps.",
+          "", "### London Strategic Edge (key verified)", "",
+          "- **Survivorship: NOT fixable with LSE.** All 3,982 catalog stocks still trade in 2026; it has no delisted US names. SIVB, FRC and LEH return no data, and 'BBBY' back to 2003 is Overstock's history under the reused ticker. Japan and Hong Kong are about 50 large caps only, so it cannot help with dead names. No status flipped; the survivorship caveats stand.",
+          "- **Insider trades:** LSE's records link to SEC Form 4 filings (the same source as our bulk files) and start in 2014, so they add nothing new. The M1 re-test would be identical and was not re-run.",
+          "- **Options (context, contracts updated on 22 Oct):** " + "; ".join(f"{k}: ATM IV {v['atm_iv']}%, 25-delta skew {v['skew_25d']} vol pts" for k, v in O.items() if v["atm_iv"]) + ". LITE had no fresh contracts. IV rank was not computed (it needs an IV history pull). Data is used locally and not redistributed.",
+          "- **Usage:** about 5MB of 50GB this month; 0 of 5 exports this hour (the plan cap is 5 an hour, not 10).",
+          "", "### S21 point-in-time (H.4.1 release dates)", "",
+          f"- {S21['releases']} weekly releases ({S21['first']} to {S21['last']}) and {S21['triggers']} triggers. OOS (2019+): n={S21['result']['oos']['n']}, precision {S21['result']['oos']['precision']}%, mean excess {S21['result']['oos']['mean_excess']}%, t={S21['result']['oos']['t_stat']}. It passes the rule mechanically (KEPT), but it is **not significant**, and the in-sample window is empty because H.4.1 parsing starts in 2015. Worst trade: 2020-02-21, −31.8%. Treat it as weak."]
     return L
 def main():
     R = LAB["results"]; L = ["# TRIAGE Edge Lab: how the big funds find edge and what survives our tests", "",

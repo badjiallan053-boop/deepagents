@@ -13,7 +13,7 @@ def frame(y, q):
         open(p, "w").write(t)
     try: return json.load(open(p))["data"]
     except Exception: return []
-def run():
+def events():
     acc = {}
     for ft, co, cik, d, path in L.idx_rows({"10-Q"}): acc[path.split("/")[-1].replace(".txt", "")] = d
     eps = collections.defaultdict(dict); fd = {}
@@ -41,6 +41,9 @@ def run():
     for m, es in by.items():
         if len(es) < 20: continue
         es.sort(key=lambda e: e[2]); k = len(es) // 10; bot += es[:k]; top += es[-k:]
+    return top, bot, ev
+def run():
+    top, bot, ev = events()
     random.seed(7); top = random.sample(top, min(900, len(top))); bot = random.sample(bot, min(900, len(bot)))
     L.prefetch([e[0] for e in top + bot])
     res = dict(n_surprises=len(ev), long_top_decile=L.study([(t, d) for t, d, _ in top], 60, 20), short_bottom_decile=L.study([(t, d) for t, d, _ in bot], 60, 20, direction=-1))

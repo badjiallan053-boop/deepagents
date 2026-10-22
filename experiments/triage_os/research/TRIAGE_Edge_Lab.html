@@ -1111,4 +1111,142 @@ a { color: var(--info); text-decoration: none; word-break: break-all; }
 <li><strong>X crowding (7-day post counts, free):</strong> Furukawa about 2.8k with a step-up from Oct 19; Lynas about 1.5k with a spike on Oct 21–22; SUMCO rising; Coherent high and steady; SMIC and Kokusai quiet. Judgement only; not a tested signal.</li>
 <li><strong>Not run:</strong> Apollo/Clay headcount (redundant with Crustdata, saves credits), Ahrefs (Crustdata traffic used instead), Context monitors (creating monitors is a persistent external setup; left for the user to approve).</li>
 <li><strong>TOPIX survivorship:</strong> NOT fixed. Yahoo has no prices for delisted .T names, so a rebuilt membership list cannot be priced without LSE or J-Quants. The BNF JP result keeps its survivorship caveat (long-side, biased UP).</li>
+</ul>
+<h2><span class="n">11</span>Portfolio: can the KEPT edges make a Sharpe-2 book? (No.)</h2>
+<p><strong>Bottom line.</strong> Combined, beta-hedged and vol-targeted, the book <strong>loses money out of sample</strong>: the core book has a net OOS Sharpe of −0.55 (gross −0.01), and adding Taiwan, Korea and Australia gives −0.75. <strong>No combination reaches a Sharpe of 2.</strong> Only BNF Japan has a positive net OOS Sharpe: 1.99 on the days it is invested, which is about <strong>0.7 in calendar time</strong> (it holds positions on only about 13% of OOS days), and it is survivorship-biased upward.</p>
+<table>
+<thead>
+<tr>
+<th>Sleeve</th>
+<th>Trades</th>
+<th>IS net Sharpe</th>
+<th>OOS gross</th>
+<th>OOS net</th>
+<th>OOS net max DD</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>BNF JP (TOPIX L/M, -25%, 5d)</td>
+<td class='r'>513</td>
+<td class='r'>0.46</td>
+<td class='r'>1.58</td>
+<td class='r'>1.36</td>
+<td class='r'>-13.8%</td>
+</tr>
+<tr>
+<td>BNF HK (-20%, 5d)</td>
+<td class='r'>239</td>
+<td class='r'>3.24</td>
+<td class='r'>0.03</td>
+<td class='r'>-0.15</td>
+<td class='r'>-40.2%</td>
+</tr>
+<tr>
+<td>BNF TW (top-120 by value, -20%, 5d) NEW</td>
+<td class='r'>507</td>
+<td class='r'>-0.45</td>
+<td class='r'>0.06</td>
+<td class='r'>-0.53</td>
+<td class='r'>-40.1%</td>
+</tr>
+<tr>
+<td>BNF KR (40 large, -20%, 5d) NEW</td>
+<td class='r'>142</td>
+<td class='r'>-0.09</td>
+<td class='r'>0.38</td>
+<td class='r'>-0.01</td>
+<td class='r'>-29.2%</td>
+</tr>
+<tr>
+<td>BNF AU (44 large, -20%, 5d) NEW</td>
+<td class='r'>133</td>
+<td class='r'>0.11</td>
+<td class='r'>-1.87</td>
+<td class='r'>-2.01</td>
+<td class='r'>-39.8%</td>
+</tr>
+<tr>
+<td>PEAD short (bottom decile, 60d)</td>
+<td class='r'>4204</td>
+<td class='r'>0.14</td>
+<td class='r'>0.22</td>
+<td class='r'>-0.11</td>
+<td class='r'>-27.1%</td>
+</tr>
+<tr>
+<td>Late-filer short overlay (120d)</td>
+<td class='r'>1316</td>
+<td class='r'>-2.63</td>
+<td class='r'>-0.99</td>
+<td class='r'>-1.85</td>
+<td class='r'>-70.8%</td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead>
+<tr>
+<th>Book</th>
+<th>IS net Sharpe</th>
+<th>OOS gross Sharpe</th>
+<th>OOS net Sharpe</th>
+<th>OOS net return / vol</th>
+<th>Max DD</th>
+<th>Bootstrap 95%</th>
+<th>Deflated Sharpe P (N=60)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Core (KEPT edges: BNF JP, BNF HK, PEAD short, late-filer short)</td>
+<td class='r'>-0.16</td>
+<td class='r'>-0.01</td>
+<td class='r'>-0.55</td>
+<td>-5.04% / 9.08%</td>
+<td class='r'>-32.6%</td>
+<td>[-1.29, 0.12]</td>
+<td class='r'>0.0</td>
+</tr>
+<tr>
+<td>Core + new markets (TW, KR, AU)</td>
+<td class='r'>-0.17</td>
+<td class='r'>-0.16</td>
+<td class='r'>-0.75</td>
+<td>-6.61% / 8.8%</td>
+<td class='r'>-34.3%</td>
+<td>[-1.44, -0.13]</td>
+<td class='r'>0.0</td>
+</tr>
+<tr>
+<td>BNF JP alone (the only sleeve with positive net OOS)</td>
+<td class='r'>0.79</td>
+<td class='r'>2.19</td>
+<td class='r'>1.99</td>
+<td>27.08% / 13.62%</td>
+<td class='r'>-5.6%</td>
+<td>[0.15, 3.43]</td>
+<td class='r'>0.785</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>Walk-forward (BNF JP, net Sharpe by year, active days):</strong> 2014: -1.55, 2016: -2.73, 2018: 1.84, 2020: -2.25, 2022: 1.14, 2024: 3.81, 2026: 1.26. Blank years had too few active days. The sign flips from year to year, and 2016 and 2020 were bad.</li>
+<li><strong>Why the event-study winners died in the book.</strong> Measured as daily P&amp;L with borrow, a 20% name cap and vol targeting: the late-filer short is wrecked by squeezes in micro-caps (net −1.85), and the PEAD short's +3.3% mean per event turns into a net Sharpe of −0.11 once overlapping 60-day positions, a 3% a year borrow fee and costs are added. BNF HK, which was KEPT on event means, is flat out of sample.</li>
+<li><strong>Breadth did not help.</strong> The new sleeves are uncorrelated (|ρ| ≤ 0.21), but Taiwan, Korea and Australia BNF are ≤ 0 net out of sample, and averaging in negative-Sharpe sleeves lowers the book's Sharpe.</li>
+<li><strong>Capacity:</strong> median BNF ADV is $28.4m, which gives about $7.1m at 5% of ADV. The shorts are micro-cap and borrow-limited.</li>
+<li><strong>Costs used:</strong> spread of 15–45bp per round trip (includes the TW and KR sell taxes), plus square-root impact (100bp at 100% of ADV for a $250k ticket), plus borrow of 3% a year (PEAD) or 20% a year (late filers).</li>
+<li><strong>What a Sharpe of 2 would need:</strong> about 10 or more independent, positively-performing sleeves at about 0.6 Sharpe each, or intraday or overnight execution on BNF Japan (not tested; needs open prices), point-in-time universes with dead names (CRSP, J-Quants), and real borrow data. On free data we have one weak edge, not a book.</li>
+<li><strong>Not done:</strong> PEAD outside the US (no free earnings-date feed was found that was worth the Apify spend), overnight/intraday split, and KOSPI beyond 40 large caps.</li>
+</ul>
+<h3>London Strategic Edge (key verified)</h3>
+<ul>
+<li><strong>Survivorship: NOT fixable with LSE.</strong> All 3,982 catalog stocks still trade in 2026; it has no delisted US names. SIVB, FRC and LEH return no data, and 'BBBY' back to 2003 is Overstock's history under the reused ticker. Japan and Hong Kong are about 50 large caps only, so it cannot help with dead names. No status flipped; the survivorship caveats stand.</li>
+<li><strong>Insider trades:</strong> LSE's records link to SEC Form 4 filings (the same source as our bulk files) and start in 2014, so they add nothing new. The M1 re-test would be identical and was not re-run.</li>
+<li><strong>Options (context, contracts updated on 22 Oct):</strong> COHR: ATM IV 84.5%, 25-delta skew -0.8 vol pts; MP: ATM IV 65.6%, 25-delta skew -3.2 vol pts. LITE had no fresh contracts. IV rank was not computed (it needs an IV history pull). Data is used locally and not redistributed.</li>
+<li><strong>Usage:</strong> about 5MB of 50GB this month; 0 of 5 exports this hour (the plan cap is 5 an hour, not 10).</li>
+</ul>
+<h3>S21 point-in-time (H.4.1 release dates)</h3>
+<ul>
+<li>615 weekly releases (2015-01-02 to 2026-10-22) and 98 triggers. OOS (2019+): n=26, precision 77%, mean excess 1.33%, t=0.77. It passes the rule mechanically (KEPT), but it is <strong>not significant</strong>, and the in-sample window is empty because H.4.1 parsing starts in 2015. Worst trade: 2020-02-21, −31.8%. Treat it as weak.</li>
 </ul><div class='disc avoid'><h3>Disclaimer and publisher's exclusion</h3><p>Published by TRIAGE for general information. Impersonal; not investment advice, a recommendation, or an offer or solicitation to buy or sell any security. Not tailored to any reader; intended to fall within the publisher's exclusion of section 202(a)(11)(D) of the US Investment Advisers Act of 1940. Facts are drawn from public filings and registries linked in the text; statements by parties are allegations; scenario figures are labelled assumptions. Companies only; no personal data.</p></div></body></html>

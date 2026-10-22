@@ -23,6 +23,7 @@ const NAV = [
   { r: "world", label: "World", icon: Globe2 },
   { r: "live", label: "Live", icon: Activity },
   { r: "edge", label: "Edge Lab", icon: ShieldCheck },
+  { r: "portfolio", label: "Portfolio", icon: ShieldCheck },
   { r: "bottleneck", label: "Bottleneck Hunt", icon: Network },
   { r: "signals", label: "Signal Library", icon: Activity },
   { r: "radar", label: "Cross-Asset Radar", icon: Globe2 },
@@ -75,6 +76,7 @@ export default function App() {
           {top === "home" && <Home />}
           {top === "bottleneck" && <Bottleneck />}
           {top === "edge" && <EdgeLab />}
+          {top === "portfolio" && <Portfolio />}
           {top === "live" && <Live />}
           {top === "overview" && <Overview sits={sits} stats={stats} />}
           {top === "situations" && <Situations sits={sits} />}
@@ -570,4 +572,18 @@ function Research() {
       <div className="mt-2 text-[17px] font-semibold leading-snug text-ink group-hover:underline">{d.title}</div>
       <p className="mt-2 text-[12.5px] leading-relaxed text-mute">{d.desc}</p>
       <div className="mt-4 flex items-center gap-1 text-[11.5px] text-info">Open PDF <ExternalLink size={11} /></div></a>)}</div></div>
+}
+
+function Portfolio() {
+  const { data: P } = useApi<{ sleeves: Record<string, any>; book: Record<string, any>; capacity: Record<string, any> }>("/api/portfolio")
+  if (!P || !P.sleeves) return <div className="text-[12px]">Loading…</div>
+  const s = (x: any) => (x && x.sharpe != null ? x.sharpe : "–")
+  return <div className="space-y-3">
+    <Card title="Verdict"><p className="text-[12px]">No book reaches an out-of-sample Sharpe of 2. The combined book is negative net. Only BNF Japan is positive: about 2.0 on active days and about 0.7 in calendar time, with a survivorship bias upward. The paper book holds BNF JP only. Paper only; not investment advice.</p></Card>
+    <Card title="Sleeves (daily P&L, beta-hedged, vol-targeted)"><table className="text-[12px] w-full"><thead><tr><th className="text-left">Sleeve</th><th>Trades</th><th>IS net</th><th>OOS gross</th><th>OOS net</th><th>Max DD</th></tr></thead><tbody>
+      {Object.entries(P.sleeves).map(([k, v]) => <tr key={k}><td>{k}</td><td>{v.trades}</td><td>{s(v.IS_net)}</td><td>{s(v.OOS_gross)}</td><td>{s(v.OOS_net)}</td><td>{v.OOS_net?.max_dd}%</td></tr>)}</tbody></table></Card>
+    <Card title="Books"><table className="text-[12px] w-full"><thead><tr><th className="text-left">Book</th><th>IS net</th><th>OOS gross</th><th>OOS net</th><th>Bootstrap 95%</th><th>Deflated P</th></tr></thead><tbody>
+      {Object.entries(P.book).map(([k, v]) => <tr key={k}><td>{k}</td><td>{s(v.IS_net)}</td><td>{s(v.OOS_gross)}</td><td>{s(v.OOS_net)}</td><td>{JSON.stringify(v.bootstrap95_oos_net_sharpe ?? v.boot)}</td><td>{(v.deflated ?? v.dsr)?.dsr_prob}</td></tr>)}</tbody></table></Card>
+    <Card title="Capacity"><p className="text-[12px]">Median BNF ADV ${P.capacity.median_bnf_adv_musd}m, so about ${P.capacity.est_book_usd_m}m at 5% of ADV. {P.capacity.note}</p></Card>
+  </div>
 }
