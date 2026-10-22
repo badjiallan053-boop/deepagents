@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { Activity, ChevronRight, Command as Cmd, FileText, Gavel, LayoutDashboard, Network, ScrollText, ShieldCheck, TrendingDown, Waypoints, ExternalLink, Crosshair, Radar } from "lucide-react"
+import { Activity, ChevronRight, Command as Cmd, FileText, Gavel, LayoutDashboard, Network, ScrollText, ShieldCheck, TrendingDown, Waypoints, ExternalLink, Crosshair, Radar, Globe2 } from "lucide-react"
 import { cn, fmtChg, fmtInt, fmtM, fmtPx, fmtPct, host, useApi } from "./lib"
 import { Card, DataTable, SourceProvider, SourceLink, Stat, Tag, VBadge, Wordmark, Button, statusKey, useSource, type Col } from "./components/ui"
 import { MarkChart, Sparkline, Timeline, Waterfall, type Tranche } from "./components/charts"
@@ -19,6 +19,7 @@ const NAV = [
   { r: "marks", label: "Marks monitor", icon: TrendingDown },
   { r: "control", label: "Control", icon: Crosshair },
   { r: "systemic", label: "Systemic radar", icon: Radar },
+  { r: "world", label: "World", icon: Globe2 },
   { r: "graph", label: "Relationship graph", icon: Waypoints },
   { r: "edges", label: "Cross-dataset edges", icon: Network },
   { r: "verify", label: "Verification ledger", icon: ShieldCheck },
@@ -70,6 +71,7 @@ export default function App() {
           {top === "marks" && <Marks />}
           {top === "control" && <Control />}
           {top === "systemic" && <Systemic />}
+          {top === "world" && <World />}
           {top === "graph" && <GraphView q={params.get("q") ?? ""} />}
           {top === "edges" && <Edges />}
           {top === "verify" && <Verify />}
@@ -161,6 +163,35 @@ function Marks() {
   return <div><PageHead kicker="Private credit" title="Distressed marks monitor" sub={`Positions marked below 75 (par-weighted fair value ÷ par) in the 30 Jun 2026 BDC Schedules of Investments, with up to 13 quarters of history from the same filings. ${held} lines with currency or unit anomalies are held back for review.`} />
     <div className="flex flex-wrap gap-1 border-b border-line px-5 py-2">{["ALL", ...bdcs].map(k => <Button key={k} variant={bdc === k ? "outline" : "ghost"} onClick={() => setBdc(k)} className="h-6 px-2 font-mono text-[10.5px]">{k === "ALL" ? "All lenders" : k}</Button>)}</div>
     <div className="p-3"><Card pad={false}><DistTable rows={rows} maxHeight={700} /></Card></div>
+  </div>
+}
+
+// ---------------- World ----------------
+type WSit = { id: string; country: string; entity: string; stage: string; chokepoint: string; date: string; basis: string; url: string; size: string; status: string }
+type WJ = { asof: string; situations: WSit[]; buyers: { firm: string; base: string; situation: string; why: string }[]; backers: { name: string; type: string; region: string; evidence: string; cheque: string; why: string; status: string; url: string }[] }
+function World() {
+  const { data: J } = useApi<WJ>("/api/world")
+  const [mkt, setMkt] = useState("All")
+  if (!J) return <div className="text-mute text-[12px]">Loading…</div>
+  const mkts = ["All", ...Array.from(new Set(J.situations.map(s => s.country)))]
+  const rows = J.situations.filter(s => mkt === "All" || s.country === mkt)
+  const dated = J.situations.filter(s => s.date !== "TBC").sort((a, b) => a.date.localeCompare(b.date))
+  return <div>
+    <PageHead kicker={`World desk · ${J.asof}`} title="25 non-US situations: who decides, and when" sub="Each row is checked against a primary filing, or against a secondary source where it is labelled. Ranking and buyer fit are judgement." right={<a href="/research/TRIAGE_World.pdf" target="_blank" className="text-[12px] text-info">Open PDF</a>} />
+    <div className="mb-3 grid grid-cols-4 gap-3">
+      <Stat label="Situations" value={String(J.situations.length)} />
+      <Stat label="Verified (primary)" value={String(J.situations.filter(s => s.status === "VERIFIED").length)} />
+      <Stat label="Dated catalysts" value={String(dated.length)} />
+      <Stat label="Markets" value={String(mkts.length - 1)} />
+    </div>
+    <Card title="Catalyst calendar"><div className="flex flex-wrap gap-2 p-3">{dated.map(s => <a key={s.id} href={s.url} target="_blank" className="rounded-[3px] border border-line px-2 py-1 text-[11.5px] hover:text-ink"><b className="text-amber">{s.date}</b> {s.country} · {s.entity}</a>)}</div></Card>
+    <div className="my-3 flex gap-1">{mkts.map(m => <button key={m} onClick={() => setMkt(m)} className={cn("rounded-[3px] px-2 py-1 text-[11.5px]", mkt === m ? "bg-line text-ink" : "text-mute")}>{m}</button>)}</div>
+    <Card title="Situations and control chokepoints"><table className="w-full text-[11.5px]"><thead><tr className="text-left text-mute"><th className="p-2">#</th><th>Mkt</th><th>Situation</th><th>Stage</th><th>Chokepoint</th><th>Catalyst</th><th>Check</th></tr></thead>
+      <tbody>{rows.map(s => <tr key={s.id} className="border-t border-line align-top"><td className="p-2 text-mute">{s.id}</td><td>{s.country}</td><td><a href={s.url} target="_blank" className="text-info">{s.entity}</a><div className="text-mute">{s.size}</div></td><td>{s.stage}</td><td>{s.chokepoint}</td><td><b>{s.date}</b><div className="text-mute">{s.basis}</div></td><td><Tag>{s.status}</Tag></td></tr>)}</tbody></table></Card>
+    <div className="mt-3 grid grid-cols-2 gap-3">
+      <Card title="Buyers fitted to situations (judgement)"><div className="max-h-[360px] overflow-auto p-2 text-[11.5px]">{J.buyers.map(b => <div key={b.firm} className="border-b border-line py-1"><b>{b.firm}</b> <span className="text-mute">{b.base}</span> → {b.situation}</div>)}</div></Card>
+      <Card title="Backers, top 15 checked"><div className="max-h-[360px] overflow-auto p-2 text-[11.5px]">{J.backers.map(b => <div key={b.name} className="border-b border-line py-1"><a href={b.url} target="_blank" className="text-info">{b.name}</a> <span className="text-mute">{b.type} · {b.cheque}</span> <Tag>{b.status}</Tag><div className="text-mute">{b.evidence}</div></div>)}</div></Card>
+    </div>
   </div>
 }
 

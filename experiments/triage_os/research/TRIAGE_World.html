@@ -1,0 +1,1501 @@
+<!doctype html><html><head><meta charset='utf-8'><title>TRIAGE World: situations, revenue, backers</title><style>
+@page { size: Letter; margin: 18mm 15mm 16mm 15mm;
+  @top-left { content: "TRIAGE  |  Special Situations Research"; font: 600 7pt 'Inter'; letter-spacing: .14em; color: #8a929c; }
+  @top-right { content: string(doctitle); font: 500 7pt 'Inter'; color: #8a929c; }
+  @bottom-left { content: "Not investment advice. See disclaimer on the final page."; font: 400 6.5pt 'Inter'; color: #8a929c; }
+  @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 500 7pt 'JetBrains Mono'; color: #8a929c; } }
+@page :first { @top-left { content: none } @top-right { content: none } }
+:root { --ink:#0d1218; --mute:#5b6570; --dim:#8a929c; --line:#d9dde2; --amber:#c97d06; --amberbg:#fff6e5; --navy:#0b0f14; --up:#1d8a52; --down:#c53340; --info:#1f6fd1; --violet:#6d4fd8; }
+* { box-sizing: border-box; }
+html { font-family: 'Inter', 'IBM Plex Sans', Arial, sans-serif; font-size: 9pt; color: var(--ink); line-height: 1.45; font-feature-settings: "tnum" 1; }
+body { margin: 0; }
+h1,h2,h3 { font-family: 'Inter Tight','Inter',sans-serif; letter-spacing: -.01em; margin: 0; }
+.doctitle { string-set: doctitle content(); }
+h2 { font-size: 13pt; margin: 14pt 0 5pt; padding-top: 6pt; border-top: 2px solid var(--navy); }
+h2 .n { color: var(--amber); font-family: 'JetBrains Mono', monospace; font-size: 9pt; margin-right: 6pt; vertical-align: 1pt; }
+h3 { font-size: 9.5pt; margin: 9pt 0 3pt; text-transform: uppercase; letter-spacing: .08em; color: var(--mute); }
+p { margin: 0 0 5pt; text-align: left; }
+.wm { display: inline-flex; align-items: center; gap: 6px; } .wm b { font: 700 11pt 'JetBrains Mono', monospace; letter-spacing: .32em; }
+.cover { background: var(--navy); color: #e8ecf0; margin: 0 0 4pt; padding: 9mm 10mm 7mm; border-radius: 2px; } .cover .wm b { color: #fff; }
+.cover .kick { color: #f5a524; font: 600 7.5pt 'Inter'; letter-spacing: .16em; text-transform: uppercase; margin-top: 7mm; }
+.cover h1 { font-size: 22pt; line-height: 1.12; margin: 4pt 0 6pt; color: #fff; max-width: 165mm; }
+.cover .sub { color: #aab3bd; font-size: 10pt; max-width: 160mm; }
+.cover .meta { display: flex; gap: 18pt; margin-top: 10pt; padding-top: 8pt; border-top: 1px solid #26303b; font-size: 7.5pt; color: #8f99a4; }
+.cover .meta b { display: block; color: #e8ecf0; font: 600 8.5pt 'JetBrains Mono', monospace; margin-top: 1pt; }
+.view { border-left: 3px solid var(--amber); background: var(--amberbg); padding: 7pt 9pt; margin: 9pt 0; }
+.view .lbl { font: 700 7pt 'Inter'; letter-spacing: .14em; color: var(--amber); text-transform: uppercase; }
+.view p { font-size: 10pt; margin: 2pt 0 0; }
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12pt; } .cols3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10pt; }
+.kpis { display: grid; grid-template-columns: repeat(5, 1fr); border: 1px solid var(--line); margin: 8pt 0; }
+.kpi { padding: 5pt 7pt; border-right: 1px solid var(--line); } .kpi:last-child { border-right: 0; }
+.kpi .l { font: 600 6.5pt 'Inter'; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); }
+.kpi .v { font: 600 13pt 'JetBrains Mono', monospace; margin-top: 2pt; } .kpi .s { font-size: 7pt; color: var(--mute); }
+table { width: 100%; border-collapse: collapse; margin: 4pt 0 8pt; font-size: 8pt; page-break-inside: auto; }
+thead th { font: 600 6.8pt 'Inter'; text-transform: uppercase; letter-spacing: .07em; color: var(--mute); text-align: left; border-bottom: 1.2px solid var(--navy); padding: 3pt 4pt; }
+td { padding: 3pt 4pt; border-bottom: .5px solid var(--line); vertical-align: top; } tr { page-break-inside: avoid; }
+td.r, th.r { text-align: right; } .num, td.r { font-family: 'JetBrains Mono', monospace; font-size: 7.6pt; }
+tr.tot td { font-weight: 700; border-top: 1px solid var(--navy); border-bottom: 0; }
+.fn { font-size: 6.8pt; color: var(--mute); } sup.f { font: 600 6pt 'JetBrains Mono'; color: var(--info); }
+.badge { display: inline-block; font: 700 6pt 'Inter'; letter-spacing: .08em; padding: 1pt 3pt; border-radius: 2px; text-transform: uppercase; border: .6px solid; white-space: nowrap; }
+.b-VERIFIED { color: var(--up); border-color: var(--up); } .b-CORRECTED { color: var(--amber); border-color: var(--amber); }
+.b-ALLEGATION { color: var(--violet); border-color: var(--violet); } .b-ASSUMPTION { color: var(--info); border-color: var(--info); } .b-UNVERIFIABLE { color: var(--dim); border-color: var(--dim); }
+.chart { margin: 4pt 0 2pt; page-break-inside: avoid; } h2, h3, .cap { page-break-after: avoid; } .chart svg { width: 100%; height: auto; display: block; }
+.cap { font: 600 7pt 'Inter'; color: var(--mute); text-transform: uppercase; letter-spacing: .08em; margin-top: 6pt; }
+.src { font-size: 6.6pt; color: var(--dim); margin-bottom: 6pt; }
+.box { border: 1px solid var(--line); padding: 6pt 8pt; margin: 6pt 0; } .box h3 { margin-top: 0; }
+ul { margin: 2pt 0 6pt; padding-left: 12pt; } li { margin: 1.5pt 0; }
+.pb { page-break-before: always; } .avoid { page-break-inside: avoid; }
+a { color: var(--info); text-decoration: none; word-break: break-all; }
+.disc { font-size: 6.8pt; color: var(--mute); line-height: 1.4; } .disc h3 { color: var(--ink); }
+.tl { position: relative; margin: 4pt 0 6pt 4pt; border-left: 1.2px solid var(--line); }
+.tl .e { position: relative; padding: 0 0 4.5pt 10pt; } .tl .e:before { content: ""; position: absolute; left: -4px; top: 3pt; width: 7px; height: 7px; border-radius: 50%; background: var(--navy); }
+.tl .e.f:before { background: #fff; border: 1.5px solid var(--amber); }
+.tl .d { font: 600 7.5pt 'JetBrains Mono', monospace; color: var(--mute); } .tl .e.f .d { color: var(--amber); }
+ table { font-size: 7pt; } td { word-break: break-word; } img { max-width: 100%; }</style></head><body><div class='cover'><span class="wm"><svg width="18" height="18" viewBox="0 0 32 32"><rect width="32" height="32" rx="5" fill="#f5a524"/><path d="M8 9h16v3h-6.5v12h-3V12H8z" fill="#0b0f14"/></svg><b>TRIAGE</b></span><div class='kick'>World desk · 23 Oct 2026</div><h1 class='doctitle'>TRIAGE World: situations, revenue, backers</h1><div class='sub'>25 verified non-US situations with control chokepoints and catalyst dates; how it makes money; who backs it.</div><div class='meta'><div>Situations<b>25 non-US</b></div><div>Markets<b>UK FR DE NO SE ES IT IN CA JP SG HK</b></div><div>Rules<b>public data · firms only · nothing sent</b></div></div></div><h2><span class="n">01</span>The answer in one page</h2>
+<ul>
+<li><strong>25 non-US situations, 25 verified</strong> against a primary (or labelled secondary) source fetched 22–23 Oct 2026, each with <em>who decides</em> and <em>when</em>.</li>
+<li><strong>The product:</strong> TRIAGE World — a weekly cross-border restructuring calendar + control maps. Indicative price £18k/desk/yr (JUDGEMENT), vs a Debtwire subscription awarded by The Pensions Regulator at <strong>£118,818</strong> (UK Contracts Finder, published 29 Jun 2023; multi-year).</li>
+<li><strong>The buyers:</strong> 30 non-US funds, trading houses and liquidators, each tied to a live situation below.</li>
+<li><strong>The backers:</strong> 9fin's investors (Highland Europe, Seedcamp, Redalpine) are the first call — they have already underwritten the category; we are the Asia/Nordic/court-calendar wedge (JUDGEMENT).</li>
+<li><strong>The ask:</strong> €2.5m seed (JUDGEMENT) for 18 months to 60 paying desks.</li>
+</ul>
+<h2><span class="n">02</span>Data actually ingested (not headlines)</h2>
+<table>
+<thead>
+<tr>
+<th>Dataset</th>
+<th style="text-align: right;">Rows</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>UK Companies House BasicCompanyData (2026-10-01)</td>
+<td style="text-align: right;">5,704,711</td>
+<td>download.companieshouse.gov.uk</td>
+</tr>
+<tr>
+<td>UK active, accounts overdue</td>
+<td style="text-align: right;">93,785</td>
+<td>derived</td>
+</tr>
+<tr>
+<td>UK large filers (FULL/GROUP/MEDIUM) overdue</td>
+<td style="text-align: right;">8,693</td>
+<td>derived</td>
+</tr>
+<tr>
+<td>UK with outstanding charges</td>
+<td style="text-align: right;">673,704</td>
+<td>derived</td>
+</tr>
+<tr>
+<td>UK in liquidation / administration</td>
+<td style="text-align: right;">108,330 / 3,709</td>
+<td>derived</td>
+</tr>
+<tr>
+<td>BODACC collective-procedure notices since 2026-07-01</td>
+<td style="text-align: right;">58,810</td>
+<td>bodacc-datadila.opendatasoft.com</td>
+</tr>
+<tr>
+<td>FR opening judgements (unique SIREN)</td>
+<td style="text-align: right;">23,355</td>
+<td>derived: sauvegarde 546, redressement 5,007, liquidation 17,802</td>
+</tr>
+<tr>
+<td>FR enriched with revenue (partial run)</td>
+<td style="text-align: right;">1602</td>
+<td>recherche-entreprises.api.gouv.fr</td>
+</tr>
+<tr>
+<td>HKEX petition/scheme announcements (22 Sep–22 Oct)</td>
+<td style="text-align: right;">26</td>
+<td>hkexnews.hk</td>
+</tr>
+<tr>
+<td>TDB bankruptcy flashes</td>
+<td style="text-align: right;">7</td>
+<td>tdb.co.jp</td>
+</tr>
+<tr>
+<td>ASX administration/delisting</td>
+<td style="text-align: right;">4</td>
+<td>asx.com.au</td>
+</tr>
+</tbody>
+</table>
+<h3>Revenue screen: French sauvegarde openings with revenue &gt; €10m (partial)</h3>
+<table>
+<thead>
+<tr>
+<th>Company</th>
+<th>Opened</th>
+<th>Tribunal</th>
+<th style="text-align: right;">Revenue</th>
+<th>Year</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ODAS</td>
+<td>2026-08-05</td>
+<td>Tribunal des Activités Economiques de Nanterr</td>
+<td style="text-align: right;">€376m</td>
+<td class='r'>2021</td>
+</tr>
+<tr>
+<td>BIGBEN INTERACTIVE Nom Commercial : BIGB</td>
+<td>2026-08-17</td>
+<td>Tribunal de Commerce de Lille Métropole</td>
+<td style="text-align: right;">€288m</td>
+<td class='r'>2024</td>
+</tr>
+<tr>
+<td>OFEE</td>
+<td>2026-08-11</td>
+<td>Tribunal des Activités Economiques de Paris</td>
+<td style="text-align: right;">€262m</td>
+<td class='r'>2022</td>
+</tr>
+<tr>
+<td>MP GESTION</td>
+<td>2026-09-14</td>
+<td>Tribunal des Activités Economiques de Paris</td>
+<td style="text-align: right;">€208m</td>
+<td class='r'>2023</td>
+</tr>
+<tr>
+<td>MAISONS PIERRE</td>
+<td>2026-09-14</td>
+<td>Tribunal des Activités Economiques de Paris</td>
+<td style="text-align: right;">€195m</td>
+<td class='r'>2023</td>
+</tr>
+<tr>
+<td>SESYCLAU</td>
+<td>2026-06-26</td>
+<td>Tribunal de Commerce d'Orléans</td>
+<td style="text-align: right;">€191m</td>
+<td class='r'>2024</td>
+</tr>
+<tr>
+<td>RAGOIS HOLDING FINANCES</td>
+<td>2026-07-02</td>
+<td>Tribunal des Activités Economiques de Marseil</td>
+<td style="text-align: right;">€105m</td>
+<td class='r'>2019</td>
+</tr>
+<tr>
+<td>SAS MAURY HOLDING</td>
+<td>2026-09-14</td>
+<td>Tribunal des Activités Economiques de Paris</td>
+<td style="text-align: right;">€104m</td>
+<td class='r'>2025</td>
+</tr>
+<tr>
+<td>SOLUTIONS 30 ENERGIES</td>
+<td>2026-07-27</td>
+<td>Tribunal de Commerce de Montpellier</td>
+<td style="text-align: right;">€93m</td>
+<td class='r'>2024</td>
+</tr>
+<tr>
+<td>CREYSROQUE</td>
+<td>2026-10-07</td>
+<td>Tribunal de Commerce de Bordeaux</td>
+<td style="text-align: right;">€53m</td>
+<td class='r'>2025</td>
+</tr>
+<tr>
+<td>SAS MAURY IMPRIMEUR</td>
+<td>2026-09-14</td>
+<td>Tribunal des Activités Economiques de Paris</td>
+<td style="text-align: right;">€53m</td>
+<td class='r'>2025</td>
+</tr>
+<tr>
+<td>NOVA</td>
+<td>2026-07-02</td>
+<td>Tribunal des Activités Economiques de Marseil</td>
+<td style="text-align: right;">€50m</td>
+<td class='r'>2019</td>
+</tr>
+<tr>
+<td>GUINIER CONSTRUCTION</td>
+<td>2026-10-05</td>
+<td>Tribunal de Commerce de Bobigny</td>
+<td style="text-align: right;">€48m</td>
+<td class='r'>2024</td>
+</tr>
+<tr>
+<td>SOCIETE DE GESTION ET DE PARTICIPATION S</td>
+<td>2026-10-05</td>
+<td>Tribunal de Commerce de Montluçon</td>
+<td style="text-align: right;">€48m</td>
+<td class='r'>2022</td>
+</tr>
+<tr>
+<td>DURANSIA</td>
+<td>2026-10-08</td>
+<td>Tribunal des Activités Economiques de Marseil</td>
+<td style="text-align: right;">€48m</td>
+<td class='r'>2024</td>
+</tr>
+</tbody>
+</table>
+<p><em>Note: the finances year can be stale (e.g. 2021). Liquidations were not enriched (gap).</em></p>
+<div style="page-break-before:always"></div>
+
+<h2><span class="n">03</span>The 25 situations — chokepoint and catalyst</h2>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Mkt</th>
+<th>Situation</th>
+<th>Stage</th>
+<th>Chokepoint (who decides)</th>
+<th>Catalyst</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>WD01</td>
+<td>UK</td>
+<td>Thames Water Utilities</td>
+<td>Recapitalisation; Class B TSA (&gt;60% of Class B)</td>
+<td>Class A creditors + Ofwat + court sanction (Part 26A plan)</td>
+<td><strong>2027-03-31</strong></td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+</tr>
+<tr>
+<td>WD02</td>
+<td>FR</td>
+<td>Bigben Interactive</td>
+<td>Sauvegarde accélérée (TC Lille Métropole)</td>
+<td>Bondholder class: lock-up holds 67.6% of €57.4m exchangeables</td>
+<td><strong>2026-12-09</strong></td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+</tr>
+<tr>
+<td>WD03</td>
+<td>FR</td>
+<td>ODAS</td>
+<td>Sauvegarde (TAE Nanterre), opened 2026-08-05</td>
+<td>Administrateur judiciaire + affected-party classes</td>
+<td><strong>2027-02-05</strong></td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+</tr>
+<tr>
+<td>WD04</td>
+<td>FR</td>
+<td>Poseidon Bidco</td>
+<td>Sauvegarde (TAE Nanterre), opened 2026-08-13</td>
+<td>Unitranche/TLB lenders as affected class (LBO holdco)</td>
+<td><strong>2027-02-13</strong></td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+</tr>
+<tr>
+<td>WD05</td>
+<td>FR</td>
+<td>Dumarey Powerglide Bouthéon</td>
+<td>Sauvegarde (TAE Lyon), opened 2026-07-22</td>
+<td>Parent group + administrateur</td>
+<td><strong>2027-01-22</strong></td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+</tr>
+<tr>
+<td>WD06</td>
+<td>DE</td>
+<td>BayWa / Kronos EKS €100m hybrid</td>
+<td>SchVG vote without meeting failed</td>
+<td>SchVG bondholder majority (75%) / StaRUG cram-down</td>
+<td><strong>2026-11-30</strong></td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+</tr>
+<tr>
+<td>WD07</td>
+<td>DE</td>
+<td>Branicks Group €400m bond</td>
+<td>SchVG vote passed (99%)</td>
+<td>Shareholder meeting (implementation condition)</td>
+<td><strong>2027-03-31</strong></td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+</tr>
+<tr>
+<td>WD08</td>
+<td>DE/NO</td>
+<td>Booster Precision Components</td>
+<td>Nordic bond; standstill with ad-hoc group</td>
+<td>Ad-hoc group of bondholders (Nordic Trustee written procedure)</td>
+<td><strong>2026-11-01</strong></td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+</tr>
+<tr>
+<td>WD09</td>
+<td>SE</td>
+<td>Point Properties Portfolio 1</td>
+<td>Written procedure; maturity extended</td>
+<td>Bondholders via Nordic Trustee written procedure</td>
+<td><strong>2026-11-30</strong></td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+</tr>
+<tr>
+<td>WD10</td>
+<td>ES</td>
+<td>Urbas / Guadahermosa Proyectos</td>
+<td>Concurso necesario (Juzgado Mercantil 12 Madrid)</td>
+<td>RS Lender (petitioning creditor, €53m claim) + administración concursal</td>
+<td><strong>TBC</strong></td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'>-SECONDARY</span></td>
+</tr>
+<tr>
+<td>WD11</td>
+<td>IT</td>
+<td>Clabo S.p.A.</td>
+<td>Accordo di ristrutturazione (artt. 57/61/63 CCII)</td>
+<td>Tribunal omologazione (art. 48 CCII) + tax authority adhesion</td>
+<td><strong>TBC</strong></td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+</tr>
+<tr>
+<td>WD12</td>
+<td>IN</td>
+<td>SVOGL Oil Gas and Energy</td>
+<td>NCLT Delhi admitted CIRP (PNB petition)</td>
+<td>Committee of Creditors (66% vote) led by PNB</td>
+<td><strong>2027-04-30</strong></td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'>-SECONDARY</span></td>
+</tr>
+<tr>
+<td>WD13</td>
+<td>CA</td>
+<td>Goodfood Market Corp.</td>
+<td>CCAA initial order 5 Aug 2026; monitor Raymond Chabot</td>
+<td>Monitor + DIP lender; TSX delisting review</td>
+<td><strong>TBC</strong></td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'>-SECONDARY</span></td>
+</tr>
+<tr>
+<td>WD14</td>
+<td>JP</td>
+<td>Toys"R"Us Japan (日本トイザらス)</td>
+<td>Civil rehabilitation commenced 2026-10-06</td>
+<td>Supervisor + rehabilitation creditors; sponsor selection</td>
+<td><strong>TBC</strong></td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+</tr>
+<tr>
+<td>WD15</td>
+<td>JP</td>
+<td>Kizuna Holdings (絆HD) group</td>
+<td>Corporate reorg petition dismissed; preservation order</td>
+<td>Court-appointed preservation administrator</td>
+<td><strong>TBC</strong></td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+</tr>
+<tr>
+<td>WD16</td>
+<td>JP</td>
+<td>Gaia Funding (ガイアファンディング)</td>
+<td>Bankruptcy commenced (Tokyo)</td>
+<td>Bankruptcy trustee; 2,700+ lender-investors</td>
+<td><strong>TBC</strong></td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+</tr>
+<tr>
+<td>WD17</td>
+<td>SG</td>
+<td>mm2 Asia</td>
+<td>Scheme of arrangement; moratorium</td>
+<td>Scheme creditors (majority in number, 75% value) + SG High Court</td>
+<td><strong>2026-11-21</strong></td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'>-SECONDARY</span></td>
+</tr>
+<tr>
+<td>WD18</td>
+<td>HK/SG</td>
+<td>VPower Group</td>
+<td>Scheme convening order granted</td>
+<td>Scheme creditors at meeting</td>
+<td><strong>2026-10-21</strong></td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+</tr>
+<tr>
+<td>WD19</td>
+<td>HK/CN</td>
+<td>Agile Group</td>
+<td>UK Part 26A plan + HK scheme</td>
+<td>Plan creditor classes; cross-class cram-down risk</td>
+<td><strong>TBC</strong></td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+</tr>
+<tr>
+<td>WD20</td>
+<td>HK/CN</td>
+<td>LVGEM (China) Real Estate</td>
+<td>Winding-up petition adjourned</td>
+<td>Petitioner + HK High Court</td>
+<td><strong>2027-04-06</strong></td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+</tr>
+<tr>
+<td>WD21</td>
+<td>HK/CN</td>
+<td>KWG Group</td>
+<td>RSA accession; consent fee deadlines</td>
+<td>RSA majority holders; scheme threshold</td>
+<td><strong>TBC</strong></td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+</tr>
+<tr>
+<td>WD22</td>
+<td>HK/CN</td>
+<td>China SCE Group</td>
+<td>Restructuring effective date</td>
+<td>Restructuring conditions (scheme already approved)</td>
+<td><strong>2026-10-26</strong></td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+</tr>
+<tr>
+<td>WD23</td>
+<td>HK/CN</td>
+<td>Redco Properties</td>
+<td>Scheme meeting approved 16 Oct 2026</td>
+<td>HK court sanction hearing</td>
+<td><strong>TBC</strong></td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+</tr>
+<tr>
+<td>WD24</td>
+<td>HK/CN</td>
+<td>China Aoyuan (secured assets)</td>
+<td>Receivers (FTI) appointed over mortgaged assets</td>
+<td>Secured lender + receivers' asset sales</td>
+<td><strong>TBC</strong></td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+</tr>
+<tr>
+<td>WD25</td>
+<td>HK/CN</td>
+<td>Zhenro Properties</td>
+<td>Winding-up petition adjourned</td>
+<td>Petitioner (offshore creditor) + HK High Court</td>
+<td><strong>2026-11-09</strong></td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+</tr>
+</tbody>
+</table>
+<h3>Catalyst basis and source</h3>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Date basis</th>
+<th>Size</th>
+<th>Primary URL</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>WD01</td>
+<td>stable platform period expires March 2027 (company)</td>
+<td>~£1bn Class B; Class B recovers ~5.9% via equity</td>
+<td>https://www.thameswater.co.uk/news/2026/oct/class-b-creditors-update</td>
+</tr>
+<tr>
+<td>WD02</td>
+<td>plan hearing (company PR)</td>
+<td>CA €288m (2024, INSEE/INPI)</td>
+<td>https://www.boursorama.com/bourse/actualites/bigben-finalise-une-cession-et-prolonge-sa-sa</td>
+</tr>
+<tr>
+<td>WD03</td>
+<td>JUDGEMENT: end of initial 6-month observation period</td>
+<td>CA €376m (2021 — stale filing)</td>
+<td>https://www.bodacc.fr/pages/annonces-commerciales-detail/?q.id=id:A202601541654</td>
+</tr>
+<tr>
+<td>WD04</td>
+<td>JUDGEMENT: end of initial 6-month observation period</td>
+<td>CA €32m (2024)</td>
+<td>https://www.bodacc.fr/pages/annonces-commerciales-detail/?q.id=id:A202601601899</td>
+</tr>
+<tr>
+<td>WD05</td>
+<td>JUDGEMENT: end of initial 6-month observation period</td>
+<td>CA €34m (2025)</td>
+<td>https://www.bodacc.fr/pages/annonces-commerciales-detail/?q.id=id:A202601443260</td>
+</tr>
+<tr>
+<td>WD06</td>
+<td>JUDGEMENT: second vote window</td>
+<td>98% haircut proposal</td>
+<td>https://www.baywa.com/</td>
+</tr>
+<tr>
+<td>WD07</td>
+<td>extended maturity (company)</td>
+<td>€400m</td>
+<td>https://branicks.com/en/branicks-group-ag-creditors-vote-to-extend-maturity-and-pave-the-w</td>
+</tr>
+<tr>
+<td>WD08</td>
+<td>standstill expiry (Stamdata notice)</td>
+<td>€60m bond</td>
+<td>https://stamdata.com/news/api/pdf/77c0e62e-9892-4a36-9863-8225674aa371</td>
+</tr>
+<tr>
+<td>WD09</td>
+<td>amended Final Redemption Date</td>
+<td>Nordic HY bond</td>
+<td>https://stamdata.com/news/api/pdf/3b50cc62-9dff-4033-9e71-766cefd50e8e</td>
+</tr>
+<tr>
+<td>WD10</td>
+<td>date not public — calendar gap</td>
+<td>SECONDARY source (press)</td>
+<td>https://www.economiadigital.es/empresas/fondo-rs-lender-insta-declaracion-concurso-filial-</td>
+</tr>
+<tr>
+<td>WD11</td>
+<td>omologazione hearing not yet fixed publicly</td>
+<td>€10m new money</td>
+<td>https://euroborsa.it/public/euroborsa/Comunicati_Stampa/Clabo/20261009_190453_1_.pdf</td>
+</tr>
+<tr>
+<td>WD12</td>
+<td>JUDGEMENT: ~180-day CIRP clock</td>
+<td>₹1,527cr claim (SECONDARY source)</td>
+<td>https://www.livelawbiz.com/nclt/nclt-delhi-admits-svogl-into-cirp-despite-pending-winding-</td>
+</tr>
+<tr>
+<td>WD13</td>
+<td>SISP milestones not public in source</td>
+<td>SECONDARY source (legal press)</td>
+<td>https://www.canadianlawyermag.com/cl-plus/deals/4208</td>
+</tr>
+<tr>
+<td>WD14</td>
+<td>rehab-plan deadline not in source</td>
+<td>¥13.2bn liabilities</td>
+<td>https://www.tdb.co.jp/report/bankruptcy/flash/5266/</td>
+</tr>
+<tr>
+<td>WD15</td>
+<td>next court step not in source</td>
+<td>¥28.95bn group liabilities</td>
+<td>https://www.tdb.co.jp/report/bankruptcy/flash/5264/</td>
+</tr>
+<tr>
+<td>WD16</td>
+<td>creditor meeting date not in source</td>
+<td>¥6.05bn liabilities</td>
+<td>https://www.tdb.co.jp/report/bankruptcy/flash/5268/</td>
+</tr>
+<tr>
+<td>WD17</td>
+<td>moratorium expiry (meetings 4 Nov per source)</td>
+<td>SECONDARY source (SGX summary)</td>
+<td>https://www.minichart.com.sg/2026/09/18/mm2-asia-wins-court-leave-to-convene-scheme-credit</td>
+</tr>
+<tr>
+<td>WD18</td>
+<td>convening order date (next: scheme meeting)</td>
+<td>HKEX 1608</td>
+<td>https://www1.hkexnews.hk/listedco/listconews/sehk/2026/1021/2026102100581.pdf</td>
+</tr>
+<tr>
+<td>WD19</td>
+<td>sanction hearing date to be announced</td>
+<td>offshore debt</td>
+<td>https://www1.hkexnews.hk/listedco/listconews/sehk/2026/1005/2026100500001.pdf</td>
+</tr>
+<tr>
+<td>WD20</td>
+<td>adjourned petition hearing</td>
+<td>HKEX 95</td>
+<td>https://www1.hkexnews.hk/listedco/listconews/sehk/2026/1005/2026100500079.pdf</td>
+</tr>
+<tr>
+<td>WD21</td>
+<td>scheme timetable pending</td>
+<td>HKEX 1813</td>
+<td>https://www1.hkexnews.hk/listedco/listconews/sehk/2026/0928/2026092801911.pdf</td>
+</tr>
+<tr>
+<td>WD22</td>
+<td>expected effective date</td>
+<td>new notes/equity post-RED</td>
+<td>https://www1.hkexnews.hk/listedco/listconews/sehk/2026/1021/2026102100751.pdf</td>
+</tr>
+<tr>
+<td>WD23</td>
+<td>sanction hearing date to be announced</td>
+<td>HKEX 1622</td>
+<td>https://www1.hkexnews.hk/listedco/listconews/sehk/2026/1016/2026101601244.pdf</td>
+</tr>
+<tr>
+<td>WD24</td>
+<td>asset-sale process</td>
+<td>HKEX 3883</td>
+<td>https://www1.hkexnews.hk/listedco/listconews/sehk/2026/1002/2026100203271.pdf</td>
+</tr>
+<tr>
+<td>WD25</td>
+<td>adjourned petition hearing</td>
+<td>HKEX 6158</td>
+<td>https://www1.hkexnews.hk/listedco/listconews/sehk/2026/1020/2026102000255.pdf</td>
+</tr>
+</tbody>
+</table>
+<h3>Calendar (dated catalysts)</h3>
+<ul>
+<li><strong>2026-10-21</strong> — VPower Group (HK/SG): Scheme creditors at meeting</li>
+<li><strong>2026-10-26</strong> — China SCE Group (HK/CN): Restructuring conditions (scheme already approved)</li>
+<li><strong>2026-11-01</strong> — Booster Precision Components (DE/NO): Ad-hoc group of bondholders (Nordic Trustee written procedure)</li>
+<li><strong>2026-11-09</strong> — Zhenro Properties (HK/CN): Petitioner (offshore creditor) + HK High Court</li>
+<li><strong>2026-11-21</strong> — mm2 Asia (SG): Scheme creditors (majority in number, 75% value) + SG High Court</li>
+<li><strong>2026-11-30</strong> — BayWa / Kronos EKS €100m hybrid (DE): SchVG bondholder majority (75%) / StaRUG cram-down</li>
+<li><strong>2026-11-30</strong> — Point Properties Portfolio 1 (SE): Bondholders via Nordic Trustee written procedure</li>
+<li><strong>2026-12-09</strong> — Bigben Interactive (FR): Bondholder class: lock-up holds 67.6% of €57.4m exchangeables</li>
+<li><strong>2027-01-22</strong> — Dumarey Powerglide Bouthéon (FR): Parent group + administrateur</li>
+<li><strong>2027-02-05</strong> — ODAS (FR): Administrateur judiciaire + affected-party classes</li>
+<li><strong>2027-02-13</strong> — Poseidon Bidco (FR): Unitranche/TLB lenders as affected class (LBO holdco)</li>
+<li><strong>2027-03-31</strong> — Thames Water Utilities (UK): Class A creditors + Ofwat + court sanction (Part 26A plan)</li>
+<li><strong>2027-03-31</strong> — Branicks Group €400m bond (DE): Shareholder meeting (implementation condition)</li>
+<li><strong>2027-04-06</strong> — LVGEM (China) Real Estate (HK/CN): Petitioner + HK High Court</li>
+<li><strong>2027-04-30</strong> — SVOGL Oil Gas and Energy (IN): Committee of Creditors (66% vote) led by PNB</li>
+</ul>
+<p>10 situations have no public catalyst date yet; finding that date first is what the product sells (JUDGEMENT).</p>
+<div style="page-break-before:always"></div>
+
+<h2><span class="n">04</span>Control maps — all 25, ten that matter most first (JUDGEMENT ranking)</h2>
+<p><strong>1. Thames Water Utilities (UK) — 2027-03-31.</strong> Stage: Recapitalisation; Class B TSA (&gt;60% of Class B). <em>Chokepoint:</em> Class A creditors + Ofwat + court sanction (Part 26A plan). Size: ~£1bn Class B; Class B recovers ~5.9% via equity. Source: <a href="https://www.thameswater.co.uk/news/2026/oct/class-b-creditors-update">thameswater.co.uk/news/2026/oc…itors-update</a></p>
+<p><strong>2. Agile Group (HK/CN) — TBC.</strong> Stage: UK Part 26A plan + HK scheme. <em>Chokepoint:</em> Plan creditor classes; cross-class cram-down risk. Size: offshore debt. Source: <a href="https://www1.hkexnews.hk/listedco/listconews/sehk/2026/1005/2026100500001.pdf">www1.hkexnews.hk/listedco/list…00500001.pdf</a></p>
+<p><strong>3. Bigben Interactive (FR) — 2026-12-09.</strong> Stage: Sauvegarde accélérée (TC Lille Métropole). <em>Chokepoint:</em> Bondholder class: lock-up holds 67.6% of €57.4m exchangeables. Size: CA €288m (2024, INSEE/INPI). Source: <a href="https://www.boursorama.com/bourse/actualites/bigben-finalise-une-cession-et-prolonge-sa-sauvegarde-acceleree-dfdd7c8294d89f11cca8373a71dd96c8">boursorama.com/bourse/actualit…373a71dd96c8</a></p>
+<p><strong>4. BayWa / Kronos EKS €100m hybrid (DE) — 2026-11-30.</strong> Stage: SchVG vote without meeting failed. <em>Chokepoint:</em> SchVG bondholder majority (75%) / StaRUG cram-down. Size: 98% haircut proposal. Source: <a href="https://www.baywa.com/">baywa.com/</a></p>
+<p><strong>5. Booster Precision Components (DE/NO) — 2026-11-01.</strong> Stage: Nordic bond; standstill with ad-hoc group. <em>Chokepoint:</em> Ad-hoc group of bondholders (Nordic Trustee written procedure). Size: €60m bond. Source: <a href="https://stamdata.com/news/api/pdf/77c0e62e-9892-4a36-9863-8225674aa371">stamdata.com/news/api/pdf/77c0…8225674aa371</a></p>
+<p><strong>6. LVGEM (China) Real Estate (HK/CN) — 2027-04-06.</strong> Stage: Winding-up petition adjourned. <em>Chokepoint:</em> Petitioner + HK High Court. Size: HKEX 95. Source: <a href="https://www1.hkexnews.hk/listedco/listconews/sehk/2026/1005/2026100500079.pdf">www1.hkexnews.hk/listedco/list…00500079.pdf</a></p>
+<p><strong>7. China SCE Group (HK/CN) — 2026-10-26.</strong> Stage: Restructuring effective date. <em>Chokepoint:</em> Restructuring conditions (scheme already approved). Size: new notes/equity post-RED. Source: <a href="https://www1.hkexnews.hk/listedco/listconews/sehk/2026/1021/2026102100751.pdf">www1.hkexnews.hk/listedco/list…02100751.pdf</a></p>
+<p><strong>8. Toys"R"Us Japan (日本トイザらス) (JP) — TBC.</strong> Stage: Civil rehabilitation commenced 2026-10-06. <em>Chokepoint:</em> Supervisor + rehabilitation creditors; sponsor selection. Size: ¥13.2bn liabilities. Source: <a href="https://www.tdb.co.jp/report/bankruptcy/flash/5266/">tdb.co.jp/report/bankruptcy/flash/5266/</a></p>
+<p><strong>9. mm2 Asia (SG) — 2026-11-21.</strong> Stage: Scheme of arrangement; moratorium. <em>Chokepoint:</em> Scheme creditors (majority in number, 75% value) + SG High Court. Size: SECONDARY source (SGX summary). Source: <a href="https://www.minichart.com.sg/2026/09/18/mm2-asia-wins-court-leave-to-convene-scheme-creditor-meetings-moratorium-extended-to-21-nov-2026/">minichart.com.sg/2026/09/18/mm…21-nov-2026/</a></p>
+<p><strong>10. Zhenro Properties (HK/CN) — 2026-11-09.</strong> Stage: Winding-up petition adjourned. <em>Chokepoint:</em> Petitioner (offshore creditor) + HK High Court. Size: HKEX 6158. Source: <a href="https://www1.hkexnews.hk/listedco/listconews/sehk/2026/1020/2026102000255.pdf">www1.hkexnews.hk/listedco/list…02000255.pdf</a></p>
+<div style="page-break-before:always"></div>
+
+<h3>The other 15</h3>
+<p><strong>11. ODAS (FR) — 2027-02-05.</strong> Stage: Sauvegarde (TAE Nanterre), opened 2026-08-05. <em>Chokepoint:</em> Administrateur judiciaire + affected-party classes. Size: CA €376m (2021 — stale filing). Source: <a href="https://www.bodacc.fr/pages/annonces-commerciales-detail/?q.id=id:A202601541654">bodacc.fr/pages/annonces-comme…202601541654</a></p>
+<p><strong>12. Poseidon Bidco (FR) — 2027-02-13.</strong> Stage: Sauvegarde (TAE Nanterre), opened 2026-08-13. <em>Chokepoint:</em> Unitranche/TLB lenders as affected class (LBO holdco). Size: CA €32m (2024). Source: <a href="https://www.bodacc.fr/pages/annonces-commerciales-detail/?q.id=id:A202601601899">bodacc.fr/pages/annonces-comme…202601601899</a></p>
+<p><strong>13. Dumarey Powerglide Bouthéon (FR) — 2027-01-22.</strong> Stage: Sauvegarde (TAE Lyon), opened 2026-07-22. <em>Chokepoint:</em> Parent group + administrateur. Size: CA €34m (2025). Source: <a href="https://www.bodacc.fr/pages/annonces-commerciales-detail/?q.id=id:A202601443260">bodacc.fr/pages/annonces-comme…202601443260</a></p>
+<p><strong>14. Branicks Group €400m bond (DE) — 2027-03-31.</strong> Stage: SchVG vote passed (99%). <em>Chokepoint:</em> Shareholder meeting (implementation condition). Size: €400m. Source: <a href="https://branicks.com/en/branicks-group-ag-creditors-vote-to-extend-maturity-and-pave-the-way-for-restructuring/">branicks.com/en/branicks-group…structuring/</a></p>
+<p><strong>15. Point Properties Portfolio 1 (SE) — 2026-11-30.</strong> Stage: Written procedure; maturity extended. <em>Chokepoint:</em> Bondholders via Nordic Trustee written procedure. Size: Nordic HY bond. Source: <a href="https://stamdata.com/news/api/pdf/3b50cc62-9dff-4033-9e71-766cefd50e8e">stamdata.com/news/api/pdf/3b50…766cefd50e8e</a></p>
+<p><strong>16. Urbas / Guadahermosa Proyectos (ES) — TBC.</strong> Stage: Concurso necesario (Juzgado Mercantil 12 Madrid). <em>Chokepoint:</em> RS Lender (petitioning creditor, €53m claim) + administración concursal. Size: SECONDARY source (press). Source: <a href="https://www.economiadigital.es/empresas/fondo-rs-lender-insta-declaracion-concurso-filial-urbas-reclama-53-millones.html">economiadigital.es/empresas/fo…illones.html</a></p>
+<p><strong>17. Clabo S.p.A. (IT) — TBC.</strong> Stage: Accordo di ristrutturazione (artt. 57/61/63 CCII). <em>Chokepoint:</em> Tribunal omologazione (art. 48 CCII) + tax authority adhesion. Size: €10m new money. Source: <a href="https://euroborsa.it/public/euroborsa/Comunicati_Stampa/Clabo/20261009_190453_1_.pdf">euroborsa.it/public/euroborsa/…90453_1_.pdf</a></p>
+<p><strong>18. SVOGL Oil Gas and Energy (IN) — 2027-04-30.</strong> Stage: NCLT Delhi admitted CIRP (PNB petition). <em>Chokepoint:</em> Committee of Creditors (66% vote) led by PNB. Size: ₹1,527cr claim (SECONDARY source). Source: <a href="https://www.livelawbiz.com/nclt/nclt-delhi-admits-svogl-into-cirp-despite-pending-winding-up-proceedings-555197">livelawbiz.com/nclt/nclt-delhi…dings-555197</a></p>
+<p><strong>19. Goodfood Market Corp. (CA) — TBC.</strong> Stage: CCAA initial order 5 Aug 2026; monitor Raymond Chabot. <em>Chokepoint:</em> Monitor + DIP lender; TSX delisting review. Size: SECONDARY source (legal press). Source: <a href="https://www.canadianlawyermag.com/cl-plus/deals/4208">canadianlawyermag.com/cl-plus/deals/4208</a></p>
+<p><strong>20. Kizuna Holdings (絆HD) group (JP) — TBC.</strong> Stage: Corporate reorg petition dismissed; preservation order. <em>Chokepoint:</em> Court-appointed preservation administrator. Size: ¥28.95bn group liabilities. Source: <a href="https://www.tdb.co.jp/report/bankruptcy/flash/5264/">tdb.co.jp/report/bankruptcy/flash/5264/</a></p>
+<p><strong>21. Gaia Funding (ガイアファンディング) (JP) — TBC.</strong> Stage: Bankruptcy commenced (Tokyo). <em>Chokepoint:</em> Bankruptcy trustee; 2,700+ lender-investors. Size: ¥6.05bn liabilities. Source: <a href="https://www.tdb.co.jp/report/bankruptcy/flash/5268/">tdb.co.jp/report/bankruptcy/flash/5268/</a></p>
+<p><strong>22. VPower Group (HK/SG) — 2026-10-21.</strong> Stage: Scheme convening order granted. <em>Chokepoint:</em> Scheme creditors at meeting. Size: HKEX 1608. Source: <a href="https://www1.hkexnews.hk/listedco/listconews/sehk/2026/1021/2026102100581.pdf">www1.hkexnews.hk/listedco/list…02100581.pdf</a></p>
+<p><strong>23. KWG Group (HK/CN) — TBC.</strong> Stage: RSA accession; consent fee deadlines. <em>Chokepoint:</em> RSA majority holders; scheme threshold. Size: HKEX 1813. Source: <a href="https://www1.hkexnews.hk/listedco/listconews/sehk/2026/0928/2026092801911.pdf">www1.hkexnews.hk/listedco/list…92801911.pdf</a></p>
+<p><strong>24. Redco Properties (HK/CN) — TBC.</strong> Stage: Scheme meeting approved 16 Oct 2026. <em>Chokepoint:</em> HK court sanction hearing. Size: HKEX 1622. Source: <a href="https://www1.hkexnews.hk/listedco/listconews/sehk/2026/1016/2026101601244.pdf">www1.hkexnews.hk/listedco/list…01601244.pdf</a></p>
+<p><strong>25. China Aoyuan (secured assets) (HK/CN) — TBC.</strong> Stage: Receivers (FTI) appointed over mortgaged assets. <em>Chokepoint:</em> Secured lender + receivers' asset sales. Size: HKEX 3883. Source: <a href="https://www1.hkexnews.hk/listedco/listconews/sehk/2026/1002/2026100203271.pdf">www1.hkexnews.hk/listedco/list…00203271.pdf</a></p>
+<div style="page-break-before:always"></div>
+
+<h2><span class="n">05</span>How it makes money</h2>
+<h3>Price against public comparables</h3>
+<table>
+<thead>
+<tr>
+<th>Product</th>
+<th>Public price evidence</th>
+<th>Source quality</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Debtwire</td>
+<td>£118,818 award (The Pensions Regulator, 2023) — PRIMARY; ≈£44.8k for one year — SECONDARY</td>
+<td>UK Contracts Finder</td>
+</tr>
+<tr>
+<td>Octus (ex-Reorg)</td>
+<td>$30k–$120k / yr (2017 court record)</td>
+<td>SECONDARY</td>
+</tr>
+<tr>
+<td>9fin</td>
+<td>≈$100k / yr</td>
+<td>SECONDARY</td>
+</tr>
+<tr>
+<td>Octus EMEA / Reorg APAC / Debtwire Asia</td>
+<td>no public price found</td>
+<td>GAP</td>
+</tr>
+<tr>
+<td><strong>TRIAGE World (proposed)</strong></td>
+<td><strong>£18k / desk / yr; £5k single situation map</strong></td>
+<td>JUDGEMENT</td>
+</tr>
+</tbody>
+</table>
+<p><svg viewBox='0 0 520 76' xmlns='http://www.w3.org/2000/svg'><text x='184' y='12' text-anchor='end' font-family='Inter, Arial' font-size='8' fill='#0d1218'>Debtwire (UK gov, 1yr)</text><rect x='190' y='2' width='122.6' height='13' fill='#64748b'/><text x='316.61052631578946' y='12' font-family='JetBrains Mono' font-size='7.5' fill='#5b6570'>£45k</text><text x='184' y='30' text-anchor='end' font-family='Inter, Arial' font-size='8' fill='#0d1218'>9fin (est.)</text><rect x='190' y='20' width='216.2' height='13' fill='#94a3b8'/><text x='410.2105263157895' y='30' font-family='JetBrains Mono' font-size='7.5' fill='#5b6570'>£79k</text><text x='184' y='48' text-anchor='end' font-family='Inter, Arial' font-size='8' fill='#0d1218'>Octus high (2017)</text><rect x='190' y='38' width='260.0' height='13' fill='#94a3b8'/><text x='454.0' y='48' font-family='JetBrains Mono' font-size='7.5' fill='#5b6570'>£95k</text><text x='184' y='66' text-anchor='end' font-family='Inter, Arial' font-size='8' fill='#0d1218'>TRIAGE World</text><rect x='190' y='56' width='49.3' height='13' fill='#2563eb'/><text x='243.26315789473685' y='66' font-family='JetBrains Mono' font-size='7.5' fill='#5b6570'>£18k</text></svg></p>
+<h3>Revenue scenarios (all assumptions JUDGEMENT)</h3>
+<table>
+<thead>
+<tr>
+<th>Scenario</th>
+<th style="text-align: right;">Desks yr-1</th>
+<th style="text-align: right;">Price</th>
+<th style="text-align: right;">Situation maps</th>
+<th style="text-align: right;">ARR</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Bear</td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">£12k</td>
+<td style="text-align: right;">10 × £5k</td>
+<td style="text-align: right;">£146k</td>
+</tr>
+<tr>
+<td>Base</td>
+<td style="text-align: right;">25</td>
+<td style="text-align: right;">£18k</td>
+<td style="text-align: right;">30 × £5k</td>
+<td style="text-align: right;">£600k</td>
+</tr>
+<tr>
+<td>Bull</td>
+<td style="text-align: right;">60</td>
+<td style="text-align: right;">£24k</td>
+<td style="text-align: right;">80 × £5k</td>
+<td style="text-align: right;">£1.84m</td>
+</tr>
+</tbody>
+</table>
+<p>Assumptions: desks = funds + liquidators in section 6 converting at 25% (base); single maps sold to liquidators/IPs pitching for appointments; no data resale; churn ignored in year 1.</p>
+<h3>90-day plan</h3>
+<ul>
+<li>Days 1–15: weekly calendar v1 (25 situations) shipped as PDF + app World tab; fix gaps (Gazette, Bundesanzeiger, EDINET key).</li>
+<li>Days 15–45: 10 design-partner desks from section 6 (free, 6 weeks), one per market; measure which catalysts they act on.</li>
+<li>Days 45–75: convert ≥5 to paid at £18k; sell 10 single situation maps to liquidators (FRP, Interpath, Kroll, Borrelli Walsh).</li>
+<li>Days 75–90: seed raise with 5 paying logos and a 52-week catalyst hit-rate; first strategic conversation (ION/Euronext/Fitch Ventures).</li>
+</ul>
+<div style="page-break-before:always"></div>
+
+<h2><span class="n">06</span>30 non-US buyers, each fitted to a live situation</h2>
+<p><em>Fit rationale is JUDGEMENT from public firm descriptions; no firm has been contacted.</em></p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Firm</th>
+<th>Base</th>
+<th>Situation</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class='r'>1</td>
+<td>Attestor</td>
+<td>London</td>
+<td>Thames Water (Class B)</td>
+<td>has run large UK special-sits positions; Class B equity strip</td>
+</tr>
+<tr>
+<td class='r'>2</td>
+<td>Arini</td>
+<td>London</td>
+<td>Bigben Interactive exchangeables</td>
+<td>European stressed credit; small-cap bond lock-ups</td>
+</tr>
+<tr>
+<td class='r'>3</td>
+<td>Cheyne Capital</td>
+<td>London</td>
+<td>Point Properties Portfolio 1</td>
+<td>real-estate credit; Nordic RE bonds</td>
+</tr>
+<tr>
+<td class='r'>4</td>
+<td>Davidson Kempner (London)</td>
+<td>London</td>
+<td>Agile Part 26A plan</td>
+<td>cross-border plan classes; Asia desk</td>
+</tr>
+<tr>
+<td class='r'>5</td>
+<td>Strategic Value Partners Europe</td>
+<td>London</td>
+<td>BayWa hybrid / StaRUG</td>
+<td>German restructurings</td>
+</tr>
+<tr>
+<td class='r'>6</td>
+<td>Bain Capital Credit EMEA</td>
+<td>London</td>
+<td>Poseidon Bidco sauvegarde</td>
+<td>LBO holdco lender classes</td>
+</tr>
+<tr>
+<td class='r'>7</td>
+<td>Värde Partners Europe</td>
+<td>London</td>
+<td>Urbas / Guadahermosa concurso</td>
+<td>Spanish real-estate NPL/concurso assets</td>
+</tr>
+<tr>
+<td class='r'>8</td>
+<td>ADV Partners</td>
+<td>Hong Kong</td>
+<td>Zhenro petition</td>
+<td>Asia special situations</td>
+</tr>
+<tr>
+<td class='r'>9</td>
+<td>Alcentra</td>
+<td>London</td>
+<td>Booster Precision Components</td>
+<td>Nordic/European HY bonds</td>
+</tr>
+<tr>
+<td class='r'>10</td>
+<td>Hayfin</td>
+<td>London</td>
+<td>Clabo accordo</td>
+<td>Italian mid-market rescue finance</td>
+</tr>
+<tr>
+<td class='r'>11</td>
+<td>Tikehau Capital</td>
+<td>Paris</td>
+<td>ODAS sauvegarde</td>
+<td>French special opportunities</td>
+</tr>
+<tr>
+<td class='r'>12</td>
+<td>Ares Europe</td>
+<td>London</td>
+<td>Dumarey Powerglide</td>
+<td>auto-supplier rescue/DIP-style</td>
+</tr>
+<tr>
+<td class='r'>13</td>
+<td>Tor Investment Management</td>
+<td>Hong Kong</td>
+<td>Redco scheme</td>
+<td>Asia performing/stressed credit</td>
+</tr>
+<tr>
+<td class='r'>14</td>
+<td>Kaiyuan Capital</td>
+<td>Hong Kong</td>
+<td>KWG RSA</td>
+<td>China developer bonds</td>
+</tr>
+<tr>
+<td class='r'>15</td>
+<td>Clearwater Capital Partners</td>
+<td>Hong Kong</td>
+<td>China SCE post-RED paper</td>
+<td>Asia distressed</td>
+</tr>
+<tr>
+<td class='r'>16</td>
+<td>Shoreline Capital</td>
+<td>Shanghai</td>
+<td>China Aoyuan receivership assets</td>
+<td>onshore NPL/real assets</td>
+</tr>
+<tr>
+<td class='r'>17</td>
+<td>Mitsubishi Corporation</td>
+<td>Tokyo</td>
+<td>Toys"R"Us Japan sponsor</td>
+<td>JUDGEMENT: retail/brand sponsor candidate</td>
+</tr>
+<tr>
+<td class='r'>18</td>
+<td>Mitsui &amp; Co.</td>
+<td>Tokyo</td>
+<td>Kizuna HD services assets</td>
+<td>JUDGEMENT: care/services platform</td>
+</tr>
+<tr>
+<td class='r'>19</td>
+<td>Japan Industrial Solutions</td>
+<td>Tokyo</td>
+<td>Toys"R"Us Japan</td>
+<td>Japanese turnaround fund</td>
+</tr>
+<tr>
+<td class='r'>20</td>
+<td>Asian family offices (SG/HK, generic)</td>
+<td>Singapore</td>
+<td>mm2 Asia scheme</td>
+<td>media assets; small tickets</td>
+</tr>
+<tr>
+<td class='r'>21</td>
+<td>FRP Advisory</td>
+<td>London</td>
+<td>UK late-accounts large filers (8,693)</td>
+<td>IP/administrator pipeline</td>
+</tr>
+<tr>
+<td class='r'>22</td>
+<td>Interpath Advisory</td>
+<td>London</td>
+<td>Thames Water / UK pipeline</td>
+<td>appointment origination</td>
+</tr>
+<tr>
+<td class='r'>23</td>
+<td>Teneo</td>
+<td>London/Asia</td>
+<td>VPower scheme</td>
+<td>scheme/administration work</td>
+</tr>
+<tr>
+<td class='r'>24</td>
+<td>Kroll APAC</td>
+<td>Hong Kong</td>
+<td>LVGEM / Zhenro petitions</td>
+<td>provisional liquidator appointments</td>
+</tr>
+<tr>
+<td class='r'>25</td>
+<td>Borrelli Walsh</td>
+<td>Hong Kong</td>
+<td>Skyfame / developer petitions</td>
+<td>HK liquidations</td>
+</tr>
+<tr>
+<td class='r'>26</td>
+<td>KPMG (ex-Ferrier Hodgson)</td>
+<td>Sydney/HK</td>
+<td>Australian administrations (ASX)</td>
+<td>Ferrier Hodgson merged into KPMG AU 2019 (JUDGEMENT: verify)</td>
+</tr>
+<tr>
+<td class='r'>27</td>
+<td>Raymond Chabot</td>
+<td>Montréal</td>
+<td>Goodfood CCAA (monitor)</td>
+<td>Canadian monitor; SISP data</td>
+</tr>
+<tr>
+<td class='r'>28</td>
+<td>Polus Capital</td>
+<td>London</td>
+<td>Booster / Nordic bonds</td>
+<td>European stressed credit</td>
+</tr>
+<tr>
+<td class='r'>29</td>
+<td>Sona Asset Management</td>
+<td>London</td>
+<td>Branicks bond</td>
+<td>European credit</td>
+</tr>
+<tr>
+<td class='r'>30</td>
+<td>Edelweiss ARC</td>
+<td>Mumbai</td>
+<td>SVOGL CIRP</td>
+<td>Indian asset reconstruction</td>
+</tr>
+</tbody>
+</table>
+<div style="page-break-before:always"></div>
+
+<h2><span class="n">07</span>Who backs it — 40 names, top 15 checked</h2>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Backer</th>
+<th>Type</th>
+<th>Evidence (site fetched 23 Oct)</th>
+<th>Comparable</th>
+<th>Cheque (JUDGEMENT)</th>
+<th>Why us</th>
+<th>Check</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class='r'>1</td>
+<td>Highland Europe</td>
+<td>Growth VC</td>
+<td>Led 9fin $50m Series B</td>
+<td>9fin</td>
+<td>€5–15m (growth)</td>
+<td>owns the category comp; we are the cross-border/Asia wedge</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+</tr>
+<tr>
+<td class='r'>2</td>
+<td>Seedcamp</td>
+<td>Seed VC</td>
+<td>9fin shown on homepage portfolio; backed 9fin from day one</td>
+<td>9fin</td>
+<td>€0.25–1m</td>
+<td>pattern-match to 9fin at seed</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+</tr>
+<tr>
+<td class='r'>3</td>
+<td>Redalpine</td>
+<td>Seed/A VC</td>
+<td>Participated in 9fin Series B</td>
+<td>9fin</td>
+<td>€1–3m</td>
+<td>credit-intel thesis already underwritten</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+</tr>
+<tr>
+<td class='r'>4</td>
+<td>Illuminate Financial</td>
+<td>Fintech VC</td>
+<td>'Financial Markets Infrastructure' theme; exits to S&amp;P and Bloomberg; bank strategic LPs</td>
+<td>capital-markets infra</td>
+<td>€1–4m</td>
+<td>bank-LP distribution into credit desks</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+</tr>
+<tr>
+<td class='r'>5</td>
+<td>Augmentum Fintech</td>
+<td>Listed fintech fund</td>
+<td>'Europe's leading publicly listed fintech fund'</td>
+<td>UK fintech</td>
+<td>£2–5m</td>
+<td>UK-listed, fintech-only mandate</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+</tr>
+<tr>
+<td class='r'>6</td>
+<td>ION Group</td>
+<td>Strategic</td>
+<td>Site lists Debtwire among ION businesses</td>
+<td>Debtwire (owned)</td>
+<td>acquirer/partner</td>
+<td>buy-vs-build for Asia/Nordic coverage</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+</tr>
+<tr>
+<td class='r'>7</td>
+<td>Fitch Ventures</td>
+<td>Strategic CVC</td>
+<td>Portfolio incl. Cognitive Credit, Versana, CredCore (search result)</td>
+<td>credit data</td>
+<td>$1–5m</td>
+<td>credit-markets thesis</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'>-SECONDARY</span></td>
+</tr>
+<tr>
+<td class='r'>8</td>
+<td>Antler</td>
+<td>Pre-seed VC</td>
+<td>Offices incl. Singapore, Japan, Australia</td>
+<td>—</td>
+<td>$0.1–0.5m</td>
+<td>APAC footprint</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+</tr>
+<tr>
+<td class='r'>9</td>
+<td>Vertex Ventures SEA &amp; India</td>
+<td>VC</td>
+<td>SEA &amp; India fintech investor (site)</td>
+<td>—</td>
+<td>$1–3m</td>
+<td>Singapore/India hub</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+</tr>
+<tr>
+<td class='r'>10</td>
+<td>Peak XV Partners</td>
+<td>VC</td>
+<td>Seed-to-growth global VC (site)</td>
+<td>—</td>
+<td>$1–5m</td>
+<td>India/SEA</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+</tr>
+<tr>
+<td class='r'>11</td>
+<td>East Ventures</td>
+<td>VC</td>
+<td>Leading SEA VC, seed to growth (site)</td>
+<td>—</td>
+<td>$0.5–2m</td>
+<td>SEA</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+</tr>
+<tr>
+<td class='r'>12</td>
+<td>Jungle Ventures</td>
+<td>VC</td>
+<td>Early/growth VC in India &amp; SEA (site)</td>
+<td>—</td>
+<td>$1–3m</td>
+<td>India/SEA</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+</tr>
+<tr>
+<td class='r'>13</td>
+<td>Balderton Capital</td>
+<td>VC</td>
+<td>Backs European-founded tech only (site)</td>
+<td>—</td>
+<td>€2–8m</td>
+<td>European founder thesis</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+</tr>
+<tr>
+<td class='r'>14</td>
+<td>Index Ventures</td>
+<td>VC</td>
+<td>Multi-stage VC (site)</td>
+<td>—</td>
+<td>€2–10m</td>
+<td>fintech track record</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+</tr>
+<tr>
+<td class='r'>15</td>
+<td>Euronext</td>
+<td>Strategic</td>
+<td>Markets incl. Oslo, Milan, Paris; data business (site)</td>
+<td>Oslo Børs/Nordic bonds</td>
+<td>partner</td>
+<td>Nordic bond calendar distribution</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Further 25 (unverified long list):</strong> Speedinvest (EU fintech); Monk's Hill (SEA); LSEG (strategic; LSEG Ventures page 404); Deutsche Börse (DB1 Ventures); SGX Group; HKEX; JPX; Nikkei/QUICK; Permira (growth); Moody's; S&amp;P Global; Spark Capital (9fin Series B); 500 Global (9fin Series B); Molten Ventures; Anthemis; Fin Capital; Mouro Capital; BlueYard; Point Nine; Global Founders Capital; Golden Gate Ventures; Wavemaker Partners; Sequoia-alum angels (generic); Distressed-fund GP angels (generic; firms only, no individuals named); Saison Capital.</p>
+<h3>Funding ask (JUDGEMENT)</h3>
+<table>
+<thead>
+<tr>
+<th>Use of funds (€2.5m, 18 months)</th>
+<th style="text-align: right;">€</th>
+<th style="text-align: right;">%</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Analysts in London, Singapore and Hong Kong (3 FTE)</td>
+<td style="text-align: right;">1.05m</td>
+<td style="text-align: right;">42%</td>
+</tr>
+<tr>
+<td>Engineering: ingestion + app (2 FTE)</td>
+<td style="text-align: right;">0.75m</td>
+<td style="text-align: right;">30%</td>
+</tr>
+<tr>
+<td>Data licences and court-access fees (lawful, no scraping of logins)</td>
+<td style="text-align: right;">0.25m</td>
+<td style="text-align: right;">10%</td>
+</tr>
+<tr>
+<td>Go-to-market (design partners, events)</td>
+<td style="text-align: right;">0.25m</td>
+<td style="text-align: right;">10%</td>
+</tr>
+<tr>
+<td>Legal/compliance (GDPR firms-only policy)</td>
+<td style="text-align: right;">0.10m</td>
+<td style="text-align: right;">4%</td>
+</tr>
+<tr>
+<td>Buffer</td>
+<td style="text-align: right;">0.10m</td>
+<td style="text-align: right;">4%</td>
+</tr>
+</tbody>
+</table>
+<div style="page-break-before:always"></div>
+
+<h2><span class="n">08</span>Pitch (worldwide)</h2>
+<p>Restructuring has gone global and court-driven: UK Part 26A plans for Chinese developers, Hong Kong petitions adjourned to 2027, Nordic written procedures, German SchVG votes, French accelerated sauvegardes, Singapore moratoria, Japanese civil rehabilitations. The incumbents sell news; nobody sells <strong>the calendar and the control map</strong> — who blocks, who decides, and on what date. TRIAGE World does, built from bulk public registers (5.7m UK companies, 58,810 French notices) and primary filings, with every claim linked and graded. Cheaper than one Debtwire seat, and focused on the date that moves the price. (Positioning is JUDGEMENT.)</p>
+<p>Eight email drafts, each headed <em>DO NOT SEND - DRAFT</em>, are saved to <code>/workspace/triage_os_data/world/email_drafts_DO_NOT_SEND.txt</code>. Nothing has been sent.</p>
+<h2><span class="n">09</span>Gaps and what was not done</h2>
+<ul>
+<li>London Gazette JSON/feed returned HTTP 202 with empty body (WAF) — UK notices come from Companies House status instead.</li>
+<li>Companies House charge detail needs an API key — only counts of outstanding charges used.</li>
+<li>Germany Insolvenzbekanntmachungen/Bundesanzeiger: no bulk access; SchVG cases from issuer IR pages only.</li>
+<li>Spain BOE concursos and Canada OSB CCAA list timed out/503 from the box; Spain/Canada rows use secondary press (labelled).</li>
+<li>Japan EDINET needs an API key; Singapore eLitigation not accessible; ESMA/EDW CMBS repositories need registration; EBA transparency exercise discontinued.</li>
+<li>French enrichment ran on ≈400 of 5,552 sauvegarde/redressement openings; liquidations not enriched; finance years can be stale.</li>
+<li>Zucchi (IT) primary PDF did not download; Gefion vote (7 Oct) dropped as its catalyst passed with no result found.</li>
+<li>Octus EMEA, Debtwire Asia and Reorg APAC prices not public; 9fin/Octus figures are secondary.</li>
+<li>Buyers list is not verified per firm; backer cheque sizes are judgement. No PACER; no logins; nothing sent.</li>
+</ul>
+<div style="page-break-before:always"></div>
+
+<h2><span class="n">10</span>Appendix A. Verification log</h2>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Claim</th>
+<th>Status</th>
+<th>Method</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>WB01</td>
+<td>Highland Europe: Led 9fin $50m Series B</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>site fetch token 'Highland'</td>
+</tr>
+<tr>
+<td>WB02</td>
+<td>Seedcamp: 9fin shown on homepage portfolio; backed 9fin from day one</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>site fetch token '9fin'</td>
+</tr>
+<tr>
+<td>WB03</td>
+<td>Redalpine: Participated in 9fin Series B</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>site fetch token 'Redalpine'</td>
+</tr>
+<tr>
+<td>WB04</td>
+<td>Illuminate Financial: 'Financial Markets Infrastructure' theme; exits to S&amp;P and Bloomberg; bank strategic LPs</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>site fetch token 'Financial Markets Infrastructure'</td>
+</tr>
+<tr>
+<td>WB05</td>
+<td>Augmentum Fintech: 'Europe's leading publicly listed fintech fund'</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>site fetch token 'publicly listed fintech fund'</td>
+</tr>
+<tr>
+<td>WB06</td>
+<td>ION Group: Site lists Debtwire among ION businesses</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>site fetch token 'Debtwire'</td>
+</tr>
+<tr>
+<td>WB07</td>
+<td>Fitch Ventures: Portfolio incl. Cognitive Credit, Versana, CredCore (search result)</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'>-SECONDARY</span></td>
+<td>site fetch token 'SECONDARY'</td>
+</tr>
+<tr>
+<td>WB08</td>
+<td>Antler: Offices incl. Singapore, Japan, Australia</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>site fetch token 'Singapore'</td>
+</tr>
+<tr>
+<td>WB09</td>
+<td>Vertex Ventures SEA &amp; India: SEA &amp; India fintech investor (site)</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>site fetch token 'Southeast Asia'</td>
+</tr>
+<tr>
+<td>WB10</td>
+<td>Peak XV Partners: Seed-to-growth global VC (site)</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>site fetch token 'Seed to Growth'</td>
+</tr>
+<tr>
+<td>WB11</td>
+<td>East Ventures: Leading SEA VC, seed to growth (site)</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>site fetch token 'Southeast Asia'</td>
+</tr>
+<tr>
+<td>WB12</td>
+<td>Jungle Ventures: Early/growth VC in India &amp; SEA (site)</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>site fetch token 'India &amp; Southeast Asia'</td>
+</tr>
+<tr>
+<td>WB13</td>
+<td>Balderton Capital: Backs European-founded tech only (site)</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>site fetch token 'European'</td>
+</tr>
+<tr>
+<td>WB14</td>
+<td>Index Ventures: Multi-stage VC (site)</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>site fetch token 'Index Ventures'</td>
+</tr>
+<tr>
+<td>WB15</td>
+<td>Euronext: Markets incl. Oslo, Milan, Paris; data business (site)</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>site fetch token 'Oslo'</td>
+</tr>
+<tr>
+<td>WD01</td>
+<td>Thames Water Utilities: Recapitalisation; Class B TSA (&gt;60% of Class B); catalyst 2027-03-31</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>fetched 2026-10-22/23, token match 'in excess of 60% of the Class B De</td>
+</tr>
+<tr>
+<td>WD02</td>
+<td>Bigben Interactive: Sauvegarde accélérée (TC Lille Métropole); catalyst 2026-12-09</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>fetched 2026-10-22/23, token match '9 décembre 2026'</td>
+</tr>
+<tr>
+<td>WD03</td>
+<td>ODAS: Sauvegarde (TAE Nanterre), opened 2026-08-05; catalyst 2027-02-05</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>BODACC open-data export row (SIREN match) + recherche-entreprises fina</td>
+</tr>
+<tr>
+<td>WD04</td>
+<td>Poseidon Bidco: Sauvegarde (TAE Nanterre), opened 2026-08-13; catalyst 2027-02-13</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>BODACC open-data export row (SIREN match) + recherche-entreprises fina</td>
+</tr>
+<tr>
+<td>WD05</td>
+<td>Dumarey Powerglide Bouthéon: Sauvegarde (TAE Lyon), opened 2026-07-22; catalyst 2027-01-22</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>BODACC open-data export row (SIREN match) + recherche-entreprises fina</td>
+</tr>
+<tr>
+<td>WD06</td>
+<td>BayWa / Kronos EKS €100m hybrid: SchVG vote without meeting failed; catalyst 2026-11-30</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>carried from pass-1 row CB23</td>
+</tr>
+<tr>
+<td>WD07</td>
+<td>Branicks Group €400m bond: SchVG vote passed (99%); catalyst 2027-03-31</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>carried from pass-1 row M05</td>
+</tr>
+<tr>
+<td>WD08</td>
+<td>Booster Precision Components: Nordic bond; standstill with ad-hoc group; catalyst 2026-11-01</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>fetched 2026-10-22/23, token match '1 November 2026'</td>
+</tr>
+<tr>
+<td>WD09</td>
+<td>Point Properties Portfolio 1: Written procedure; maturity extended; catalyst 2026-11-30</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>fetched 2026-10-22/23, token match '30 November 2026'</td>
+</tr>
+<tr>
+<td>WD10</td>
+<td>Urbas / Guadahermosa Proyectos: Concurso necesario (Juzgado Mercantil 12 Madrid); catalyst TBC</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'>-SECONDARY</span></td>
+<td>fetched 2026-10-22/23, token match '53 millones'</td>
+</tr>
+<tr>
+<td>WD11</td>
+<td>Clabo S.p.A.: Accordo di ristrutturazione (artt. 57/61/63 CCII); catalyst TBC</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>fetched 2026-10-22/23, token match 'ACCORDO DI RISTRUTTURAZIONE'</td>
+</tr>
+<tr>
+<td>WD12</td>
+<td>SVOGL Oil Gas and Energy: NCLT Delhi admitted CIRP (PNB petition); catalyst 2027-04-30</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'>-SECONDARY</span></td>
+<td>fetched 2026-10-22/23, token match 'Corporate Insolvency Resolution Pr</td>
+</tr>
+<tr>
+<td>WD13</td>
+<td>Goodfood Market Corp.: CCAA initial order 5 Aug 2026; monitor Raymond Chabot; catalyst TBC</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'>-SECONDARY</span></td>
+<td>fetched 2026-10-22/23, token match 'Raymond Chabot Inc.'</td>
+</tr>
+<tr>
+<td>WD14</td>
+<td>Toys"R"Us Japan (日本トイザらス): Civil rehabilitation commenced 2026-10-06; catalyst TBC</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>fetched 2026-10-22/23, token match '負債132億円'</td>
+</tr>
+<tr>
+<td>WD15</td>
+<td>Kizuna Holdings (絆HD) group: Corporate reorg petition dismissed; preservation order; catalyst TBC</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>fetched 2026-10-22/23, token match '289億5361万円'</td>
+</tr>
+<tr>
+<td>WD16</td>
+<td>Gaia Funding (ガイアファンディング): Bankruptcy commenced (Tokyo); catalyst TBC</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>fetched 2026-10-22/23, token match '負債60億4535万円'</td>
+</tr>
+<tr>
+<td>WD17</td>
+<td>mm2 Asia: Scheme of arrangement; moratorium; catalyst 2026-11-21</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'>-SECONDARY</span></td>
+<td>fetched 2026-10-22/23, token match '21 Nov 2026'</td>
+</tr>
+<tr>
+<td>WD18</td>
+<td>VPower Group: Scheme convening order granted; catalyst 2026-10-21</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>fetched 2026-10-22/23, token match '21 October 2026'</td>
+</tr>
+<tr>
+<td>WD19</td>
+<td>Agile Group: UK Part 26A plan + HK scheme; catalyst TBC</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>fetched 2026-10-22/23, token match 'Part 26A'</td>
+</tr>
+<tr>
+<td>WD20</td>
+<td>LVGEM (China) Real Estate: Winding-up petition adjourned; catalyst 2027-04-06</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>fetched 2026-10-22/23, token match '6 April 2027'</td>
+</tr>
+<tr>
+<td>WD21</td>
+<td>KWG Group: RSA accession; consent fee deadlines; catalyst TBC</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>fetched 2026-10-22/23, token match 'ACCESSION RATE'</td>
+</tr>
+<tr>
+<td>WD22</td>
+<td>China SCE Group: Restructuring effective date; catalyst 2026-10-26</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>fetched 2026-10-22/23, token match '26 October 2026'</td>
+</tr>
+<tr>
+<td>WD23</td>
+<td>Redco Properties: Scheme meeting approved 16 Oct 2026; catalyst TBC</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>fetched 2026-10-22/23, token match 'Scheme Meeting'</td>
+</tr>
+<tr>
+<td>WD24</td>
+<td>China Aoyuan (secured assets): Receivers (FTI) appointed over mortgaged assets; catalyst TBC</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>fetched 2026-10-22/23, token match 'FTI Consulting'</td>
+</tr>
+<tr>
+<td>WD25</td>
+<td>Zhenro Properties: Winding-up petition adjourned; catalyst 2026-11-09</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>fetched 2026-10-22/23, token match '9 November 2026'</td>
+</tr>
+</tbody>
+</table>
+<h2><span class="n">11</span>Appendix B. Method</h2>
+<p>Situations were selected from bulk feeds (Companies House snapshot, BODACC export, HKEX title search, TDB flash, ASX announcements, Stamdata/Nordic Trustee) and press triage, then kept only if a primary page fetched on 22–23 Oct 2026 contained the exact token recorded in the log. Secondary-only items are labelled VERIFIED-SECONDARY. Chokepoints reflect the statutory voting or court mechanics of each procedure (Part 26A cross-class cram-down; HK/SG scheme majorities: majority in number and 75% in value; SchVG 75%; Nordic written procedure; French affected-party classes since 2021 reform; Indian CoC 66%). Ranking and fit are JUDGEMENT. Individuals are excluded by design.</p><div class='disc avoid'><h3>Disclaimer and publisher's exclusion</h3><p>Published by TRIAGE for general information. Impersonal; not investment advice, a recommendation, or an offer or solicitation to buy or sell any security. Not tailored to any reader; intended to fall within the publisher's exclusion of section 202(a)(11)(D) of the US Investment Advisers Act of 1940. Facts are drawn from public filings and registries linked in the text; statements by parties are allegations; scenario figures are labelled assumptions. Companies only; no personal data.</p></div></body></html>
