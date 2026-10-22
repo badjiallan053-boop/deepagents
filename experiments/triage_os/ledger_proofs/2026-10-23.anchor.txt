@@ -1,4 +1,4 @@
 TRIAGE Alpha Committee paper ledger
-records=68
-last_hash=33bebc616e9444979576ade0077c9d898b261221ff34e3f61ca9cf985eb72f8c
+records=84
+last_hash=4382df16f0867692935d6ab072027b7b70326a7a98897e796daad51ae2603a50
 anchored_sgt=2026-10-23

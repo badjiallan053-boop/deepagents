@@ -120,3 +120,127 @@ Paper AVOID / SHORT-WATCH calls from M5 (NT 10-K filed in the last 60 days, pric
 - **ALFRED:** point-in-time vintages still fail (the host keeps refusing this box), so the macro point-in-time rebuild is still pending.
 - **UN Comtrade:** 213 monthly China-export rows (2022+) arrived. They are not yet joined to signals.
 - **Form 4 bulk data** stops at 2026Q1; the live layer reads filings directly.
+
+## 6. Post-reorganisation equity, worldwide (M3 expanded)
+
+**Event set:** 41 events with a dated, priced new equity (by region: US 30, FR 6, NO 1, JP 1, ID 1, HK 1, NO/US 1). That is far short of the 150 target. From 605 US filers found in EDGAR full-text search, 244 had no confirmation/effective 8-K we could date, 63 kept their old equity, and **40 are MISSING**: new equity was registered (Form 8-A) but there is no current ticker or Yahoo price (delisted, went dark, renamed).
+
+**Dating:**
+- Confirmation is the first 8-K Item 1.03 citing the confirmation order (filed within 4 business days of the order). CourtListener dockets were not queried.
+- The effective date is the next 8-K with Item 5.01/3.03/2.01.
+- Non-US events (11) are a curated JUDGEMENT list (France sauvegarde, Norway, Japan JAL, Indonesia Garuda, HK Sunac) and need primary verification.
+
+| Test | Status | IS n / prec / mean / median | OOS n / prec / mean / median | OOS t |
+|---|---|---|---|---|
+| ALL from day 0, 20d | **KILLED** | 21 / 67% / 104.55% / 11.85% | 20 / 55% / -0.01% / 1.01% | -0.0 |
+| ALL from day 0, 60d | **KEPT** | 21 / 62% / 88.01% / 10.21% | 19 / 63% / 0.09% / 3.69% | 0.02 |
+| ALL from day 0, 120d | **KEPT** | 21 / 52% / 106.46% / 4.05% | 18 / 67% / 8.61% / 15.9% | 1.24 |
+| ALL from day 0, 250d | **KEPT** | 21 / 52% / 126.27% / 8.29% | 16 / 69% / 10.07% / 16.97% | 0.93 |
+| ALL from day 5, 20d | **KEPT** | 21 / 57% / 13.32% / 1.44% | 19 / 63% / 3.17% / 2.54% | 1.99 |
+| ALL from day 5, 60d | **FRAGILE (IS disagrees)** | 21 / 48% / 3.82% / -3.72% | 18 / 78% / 5.82% / 12.35% | 1.06 |
+| ALL from day 5, 120d | **FRAGILE (IS disagrees)** | 21 / 33% / 6.51% / -7.16% | 17 / 65% / 10.96% / 20.72% | 1.35 |
+| ALL from day 5, 250d | **FRAGILE (IS disagrees)** | 21 / 38% / 9.24% / -22.27% | 14 / 71% / 12.28% / 22.85% | 0.94 |
+| US only, day 5, 250d | **UNTESTED (n_oos=7)** | 18 / 39% / 17.65% / -18.65% | 7 / 71% / 12.08% / 21.29% | 0.49 |
+| Non-US (curated), day 5, 250d | **UNTESTED (n_oos=7)** | 3 / 33% / -41.22% / -50.15% | 7 / 71% / 12.47% / 24.42% | 1.14 |
+| Small (first-20d $ volume below median), day 5, 250d | **UNTESTED (n_oos=5)** | 13 / 31% / 27.78% / -22.27% | 5 / 100% / 42.76% / 43.65% | 3.8 |
+| Large (above median), day 5, 250d | **KILLED** | 8 / 50% / -20.89% / -30.29% | 9 / 56% / -4.66% / 11.14% | -0.27 |
+| Creditor ownership >50% (8-K text), day 5, 250d | **UNTESTED (n_oos=3)** | 1 / 0% / -102.59% / -102.59% | 3 / 100% / 49.64% / 68.04% | 2.58 |
+| Backstop mentioned, day 5, 250d | **UNTESTED (n_oos=3)** | 9 / 44% / -8.09% / -15.03% | 3 / 100% / 48.16% / 65.29% | 2.6 |
+| No backstop mentioned, day 5, 250d | **UNTESTED (n_oos=4)** | 9 / 33% / 43.38% / -22.27% | 4 / 50% / -14.97% / -15.81% | -0.4 |
+| SUB insider open-market buy within 90d of first trade, entry day 90 -> 250d | **UNTESTED (n_oos=5)** | 7 / 57% / 2.6% / 17.51% | 5 / 80% / 18.48% / 25.85% | 1.05 |
+| SUB no insider buy, entry day 90 -> 250d | **UNTESTED (n_oos=3)** | 11 / 36% / -16.25% / -17.57% | 3 / 33% / -22.96% / -27.7% | -0.73 |
+| SUB orphan dump: first 20d excess return < -20%, entry day 20 -> 250d | **UNTESTED (n_oos=0)** | 2 / 0% / -36.06% / -36.06% | 0 / –% / –% / –% | – |
+| SUB no early dump, entry day 20 -> 250d | **FRAGILE (IS disagrees)** | 19 / 47% / -11.38% / -1.84% | 16 / 69% / 9.14% / 11.11% | 0.76 |
+
+**Survivorship sensitivity:** with missing names excluded, day-5/250d is **FRAGILE (IS disagrees)**. With the 40 missing names set to -100%, it is **KILLED** (OOS mean -53.77%).
+
+**Verdict: M3 does not pass.** The day-0 'KEPT' rows have t-statistics of 0.02–1.2. That is noise that only passes the mechanical rule, and it flips to KILLED under the survivorship test.
+
+**Best sub-signal:** insider open-market buying within 90 days of first trade (OOS 5 events, 80% wins, +18.5% vs -23.0% for no insider buy). Directionally consistent with the Klarman 'orphan' story, but UNTESTED (n < 8).
+
+**Not testable with free data:** creditor ownership above 50% and backstop flags come from 8-K text and cover too few events; sell-side coverage counts and CLO forced-selling flows are not available.
+
+**Upcoming emergences worldwide** (paper WATCH, calendar only, mechanism vetoed; existing equity is usually diluted 90–100%):
+
+| Ticker | Company | Country | Date | Event | Last px |
+|---|---|---|---|---|---|
+| BIG.PA | Bigben Interactive | FR | 2026-12-09 | plan hearing (proceeding extended to 17 Dec 2026) | 0.0689999982714653 |
+| NACON.PA | Nacon | FR | 2027-03-02 | end of extended observation period | 0.05290000140666962 |
+| 3383.HK | Agile Group | HK/CN | 2026-11-16 | RSA launch (JUDGEMENT date) | 0.14300000667572021 |
+| BRNK.DE | Branicks Group | DE | 2027-03-31 | plan effective by end-2026 or 31 Mar 2027 at the latest | 0.4099999964237213 |
+| 1B0.SI | mm2 Asia | SG | 2026-11-04 | scheme meetings; moratorium to 21 Nov | 0.003000000026077032 |
+| 6158.HK | Zhenro Properties | HK/CN | 2026-11-09 | adjourned petition hearing | 0.017000000923871994 |
+| 1813.HK | KWG Group | HK/CN | 2027-03-31 | scheme timetable not announced (JUDGEMENT window) | 0.08799999952316284 |
+| 1622.HK | Redco Properties | HK/CN | 2027-03-31 | sanction hearing not announced (JUDGEMENT window) | 0.14100000262260437 |
+| 1608.HK | VPower Group | HK | 2027-03-31 | meeting notice to follow (JUDGEMENT window) | 0.03099999949336052 |
+| FOOD.TO | Goodfood Market | CA | 2027-03-31 | SISP milestones (JUDGEMENT window) | 0.029999999329447746 |
+
+## 7. BNF and CIS rebuilt
+
+**Sources:** BNF (Takashi Kotegawa) is known from his rare press interviews (Nikkei and Weekly SPA!, summarised in Japanese trading books). CIS is known from his book 『一億円稼ぐ…』 and X posts. Both are labelled C: secondary, not primary-verified this pass.
+
+**Rules tested:**
+- BNF: buy when the close is 20/25/30% or more below its 25-day average (kairi-ritsu), hold 1–5 days.
+- CIS: buy a new 250-day closing high on at least 2x the 50-day volume, exit on a 7% trailing stop (max 60 days).
+
+**Test setup:** entry at the next close; costs 25bp (JP large), 40bp (JP small), 10bp (US), 20bp (EU), 30bp (HK), 75bp (US small). Universe: JP TOPIX Core30/Large70/Mid400 (491), Small1 (482), US large (98), EU large (50), HK large (40), and our US event/distressed universe (1500). Out-of-sample from 2021.
+
+| Test | Status | IS n / prec / mean / median | OOS n / prec / mean / median | OOS t |
+|---|---|---|---|---|
+| BNF JP large/mid kairi<=-20% hold 1d | **KILLED** | 918 / 51% / 0.07% / 0.03% | 451 / 37% / -0.6% / -1.18% | -3.06 |
+| BNF JP large/mid kairi<=-20% hold 3d | **KILLED** | 918 / 52% / 0.29% / 0.36% | 450 / 48% / 0.56% / -0.29% | 1.7 |
+| BNF JP large/mid kairi<=-20% hold 5d | **KEPT** | 918 / 52% / 0.69% / 0.39% | 448 / 52% / 1.13% / 0.34% | 2.76 |
+| BNF JP large/mid kairi<=-25% hold 1d | **KILLED** | 374 / 42% / -0.57% / -0.68% | 175 / 49% / 0.69% / -0.32% | 1.85 |
+| BNF JP large/mid kairi<=-25% hold 3d | **FRAGILE (IS disagrees)** | 374 / 47% / -0.38% / -0.43% | 175 / 57% / 1.94% / 1.03% | 3.15 |
+| BNF JP large/mid kairi<=-25% hold 5d | **KEPT** | 374 / 53% / 1.27% / 0.71% | 174 / 61% / 2.87% / 1.81% | 4.05 |
+| BNF JP large/mid kairi<=-30% hold 1d | **KILLED** | 137 / 45% / 0.2% / -1.16% | 72 / 50% / 1.09% / 0.25% | 1.67 |
+| BNF JP large/mid kairi<=-30% hold 3d | **KEPT** | 137 / 52% / 0.81% / 0.33% | 72 / 58% / 2.14% / 0.54% | 2.31 |
+| BNF JP large/mid kairi<=-30% hold 5d | **KEPT** | 137 / 58% / 3.65% / 2.73% | 72 / 69% / 3.92% / 3.15% | 3.5 |
+| BNF US large kairi<=-20% hold 3d | **KILLED** | 266 / 39% / -2.11% / -1.87% | 271 / 51% / 0.74% / 0.14% | 1.62 |
+| BNF US large kairi<=-20% hold 5d | **FRAGILE (IS disagrees)** | 266 / 43% / -2.4% / -1.86% | 271 / 57% / 1.42% / 1.19% | 2.77 |
+| BNF EU large kairi<=-20% hold 3d | **KILLED** | 133 / 52% / 0.85% / 0.12% | 41 / 49% / -0.02% / -1.25% | -0.02 |
+| BNF EU large kairi<=-20% hold 5d | **KILLED** | 133 / 50% / 0.44% / 0.18% | 41 / 49% / 0.02% / -0.25% | 0.02 |
+| BNF HK large kairi<=-20% hold 3d | **KEPT** | 96 / 68% / 2.44% / 2.15% | 151 / 52% / 1.72% / 0.36% | 1.98 |
+| BNF HK large kairi<=-20% hold 5d | **KEPT** | 96 / 67% / 3.13% / 2.32% | 151 / 54% / 2.21% / 0.71% | 2.55 |
+| BNF distressed/event universe (US small) kairi<=-20% hold 3d | **KILLED** | 6322 / 43% / 36.34% / -0.97% | 17459 / 43% / 21.01% / -1.29% | 2.06 |
+| BNF distressed/event universe (US small) kairi<=-20% hold 5d | **KILLED** | 6322 / 45% / 38.56% / -1.0% | 17386 / 43% / 27.57% / -1.65% | 2.49 |
+| CIS JP large/mid breakout on 2x volume, 7% trailing stop | **KILLED** | 3597 / 44% / 1.99% / -1.09% | 2434 / 39% / -0.59% / -2.28% | -0.98 |
+| CIS JP small1 breakout on 2x volume, 7% trailing stop | **KILLED** | 4532 / 41% / 1.98% / -1.95% | 2864 / 39% / -0.75% / -2.31% | -1.23 |
+| CIS US large breakout on 2x volume, 7% trailing stop | **KILLED** | 637 / 46% / 1.4% / -0.89% | 365 / 38% / 0.37% / -2.11% | 0.69 |
+
+**Honest reading:**
+- BNF holds in Japanese large and mid caps on a 5-day hold. The deepest discount does best: -30% gives 72 OOS events, 69% wins, +3.9%, t = 3.5; -25% gives 174 events, +2.9%, t = 4.05. It also holds in HK.
+- It fails in EU, in the US distressed universe (the mean is driven by bad-tick outliers; the median is negative), and on 1-day holds.
+- **Survivorship is the main risk.** The JP universe is today's TOPIX members, which excludes exactly the names that kept falling. Mean-reversion results are biased upward, so treat them as an upper bound.
+- **Multiple testing:** 20 variants were run. The two strongest (t of 3.5 and 4.05) would survive a Bonferroni cut at 5%. The -20% variants would not.
+- **CIS is KILLED everywhere out of sample** (38–39% wins, negative medians), despite strong in-sample t-values (7.5–8.1). The simple breakout rule decayed after 2021.
+
+**Live BNF triggers today** (logged as paper WATCH with a 5-day exit and a kill rule): 285A.T (kairi -24.1%, JP kairi<=-20% 5d), 3436.T (kairi -22.5%, JP kairi<=-20% 5d), 5801.T (kairi -22.6%, JP kairi<=-20% 5d), 6525.T (kairi -23.4%, JP kairi<=-20% 5d), 9984.T (kairi -25.7%, JP kairi<=-25% 5d), 0981.HK (kairi -20.4%, HK kairi<=-20% 5d). Context only (FRAGILE or KILLED variants): 6532.T CIS, 9889.T CIS, INTC BNF, ROKU CIS, BIIB CIS, KSS CIS.
+
+## 8. Data joins and point-in-time
+
+**China exports (UN Comtrade public preview; data available through the month shown), joined to the export-control names:**
+
+| HS | Product | Our names | Last month | Last 12m kg | Prior 12m kg | YoY |
+|---|---|---|---|---|---|---|
+| 811292 | Ga/Ge/In/Nb/Re unwrought & powders | Ga/Ge (LPTH germanium-free optics; 5N Plus) | 202412 | 1,763,062 | 1,681,614 | 5% |
+| 8110 | antimony | antimony (UAMY, LRV.AX) | 202409 | 3,502,515 | 5,702,110 | -39% |
+| 2846 | rare-earth compounds | rare-earth compounds (UCU.V, ARA.TO, IXR.AX, AREC) | 202412 | 46,538,472 | 42,856,133 | 9% |
+| 280530 | rare-earth metals | rare-earth metals (UCU.V, ARA.TO) | 202412 | 8,906,067 | 9,452,796 | -6% |
+| 250410 | natural graphite powder/flakes | natural graphite (GPH.V) | 202412 | 126,257,972 | 169,439,148 | -25% |
+| 810194 | tungsten unwrought | tungsten (TUN.L, GMET.L) | 202412 | 1,145,859 | 967,952 | 18% |
+
+**Comtrade notes:**
+- The preview stops at Dec 2024 (Sep 2024 for antimony), so it captures the 2023–24 export controls, not 2025–26.
+- Antimony exports fell 39% year on year and graphite 25%, consistent with the controls.
+- Tungsten rose 18% and gallium/germanium rose 5%.
+
+**Point-in-time Fed balance sheet:** ALFRED refused this box again. Fallback: the Fed's own H.4.1 release archive (each release is what the public saw that Thursday). 345 weekly releases parsed so far (2015-01-01 to 2021-08-12), fetch still running. The S21 point-in-time re-test runs once the archive reaches 2026.
+
+## 9. Gaps and access notes
+
+- **London Strategic Edge:** the free key is issued only through the website sign-up at https://londonstrategicedge.com/data. There is no programmatic issuance in the client (lse-data, MIT). Stopped for the user. Once a key is saved under /workspace/triage_os_data/.secrets, LSE can fill the survivorship gap (delisted US names back to 2003), add options greeks and insider data, and cross-check macro history.
+- **Non-US insider data (UK PDMR, ASX Appendix 3Y, Japan large-holder reports):** not ingested this pass; Apify actors not run. Apify $0 and Crustdata 0 credits spent.
+- **Not built:** PEAD (XBRL EPS vs seasonal random walk), fallen angels from rating-agency releases, index deletions from S&P DJI / FTSE Russell notices, and merger arb (8-K 1.01 + DEFM14A). All are queued.
+- **Connector checks** (Crustdata/Apollo/Clay headcount, X crowding, Ahrefs traffic): not run this pass.
+- **Live layer:** live_service.py polls Yahoo every 2 min in market hours and every 30 min otherwise. Quotes may be delayed 15–20 min (shown per symbol). Served at /api/live and in the Live tab.

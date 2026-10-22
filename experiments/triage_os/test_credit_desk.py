@@ -20,3 +20,8 @@ def test_edge_lab():
     kept = [k for k, v in d.items() if v["status"] == "KEPT"]
     for k in kept: assert d[k]["OOS"]["n"] >= 8 and d[k]["OOS"]["mean"] > 0
     assert len(d) >= 7
+def test_reorg_bnf_live():
+    r = json.load(open("/workspace/triage_os_data/reorg_ww.json")); b = json.load(open("/workspace/triage_os_data/bnf_cis.json"))
+    assert r["counts"]["events"] > 0 and "missing_as_minus100" in r["survivorship"] and len(b["results"]) >= 15
+    sys.path.insert(0, HERE); import live_service
+    assert live_service.is_open("7203.T", __import__("datetime").datetime(2026, 10, 23, 1, 0, tzinfo=__import__("datetime").timezone.utc))

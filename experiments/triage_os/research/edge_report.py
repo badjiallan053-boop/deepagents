@@ -22,6 +22,65 @@ OVER = [
  ("Schedule 13D form-type change", "EDGAR now files new 13Ds as 'SCHEDULE 13D'. Screens still keyed to 'SC 13D' silently miss 2025+ activism. We found this in our own pipeline.", "FIXED in the live layer; M4 backtest is 2018-2024 only"),
 ]
 def pct(v): return "–" if v is None else f"{v}"
+def tbl(R):
+    out = ["| Test | Status | IS n / prec / mean / median | OOS n / prec / mean / median | OOS t |", "|---|---|---|---|---|"]
+    for k, v in R.items():
+        i, o = v["IS"], v["OOS"]
+        out.append(f"| {k} | **{v['status']}** | {i.get('n')} / {i.get('precision','–')}% / {i.get('mean','–')}% / {i.get('median','–')}% | {o.get('n')} / {o.get('precision','–')}% / {o.get('mean','–')}% / {o.get('median','–')}% | {o.get('t','–')} |")
+    return out
+def addendum():
+    RW = json.load(open("/workspace/triage_os_data/reorg_ww.json")); BN = json.load(open("/workspace/triage_os_data/bnf_cis.json")); AD = json.load(open("/workspace/triage_os_data/edge_addendum.json"))
+    c = RW["counts"]; S = RW["survivorship"]
+    L = ["", "## 6. Post-reorganisation equity, worldwide (M3 expanded)", "",
+         f"**Event set:** {c['events']} events with a dated, priced new equity (by region: {', '.join(f'{k} {v}' for k, v in c['by_region'].items())}). That is far short of the 150 target. From {c['ciks']} US filers found in EDGAR full-text search, {c['no_date']} had no confirmation/effective 8-K we could date, {c['old_equity_continued']} kept their old equity, and **{c['missing']} are MISSING**: new equity was registered (Form 8-A) but there is no current ticker or Yahoo price (delisted, went dark, renamed).",
+         "",
+         "**Dating:**",
+         "- Confirmation is the first 8-K Item 1.03 citing the confirmation order (filed within 4 business days of the order). CourtListener dockets were not queried.",
+         "- The effective date is the next 8-K with Item 5.01/3.03/2.01.",
+         "- Non-US events (11) are a curated JUDGEMENT list (France sauvegarde, Norway, Japan JAL, Indonesia Garuda, HK Sunac) and need primary verification.", ""] + tbl(RW["results"])
+    L += ["", f"**Survivorship sensitivity:** with missing names excluded, day-5/250d is **{S['excluded']['status']}**. With the {c['missing']} missing names set to -100%, it is **{S['missing_as_minus100']['status']}** (OOS mean {S['missing_as_minus100']['OOS'].get('mean')}%).",
+          "",
+          "**Verdict: M3 does not pass.** The day-0 'KEPT' rows have t-statistics of 0.02–1.2. That is noise that only passes the mechanical rule, and it flips to KILLED under the survivorship test.",
+          "",
+          "**Best sub-signal:** insider open-market buying within 90 days of first trade (OOS 5 events, 80% wins, +18.5% vs -23.0% for no insider buy). Directionally consistent with the Klarman 'orphan' story, but UNTESTED (n < 8).",
+          "",
+          "**Not testable with free data:** creditor ownership above 50% and backstop flags come from 8-K text and cover too few events; sell-side coverage counts and CLO forced-selling flows are not available.",
+          "",
+          "**Upcoming emergences worldwide** (paper WATCH, calendar only, mechanism vetoed; existing equity is usually diluted 90–100%):", "", "| Ticker | Company | Country | Date | Event | Last px |", "|---|---|---|---|---|---|"]
+    L += [f"| {e['t']} | {e['name']} | {e['country']} | {e['date']} | {e['why']} | {e['px']} |" for e in AD["emergences"]]
+    u = BN["universe"]
+    L += ["", "## 7. BNF and CIS rebuilt", "",
+          "**Sources:** BNF (Takashi Kotegawa) is known from his rare press interviews (Nikkei and Weekly SPA!, summarised in Japanese trading books). CIS is known from his book 『一億円稼ぐ…』 and X posts. Both are labelled C: secondary, not primary-verified this pass.",
+          "",
+          "**Rules tested:**",
+          "- BNF: buy when the close is 20/25/30% or more below its 25-day average (kairi-ritsu), hold 1–5 days.",
+          "- CIS: buy a new 250-day closing high on at least 2x the 50-day volume, exit on a 7% trailing stop (max 60 days).",
+          "",
+          f"**Test setup:** entry at the next close; costs 25bp (JP large), 40bp (JP small), 10bp (US), 20bp (EU), 30bp (HK), 75bp (US small). Universe: JP TOPIX Core30/Large70/Mid400 ({u['jp_big']}), Small1 ({u['jp_small1']}), US large ({u['us']}), EU large ({u['eu']}), HK large ({u['hk']}), and our US event/distressed universe ({u['dist']}). Out-of-sample from 2021.", ""] + tbl(BN["results"])
+    L += ["", "**Honest reading:**",
+          "- BNF holds in Japanese large and mid caps on a 5-day hold. The deepest discount does best: -30% gives 72 OOS events, 69% wins, +3.9%, t = 3.5; -25% gives 174 events, +2.9%, t = 4.05. It also holds in HK.",
+          "- It fails in EU, in the US distressed universe (the mean is driven by bad-tick outliers; the median is negative), and on 1-day holds.",
+          "- **Survivorship is the main risk.** The JP universe is today's TOPIX members, which excludes exactly the names that kept falling. Mean-reversion results are biased upward, so treat them as an upper bound.",
+          "- **Multiple testing:** 20 variants were run. The two strongest (t of 3.5 and 4.05) would survive a Bonferroni cut at 5%. The -20% variants would not.",
+          "- **CIS is KILLED everywhere out of sample** (38–39% wins, negative medians), despite strong in-sample t-values (7.5–8.1). The simple breakout rule decayed after 2021.",
+          "",
+          "**Live BNF triggers today** (logged as paper WATCH with a 5-day exit and a kill rule): " + ", ".join(f"{x['t']} (kairi {x['kairi']}%, {x['variant']})" for x in AD["bnf_live"]) + ". Context only (FRAGILE or KILLED variants): " + ", ".join(f"{x['t']} {x['kind']}" for x in BN["live"] if not (x["kind"] == "BNF" and x["region"] in ("JP", "HK"))) + ".",
+          "", "## 8. Data joins and point-in-time", "", "**China exports (UN Comtrade public preview; data available through the month shown), joined to the export-control names:**", "", "| HS | Product | Our names | Last month | Last 12m kg | Prior 12m kg | YoY |", "|---|---|---|---|---|---|---|"]
+    L += [f"| {r['hs']} | {r['desc']} | {r['names']} | {r['last_month']} | {r['kg_last12']:,} | {r['kg_prior12'] or 0:,} | {r['yoy_pct']}% |" for r in AD["comtrade"]]
+    h = AD["h41"]
+    L += ["", "**Comtrade notes:**",
+          "- The preview stops at Dec 2024 (Sep 2024 for antimony), so it captures the 2023–24 export controls, not 2025–26.",
+          "- Antimony exports fell 39% year on year and graphite 25%, consistent with the controls.",
+          "- Tungsten rose 18% and gallium/germanium rose 5%.",
+          "",
+          f"**Point-in-time Fed balance sheet:** ALFRED refused this box again. Fallback: the Fed's own H.4.1 release archive (each release is what the public saw that Thursday). {h.get('releases')} weekly releases parsed so far ({h.get('first')} to {h.get('last')}), fetch still running. The S21 point-in-time re-test runs once the archive reaches 2026.",
+          "", "## 9. Gaps and access notes", "",
+          "- **London Strategic Edge:** the free key is issued only through the website sign-up at https://londonstrategicedge.com/data. There is no programmatic issuance in the client (lse-data, MIT). Stopped for the user. Once a key is saved under /workspace/triage_os_data/.secrets, LSE can fill the survivorship gap (delisted US names back to 2003), add options greeks and insider data, and cross-check macro history.",
+          "- **Non-US insider data (UK PDMR, ASX Appendix 3Y, Japan large-holder reports):** not ingested this pass; Apify actors not run. Apify $0 and Crustdata 0 credits spent.",
+          "- **Not built:** PEAD (XBRL EPS vs seasonal random walk), fallen angels from rating-agency releases, index deletions from S&P DJI / FTSE Russell notices, and merger arb (8-K 1.01 + DEFM14A). All are queued.",
+          "- **Connector checks** (Crustdata/Apollo/Clay headcount, X crowding, Ahrefs traffic): not run this pass.",
+          "- **Live layer:** live_service.py polls Yahoo every 2 min in market hours and every 30 min otherwise. Quotes may be delayed 15–20 min (shown per symbol). Served at /api/live and in the Live tab."]
+    return L
 def main():
     R = LAB["results"]; L = ["# TRIAGE Edge Lab: how the big funds find edge and what survives our tests", "",
         "*As of 23 Oct 2026 (SGT). Public data, research only, not investment advice, paper ledger only. A grade means a primary document was read this pass; B means a book or the fund's own filings; C means secondary or judgement.*", "",
@@ -61,6 +120,7 @@ def main():
           "- **ALFRED:** point-in-time vintages still fail (the host keeps refusing this box), so the macro point-in-time rebuild is still pending.",
           "- **UN Comtrade:** 213 monthly China-export rows (2022+) arrived. They are not yet joined to signals.",
           "- **Form 4 bulk data** stops at 2026Q1; the live layer reads filings directly."]
+    L += addendum()
     m = "\n".join(L); open(os.path.join(HERE, "edge_lab.md"), "w").write(m)
     from design import report_from_markdown
     report_from_markdown(m, "TRIAGE Edge Lab", "Research · 23 Oct 2026", "How the big funds find edge, and what survives our tests on free public data",

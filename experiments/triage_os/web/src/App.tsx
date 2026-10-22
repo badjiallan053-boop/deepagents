@@ -21,6 +21,7 @@ const NAV = [
   { r: "control", label: "Control", icon: Crosshair },
   { r: "systemic", label: "Systemic radar", icon: Radar },
   { r: "world", label: "World", icon: Globe2 },
+  { r: "live", label: "Live", icon: Activity },
   { r: "edge", label: "Edge Lab", icon: ShieldCheck },
   { r: "bottleneck", label: "Bottleneck Hunt", icon: Network },
   { r: "signals", label: "Signal Library", icon: Activity },
@@ -74,6 +75,7 @@ export default function App() {
           {top === "home" && <Home />}
           {top === "bottleneck" && <Bottleneck />}
           {top === "edge" && <EdgeLab />}
+          {top === "live" && <Live />}
           {top === "overview" && <Overview sits={sits} stats={stats} />}
           {top === "situations" && <Situations sits={sits} />}
           {top === "situation" && sits && <SituationView s={sits.find(s => s.key === base.split("/")[1]) ?? sits[0]} />}
@@ -248,6 +250,16 @@ function Bottleneck() {
     <PageHead kicker="Bottleneck Hunt · research only · paper WATCH calls" title="Small companies inside supply chokepoints" sub="Asymmetric setups, not promises. Nothing here claims 100x. Every name is vetoed by Quant Validation as recommendation-grade." />
     <Card title="Base rate: chokepoint small caps, entry cap under $300m, 12-month window (survivorship-biased upward)"><div className="grid grid-cols-5 gap-4 text-[12px]"><Stat label="Touched 10x" value={`${b.touch_10x_pct}%`} /><Stat label="Still ≥10x at 12m" value={`${b.hold_10x_pct}%`} /><Stat label="Touched 2x" value={`${b.touch_2x_pct}%`} /><Stat label="Lost ≥50%" value={`${b.lose_50_pct}%`} /><Stat label="Median max drawdown" value={`${b.median_maxdd}%`} /></div></Card>
     <Card title={`Top 15 (ledger chain ${J.ledger_ok ? "verified" : "BROKEN"})`}><table className="w-full text-[12px]"><thead><tr className="text-mute"><td>#</td><td>Company</td><td>Chain</td><td className="text-right">Mcap $m</td><td className="text-right">12m</td><td className="text-right">Score</td><td>Grade</td><td>Catalyst</td><td>Kill if</td></tr></thead><tbody>{J.top.map((c, i) => <tr key={c.t} className="border-t border-line align-top"><td className="py-1 pr-2">{i + 1}</td><td className="pr-2"><b>{c.name}</b><div className="text-mute">{c.t}</div></td><td className="pr-2 text-mute">{c.chain}<div className="mt-1">{c.ev.map(u => <a key={u} className="mr-2 text-info" href={u} target="_blank">src</a>)}</div></td><td className="num text-right">{c.mcap_usd}</td><td className="num text-right">{c.r12m ?? "–"}%</td><td className="num text-right">{c.score}</td><td>{c.grade}</td><td className="pr-2"><span className="num text-amber">{c.cat[0]}</span> {c.cat[1]}</td><td className="text-mute">{c.kill}</td></tr>)}</tbody></table></Card>
+  </div>
+}
+function Live() {
+  const [J, setJ] = useState<any>(null)
+  useEffect(() => { const f = () => fetch("/api/live").then(r => r.json()).then(setJ).catch(() => {}); f(); const id = setInterval(f, 60000); return () => clearInterval(id) }, [])
+  if (!J || !J.rows) return <div className="p-6 text-mute">Loading…</div>
+  return <div className="space-y-5 p-6">
+    <PageHead kicker={`Live · updated ${J.updated} · auto-refresh 60s`} title="Live prices, triggers and paper mark-to-market" sub={J.note} />
+    <Card title="Paper ledger mark-to-market"><table className="w-full text-[12px]"><thead><tr className="text-mute"><td>Ticker</td><td>Call</td><td className="text-right">Entry</td><td className="text-right">Now</td><td className="text-right">P&L</td><td>Kill condition</td></tr></thead><tbody>{J.mtm.map((m: any, i: number) => <tr key={i} className="border-t border-line align-top"><td className="py-1 pr-2">{m.ticker}</td><td className="pr-2 text-mute">{m.call}</td><td className="num text-right">{m.entry}</td><td className="num text-right">{m.now}</td><td className={cn("num text-right", m.pnl_pct >= 0 ? "text-up" : "text-down")}>{m.pnl_pct}%</td><td className="pl-3 text-mute">{m.kill}</td></tr>)}</tbody></table></Card>
+    <Card title="Quotes and triggers"><table className="w-full text-[12px]"><thead><tr className="text-mute"><td>Ticker</td><td className="text-right">Px</td><td className="text-right">Chg</td><td className="text-right">Kairi 25d</td><td>BNF</td><td>CIS</td><td>Market</td><td className="text-right">Delay (min)</td></tr></thead><tbody>{J.rows.map((r: any) => <tr key={r.t} className="border-t border-line"><td className="py-1">{r.t}</td><td className="num text-right">{r.px}</td><td className="num text-right">{r.chg_pct?.toFixed?.(2)}%</td><td className="num text-right">{r.kairi_pct ?? "–"}</td><td>{r.bnf_trigger ? "●" : ""}</td><td>{r.cis_trigger ? "●" : ""}</td><td className="text-mute">{r.open ? "open" : r.market_state}</td><td className="num text-right">{r.delayed_min ?? "–"}</td></tr>)}</tbody></table></Card>
   </div>
 }
 function EdgeLab() {
