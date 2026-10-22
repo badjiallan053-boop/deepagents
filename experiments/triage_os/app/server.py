@@ -89,6 +89,9 @@ def cap(situation):
     return q("select * from cap_structures_top15 where situation like ? or issuer like ?", (f"%{situation}%", f"%{situation}%"))
 CONTROL = os.environ.get("TRIAGE_CONTROL", "/workspace/triage_os_data/control.json")
 SYSTEMIC = os.environ.get("TRIAGE_SYSTEMIC", "/workspace/triage_os_data/systemic.json")
+MINING = os.environ.get("TRIAGE_MINING", "/workspace/triage_os_data/mining.json")
+def mining():
+    return json.load(open(MINING)) if os.path.exists(MINING) else {"events": [], "regime": []}
 WORLD = os.environ.get("TRIAGE_WORLD", "/workspace/triage_os_data/world.json")
 def world():
     return json.load(open(WORLD)) if os.path.exists(WORLD) else {"situations": [], "buyers": [], "backers": []}
@@ -112,7 +115,7 @@ def distressed():
         r["qa"] = "units check" if (r["min_mark"] or 0) < 2 or r["mark"] < 15 else "ok"
         r["chg_q"] = round(h[-1][1] - h[-2][1], 1) if len(h) >= 2 and h[-1][1] is not None and h[-2][1] is not None else None
     _DIST = rows; return rows
-ROUTES = {"/api/world": lambda p: world(), "/api/systemic": lambda p: systemic(), "/api/control": lambda p: control(), "/api/marks": lambda p: marks_history(p.get("borrower", [""])[0]), "/api/cap": lambda p: cap(p.get("situation", [""])[0]), "/api/distressed": lambda p: distressed(),"/api/stats": lambda p: stats(), "/api/search": lambda p: search(p.get("q", [""])[0]), "/api/graph": lambda p: graph(p.get("entity", ["EchoStar Corp"])[0]),
+ROUTES = {"/api/committee": lambda p: (json.load(open("/workspace/triage_os_data/committee.json")) if os.path.exists("/workspace/triage_os_data/committee.json") else {}), "/api/mining": lambda p: mining(), "/api/world": lambda p: world(), "/api/systemic": lambda p: systemic(), "/api/control": lambda p: control(), "/api/marks": lambda p: marks_history(p.get("borrower", [""])[0]), "/api/cap": lambda p: cap(p.get("situation", [""])[0]), "/api/distressed": lambda p: distressed(),"/api/stats": lambda p: stats(), "/api/search": lambda p: search(p.get("q", [""])[0]), "/api/graph": lambda p: graph(p.get("entity", ["EchoStar Corp"])[0]),
           "/api/situations": lambda p: situations(), "/api/hitlog": lambda p: hitlog(), "/api/verification": lambda p: q("select * from verification order by claim_id"),
           "/api/edges": lambda p: q("select * from edges2 order by status, type, value desc"), "/api/concentration": lambda p: q("select * from fund_service_concentration")}
 class H(BaseHTTPRequestHandler):

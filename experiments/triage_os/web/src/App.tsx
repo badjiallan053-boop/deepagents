@@ -20,6 +20,8 @@ const NAV = [
   { r: "control", label: "Control", icon: Crosshair },
   { r: "systemic", label: "Systemic radar", icon: Radar },
   { r: "world", label: "World", icon: Globe2 },
+  { r: "radar", label: "Cross-Asset Radar", icon: Globe2 },
+  { r: "committee", label: "Alpha Committee", icon: Gavel },
   { r: "graph", label: "Relationship graph", icon: Waypoints },
   { r: "edges", label: "Cross-dataset edges", icon: Network },
   { r: "verify", label: "Verification ledger", icon: ShieldCheck },
@@ -72,6 +74,8 @@ export default function App() {
           {top === "control" && <Control />}
           {top === "systemic" && <Systemic />}
           {top === "world" && <World />}
+          {top === "radar" && <XRadar />}
+          {top === "committee" && <Committee />}
           {top === "graph" && <GraphView q={params.get("q") ?? ""} />}
           {top === "edges" && <Edges />}
           {top === "verify" && <Verify />}
@@ -163,6 +167,44 @@ function Marks() {
   return <div><PageHead kicker="Private credit" title="Distressed marks monitor" sub={`Positions marked below 75 (par-weighted fair value ÷ par) in the 30 Jun 2026 BDC Schedules of Investments, with up to 13 quarters of history from the same filings. ${held} lines with currency or unit anomalies are held back for review.`} />
     <div className="flex flex-wrap gap-1 border-b border-line px-5 py-2">{["ALL", ...bdcs].map(k => <Button key={k} variant={bdc === k ? "outline" : "ghost"} onClick={() => setBdc(k)} className="h-6 px-2 font-mono text-[10.5px]">{k === "ALL" ? "All lenders" : k}</Button>)}</div>
     <div className="p-3"><Card pad={false}><DistTable rows={rows} maxHeight={700} /></Card></div>
+  </div>
+}
+
+// ---------------- Cross-Asset Radar: Mining + Land, Macro ----------------
+type MLeg = { ticker: string; bench: string; x1: number | null; x5: number | null; x20: number | null }
+type MJ = { asof: string; events: { date: string; what: string; url: string; quote: string; found: boolean; legs: MLeg[] }[]; event_summary: Record<string, { n: number; mean: number; median: number; hit: number }>;
+  claims: { fetched: string; caveat: string; sites: { site: string; mineral: string; active: number; filed_pending: number; closed: number; lapse_ratio: number; pending_share: number }[] };
+  sat: { caveat: string; scenes: { site: string; before?: string; after?: string }[] }; concentration: { source: string; rows: { mineral: string; quote: string }[] };
+  regime: { pillar: string; metric: string; value: string; change: string; pctile: number | null; read: string; src: string }[]; gaps: string[] }
+function XRadar() {
+  const { data: J } = useApi<MJ>("/api/mining")
+  if (!J || !J.regime) return <div className="p-6 text-mute">Loading…</div>
+  const f = (z: number | null) => z === null ? "n/a" : `${z > 0 ? "+" : ""}${z.toFixed(1)}%`
+  return <div className="space-y-5 p-6">
+    <PageHead kicker={`Cross-Asset Radar · Mining + Land · ${J.asof}`} title="Export controls, claims, satellites and the macro regime" sub="Public data only. MOFCOM primary text, BLM MLRS claims, Earth Search Sentinel-2, USGS MCS 2026, IMF COFER, FRED. Reads marked as judgement; gaps listed." right={<a href="/research/TRIAGE_Cross_Asset_Radar.pdf" target="_blank" className="text-[12px] text-info">Open PDF</a>} />
+    <Card title="Macro regime (Dalio-style)"><table className="w-full text-[12px]"><tbody>{J.regime.map(d => <tr key={d.pillar} className="border-t border-line"><td className="py-1 pr-3 text-ink">{d.pillar}</td><td className="pr-3 text-mute">{d.metric}</td><td className="pr-3">{d.value}</td><td className="pr-3">{d.change}</td><td className="pr-3">{d.pctile ?? "—"}</td><td><Tag>{d.read}</Tag></td></tr>)}</tbody></table></Card>
+    <Card title="Event study: equities after Chinese export controls (excess return)"><table className="w-full text-[12px]"><tbody>{J.events.flatMap(e => e.legs.map(l => <tr key={e.date + l.ticker} className="border-t border-line"><td className="py-1 pr-3"><a className="text-info" href={e.url} target="_blank">{e.date}</a> {e.what}</td><td className="pr-3">{l.ticker}</td><td className="pr-3">{f(l.x1)}</td><td className="pr-3">{f(l.x5)}</td><td>{f(l.x20)}</td></tr>))}</tbody></table>
+      <div className="mt-2 text-[12px] text-mute">{Object.entries(J.event_summary).map(([k, v]) => `${k.slice(1)}d: mean ${v.mean}% · median ${v.median}% · ${v.hit}% positive (n=${v.n})`).join("  |  ")} — small n, overlapping legs.</div></Card>
+    <Card title={`Claims around controlled-mineral deposits (BLM MLRS, ${J.claims.fetched})`}><table className="w-full text-[12px]"><tbody>{J.claims.sites.map(s => <tr key={s.site} className="border-t border-line"><td className="py-1 pr-3">{s.site}</td><td className="pr-3">active {s.active}</td><td className="pr-3">pending {s.filed_pending} ({Math.round(100 * s.pending_share)}%)</td><td className="pr-3">closed {s.closed}</td><td>lapse {s.lapse_ratio}</td></tr>)}</tbody></table><div className="mt-2 text-[12px] text-mute">{J.claims.caveat}</div></Card>
+    <Card title="Supply concentration (USGS MCS 2026)"><ul className="text-[12px]">{J.concentration.rows.map(r => <li key={r.mineral}><b>{r.mineral}</b>: {r.quote}</li>)}</ul></Card>
+    <Card title="Gaps"><ul className="list-disc pl-5 text-[12px] text-mute">{J.gaps.map(g => <li key={g}>{g}</li>)}</ul></Card>
+  </div>
+}
+
+// ---------------- Alpha Committee (AlphaAgents arXiv:2508.11152, adapted) ----------------
+type CStat = { cagr: number; vol: number; sharpe: number; maxdd: number }
+type CJ = { paper: string; chain_ok: boolean; n: number; roles: string[]; backtest: Record<string, { full: Record<string, CStat>; oos_2021: Record<string, CStat>; committee_calls: number; committee_beat_ew_pct: number }>;
+  ledger: { kind: string; instrument: string; call: string; entry: number; entry_date: string; thesis: string; exit_rule: string; benchmark: string; hash: string; logged_at: string }[];
+  licensing: { jur: string; url: string; grade: string; quote: string; meaning: string }[] }
+function Committee() {
+  const { data: J } = useApi<CJ>("/api/committee")
+  if (!J || !J.backtest) return <div className="p-6 text-mute">Loading…</div>
+  const keys = ["committee", "equal_weight", ...J.roles]
+  return <div className="space-y-5 p-6">
+    <PageHead kicker="Alpha Committee · PAPER ONLY" title="Six agents debate, the ledger keeps score" sub="Protocol adapted from AlphaAgents (BlackRock, arXiv:2508.11152): independent analysis, round-robin debate (each agent speaks at least twice), consensus, risk profiles. Rule-based agents, so the backtest has no LLM look-ahead. No trades, not advice." right={<a href={J.paper} target="_blank" className="text-[12px] text-info">Paper</a>} />
+    {Object.entries(J.backtest).map(([prof, b]) => <Card key={prof} title={`Backtest — ${prof} (committee picks beat EW ${b.committee_beat_ew_pct}% of the time)`}><table className="w-full text-[12px]"><thead><tr className="text-mute"><td>Portfolio</td><td>CAGR full</td><td>Sharpe full</td><td>MaxDD full</td><td>CAGR 2021+</td><td>Sharpe 2021+</td><td>MaxDD 2021+</td></tr></thead><tbody>{keys.map(k => <tr key={k} className={cn("border-t border-line", k === "committee" && "text-amber")}><td className="py-1">{k}</td><td>{b.full[k]?.cagr}%</td><td>{b.full[k]?.sharpe}</td><td>{b.full[k]?.maxdd}%</td><td>{b.oos_2021[k]?.cagr}%</td><td>{b.oos_2021[k]?.sharpe}</td><td>{b.oos_2021[k]?.maxdd}%</td></tr>)}</tbody></table></Card>)}
+    <Card title={`Hash-chained paper ledger — ${J.n} calls, chain ${J.chain_ok ? "verified" : "BROKEN"}`}><table className="w-full text-[12px]"><tbody>{J.ledger.map(r => <tr key={r.hash} className="border-t border-line"><td className="py-1 pr-2">{r.entry_date}</td><td className="pr-2">{r.instrument}</td><td className="pr-2"><Tag>{r.call}</Tag></td><td className="pr-2">{r.entry.toPrecision(4)}</td><td className="pr-2 text-mute">{r.thesis.slice(0, 120)}</td><td className="font-mono text-[10px] text-mute">{r.hash.slice(0, 10)}</td></tr>)}</tbody></table></Card>
+    <Card title="Licensing (high level, user to handle)"><ul className="space-y-2 text-[12px]">{J.licensing.map(l => <li key={l.url}><b>{l.jur}</b> — <a className="text-info" href={l.url} target="_blank">{l.grade}</a>: “{l.quote}” <span className="text-mute">{l.meaning}</span></li>)}</ul></Card>
   </div>
 }
 
