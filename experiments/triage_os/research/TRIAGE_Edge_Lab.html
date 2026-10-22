@@ -1,0 +1,573 @@
+<!doctype html><html><head><meta charset='utf-8'><title>TRIAGE Edge Lab</title><style>
+@page { size: Letter; margin: 18mm 15mm 16mm 15mm;
+  @top-left { content: "TRIAGE  |  Special Situations Research"; font: 600 7pt 'Inter'; letter-spacing: .14em; color: #8a929c; }
+  @top-right { content: string(doctitle); font: 500 7pt 'Inter'; color: #8a929c; }
+  @bottom-left { content: "Not investment advice. See disclaimer on the final page."; font: 400 6.5pt 'Inter'; color: #8a929c; }
+  @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 500 7pt 'JetBrains Mono'; color: #8a929c; } }
+@page :first { @top-left { content: none } @top-right { content: none } }
+:root { --ink:#0d1218; --mute:#5b6570; --dim:#8a929c; --line:#d9dde2; --amber:#c97d06; --amberbg:#fff6e5; --navy:#0b0f14; --up:#1d8a52; --down:#c53340; --info:#1f6fd1; --violet:#6d4fd8; }
+* { box-sizing: border-box; }
+html { font-family: 'Inter', 'IBM Plex Sans', Arial, sans-serif; font-size: 9pt; color: var(--ink); line-height: 1.45; font-feature-settings: "tnum" 1; }
+body { margin: 0; }
+h1,h2,h3 { font-family: 'Inter Tight','Inter',sans-serif; letter-spacing: -.01em; margin: 0; }
+.doctitle { string-set: doctitle content(); }
+h2 { font-size: 13pt; margin: 14pt 0 5pt; padding-top: 6pt; border-top: 2px solid var(--navy); }
+h2 .n { color: var(--amber); font-family: 'JetBrains Mono', monospace; font-size: 9pt; margin-right: 6pt; vertical-align: 1pt; }
+h3 { font-size: 9.5pt; margin: 9pt 0 3pt; text-transform: uppercase; letter-spacing: .08em; color: var(--mute); }
+p { margin: 0 0 5pt; text-align: left; }
+.wm { display: inline-flex; align-items: center; gap: 6px; } .wm b { font: 700 11pt 'JetBrains Mono', monospace; letter-spacing: .32em; }
+.cover { background: var(--navy); color: #e8ecf0; margin: 0 0 4pt; padding: 9mm 10mm 7mm; border-radius: 2px; } .cover .wm b { color: #fff; }
+.cover .kick { color: #f5a524; font: 600 7.5pt 'Inter'; letter-spacing: .16em; text-transform: uppercase; margin-top: 7mm; }
+.cover h1 { font-size: 22pt; line-height: 1.12; margin: 4pt 0 6pt; color: #fff; max-width: 165mm; }
+.cover .sub { color: #aab3bd; font-size: 10pt; max-width: 160mm; }
+.cover .meta { display: flex; gap: 18pt; margin-top: 10pt; padding-top: 8pt; border-top: 1px solid #26303b; font-size: 7.5pt; color: #8f99a4; }
+.cover .meta b { display: block; color: #e8ecf0; font: 600 8.5pt 'JetBrains Mono', monospace; margin-top: 1pt; }
+.view { border-left: 3px solid var(--amber); background: var(--amberbg); padding: 7pt 9pt; margin: 9pt 0; }
+.view .lbl { font: 700 7pt 'Inter'; letter-spacing: .14em; color: var(--amber); text-transform: uppercase; }
+.view p { font-size: 10pt; margin: 2pt 0 0; }
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12pt; } .cols3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10pt; }
+.kpis { display: grid; grid-template-columns: repeat(5, 1fr); border: 1px solid var(--line); margin: 8pt 0; }
+.kpi { padding: 5pt 7pt; border-right: 1px solid var(--line); } .kpi:last-child { border-right: 0; }
+.kpi .l { font: 600 6.5pt 'Inter'; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); }
+.kpi .v { font: 600 13pt 'JetBrains Mono', monospace; margin-top: 2pt; } .kpi .s { font-size: 7pt; color: var(--mute); }
+table { width: 100%; border-collapse: collapse; margin: 4pt 0 8pt; font-size: 8pt; page-break-inside: auto; }
+thead th { font: 600 6.8pt 'Inter'; text-transform: uppercase; letter-spacing: .07em; color: var(--mute); text-align: left; border-bottom: 1.2px solid var(--navy); padding: 3pt 4pt; }
+td { padding: 3pt 4pt; border-bottom: .5px solid var(--line); vertical-align: top; } tr { page-break-inside: avoid; }
+td.r, th.r { text-align: right; } .num, td.r { font-family: 'JetBrains Mono', monospace; font-size: 7.6pt; }
+tr.tot td { font-weight: 700; border-top: 1px solid var(--navy); border-bottom: 0; }
+.fn { font-size: 6.8pt; color: var(--mute); } sup.f { font: 600 6pt 'JetBrains Mono'; color: var(--info); }
+.badge { display: inline-block; font: 700 6pt 'Inter'; letter-spacing: .08em; padding: 1pt 3pt; border-radius: 2px; text-transform: uppercase; border: .6px solid; white-space: nowrap; }
+.b-VERIFIED { color: var(--up); border-color: var(--up); } .b-CORRECTED { color: var(--amber); border-color: var(--amber); }
+.b-ALLEGATION { color: var(--violet); border-color: var(--violet); } .b-ASSUMPTION { color: var(--info); border-color: var(--info); } .b-UNVERIFIABLE { color: var(--dim); border-color: var(--dim); }
+.chart { margin: 4pt 0 2pt; page-break-inside: avoid; } h2, h3, .cap { page-break-after: avoid; } .chart svg { width: 100%; height: auto; display: block; }
+.cap { font: 600 7pt 'Inter'; color: var(--mute); text-transform: uppercase; letter-spacing: .08em; margin-top: 6pt; }
+.src { font-size: 6.6pt; color: var(--dim); margin-bottom: 6pt; }
+.box { border: 1px solid var(--line); padding: 6pt 8pt; margin: 6pt 0; } .box h3 { margin-top: 0; }
+ul { margin: 2pt 0 6pt; padding-left: 12pt; } li { margin: 1.5pt 0; }
+.pb { page-break-before: always; } .avoid { page-break-inside: avoid; }
+a { color: var(--info); text-decoration: none; word-break: break-all; }
+.disc { font-size: 6.8pt; color: var(--mute); line-height: 1.4; } .disc h3 { color: var(--ink); }
+.tl { position: relative; margin: 4pt 0 6pt 4pt; border-left: 1.2px solid var(--line); }
+.tl .e { position: relative; padding: 0 0 4.5pt 10pt; } .tl .e:before { content: ""; position: absolute; left: -4px; top: 3pt; width: 7px; height: 7px; border-radius: 50%; background: var(--navy); }
+.tl .e.f:before { background: #fff; border: 1.5px solid var(--amber); }
+.tl .d { font: 600 7.5pt 'JetBrains Mono', monospace; color: var(--mute); } .tl .e.f .d { color: var(--amber); }
+ table { font-size: 7pt; } td { word-break: break-word; } img { max-width: 100%; }</style></head><body><div class='cover'><span class="wm"><svg width="18" height="18" viewBox="0 0 32 32"><rect width="32" height="32" rx="5" fill="#f5a524"/><path d="M8 9h16v3h-6.5v12h-3V12H8z" fill="#0b0f14"/></svg><b>TRIAGE</b></span><div class='kick'>Research · 23 Oct 2026</div><h1 class='doctitle'>TRIAGE Edge Lab</h1><div class='sub'>How the big funds find edge, and what survives our tests on free public data</div><div class='meta'><div>Mechanisms<b>10 tested or scoped, 1 kept</b></div><div>Data<b>EDGAR idx 2018–2026, Form 4 bulk, 8-K full text</b></div><div>Rules<b>PIT filing dates · costs · OOS ≥ 2022</b></div></div></div>
+<p><em>As of 23 Oct 2026 (SGT). Public data, research only, not investment advice, paper ledger only. A grade means a primary document was read this pass; B means a book or the fund's own filings; C means secondary or judgement.</em></p>
+<p><strong>Bottom line.</strong> Of seven mechanisms we could rebuild from free SEC data, <strong>one survives</strong> our rules (late-filer SHORT/AVOID). It is hard to trade because borrow is scarce. Spin-offs are FRAGILE, post-reorganisation equity is UNTESTED (too few clean events), and insider clusters, activist 13Ds and lockup shorts are KILLED. Merger arb, earnings drift and fallen angels need paid data.</p>
+<h2><span class="n">01</span>The big-funds playbook</h2>
+<table>
+<thead>
+<tr>
+<th>Fund</th>
+<th>Repeatable mechanism</th>
+<th>Data it needs</th>
+<th>Free public equivalent?</th>
+<th>Primary source</th>
+<th>Grade</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Elliott</td>
+<td>Holdouts and legal leverage: buy defaulted claims cheap, enforce contract terms (pari passu) until paid; activism in governance-weak firms</td>
+<td>Bond indentures, court dockets, 13D</td>
+<td>Partly: CourtListener/RECAP, EDGAR 13D, indentures in 8-K exhibits. PACER fees and docket depth are limits</td>
+<td>https://www.govinfo.gov/content/pkg/USCOURTS-ca2-12-00109/pdf/USCOURTS-ca2-12-00109-0.pdf</td>
+<td>A</td>
+</tr>
+<tr>
+<td>Baupost / Klarman</td>
+<td>Orphans: securities sold for non-economic reasons (post-reorg equity, spin-offs, claims, index exits)</td>
+<td>Emergence dates, Form 10s, claims registers</td>
+<td>Yes for emergences and spin-offs (EDGAR); claims prices are not free</td>
+<td>Margin of Safety (1991, book); M2/M3 below</td>
+<td>B</td>
+</tr>
+<tr>
+<td>Oaktree / Apollo</td>
+<td>Create control: buy the fulcrum tranche, then use LMEs/uptiers or the plan to take the equity</td>
+<td>Credit agreements, lender groups, plan documents</td>
+<td>Partly: 8-K credit agreements, our control maps. Loan prices are not free</td>
+<td>https://www.ca5.uscourts.gov/opinions/pub/23/23-20181-CV0.pdf (Serta: uptier not an 'open market purchase')</td>
+<td>A</td>
+</tr>
+<tr>
+<td>Millennium / Citadel pods</td>
+<td>Many small event edges with tight risk: index adds, spin-offs, lockups, merger arb, earnings drift</td>
+<td>Index changes, deal terms, consensus estimates, borrow</td>
+<td>Partly: EDGAR events are free; consensus, borrow and index history are paid</td>
+<td>No public primary source (labelled JUDGEMENT); academic anchors: Field &amp; Hanka 2001 JF (lockups), Mitchell &amp; Pulvino 2001 JF (merger arb), Bernard &amp; Thomas 1989 (PEAD)</td>
+<td>C</td>
+</tr>
+<tr>
+<td>Glencore / Trafigura / Vitol</td>
+<td>Physical arbitrage: own storage and freight, earn location, time (contango) and quality spreads</td>
+<td>Inventories, freight rates, forward curves</td>
+<td>Partly: EIA stocks, SHFE/LME weekly stocks (SHFE in our v4), Comtrade flows. Freight and physical premia are paid</td>
+<td>Company annual reports (e.g. Trafigura annual report); JUDGEMENT on the mechanism</td>
+<td>B</td>
+</tr>
+<tr>
+<td>Renaissance</td>
+<td>Many weak, uncorrelated signals with clean data, careful costs and no single big bet</td>
+<td>Tick data, corporate actions, clean histories</td>
+<td>Partly: daily data free, survivorship-free history not free</td>
+<td>Zuckerman, The Man Who Solved the Market (2019, book)</td>
+<td>C</td>
+</tr>
+<tr>
+<td>Burry</td>
+<td>Read the documents nobody reads (prospectus tapes, filings), then buy cheap convex protection (CDS)</td>
+<td>Prospectuses, 10-K/10-Q footnotes, CDS</td>
+<td>Yes for documents (EDGAR full text); CDS not free</td>
+<td>Scion 13F filings on EDGAR; Lewis, The Big Short (book)</td>
+<td>B</td>
+</tr>
+<tr>
+<td>Ackman</td>
+<td>Asymmetric hedges: buy protection when it is near its cheapest (CDX IG ~50bp) before a regime break</td>
+<td>CDS index spreads, macro triggers</td>
+<td>Partly: FRED ICE OAS (3-year public window only)</td>
+<td>https://pershingsquareholdings.com/wp-content/uploads/2020/03/Pershing-Square-Capital-Management-L.P.-Releases-Letter-to-Investors-March-26-2020.pdf ($27m cost, &gt;$2.6bn proceeds)</td>
+<td>A</td>
+</tr>
+<tr>
+<td>Druckenmiller / Soros</td>
+<td>Regime shifts: liquidity and policy turns, reflexive feedback loops; size up when right</td>
+<td>Central-bank balance sheets, FX, policy</td>
+<td>Yes: FRED/ALFRED (point-in-time vintages throttled this session)</td>
+<td>Soros, The Alchemy of Finance (1987, book)</td>
+<td>B</td>
+</tr>
+<tr>
+<td>Bridgewater</td>
+<td>Debt-cycle mechanics: debt service vs income, policy levers, deleveraging phases</td>
+<td>Credit growth, debt service, rates</td>
+<td>Yes: BIS, FRED, IMF</td>
+<td>https://www.bridgewater.com/research-and-insights/a-template-for-understanding-big-debt-crises (Dalio, Big Debt Crises, free PDF)</td>
+<td>B</td>
+</tr>
+</tbody>
+</table>
+<h2><span class="n">02</span>Backtests (filing-date point-in-time, costs, IS &lt; 2022 ≤ OOS, one event per ticker per window)</h2>
+<table>
+<thead>
+<tr>
+<th>Mechanism</th>
+<th>Status</th>
+<th>Events found</th>
+<th>Priced (coverage)</th>
+<th>IS n / prec / mean / median</th>
+<th>OOS n / prec / mean / median</th>
+<th>OOS t</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>M1 insider cluster buys (&gt;=3 insiders, &gt;=$100k, 14d)</td>
+<td><strong>KILLED</strong></td>
+<td class='r'>900</td>
+<td>614 (68%)</td>
+<td>250 / 47% / -1.06% / -2.47%</td>
+<td>355 / 41% / -1.91% / -7.26%</td>
+<td class='r'>-0.84</td>
+</tr>
+<tr>
+<td>M1b insider clusters in distressed names (price &lt;=60% of 6m high)</td>
+<td><strong>KILLED</strong></td>
+<td class='r'>175</td>
+<td>175 (100%)</td>
+<td>59 / 51% / 8.41% / 0.77%</td>
+<td>116 / 44% / 2.3% / -12.09%</td>
+<td class='r'>0.46</td>
+</tr>
+<tr>
+<td>M2 spin-offs (Form 10-12B spinco, 250d)</td>
+<td><strong>FRAGILE (IS disagrees)</strong></td>
+<td class='r'>114</td>
+<td>91 (80%)</td>
+<td>43 / 47% / 104.46% / -4.94%</td>
+<td>48 / 52% / 45.95% / 4.13%</td>
+<td class='r'>1.28</td>
+</tr>
+<tr>
+<td>M3 post-reorganization equity (8-K 'emerged from chapter 11', 250d)</td>
+<td><strong>UNTESTED (n_oos=6)</strong></td>
+<td class='r'>18</td>
+<td>13 (72%)</td>
+<td>7 / 43% / 13.89% / -2.3%</td>
+<td>6 / 67% / 11.97% / 16.16%</td>
+<td class='r'>0.49</td>
+</tr>
+<tr>
+<td>M4 activist 13D initial filings (120d)</td>
+<td><strong>KILLED</strong></td>
+<td class='r'>700</td>
+<td>629 (90%)</td>
+<td>323 / 41% / -1.75% / -8.97%</td>
+<td>280 / 34% / 1.1% / -13.16%</td>
+<td class='r'>0.12</td>
+</tr>
+<tr>
+<td>M5 NT 10-K late filers, SHORT (120d)</td>
+<td><strong>KEPT</strong></td>
+<td class='r'>700</td>
+<td>615 (88%)</td>
+<td>297 / 60% / 5.98% / 10.19%</td>
+<td>318 / 67% / 14.93% / 15.0%</td>
+<td class='r'>5.4</td>
+</tr>
+<tr>
+<td>M6 IPO lockup expiry window, SHORT (day 173 -&gt; +10 trading days)</td>
+<td><strong>KILLED</strong></td>
+<td class='r'>700</td>
+<td>648 (93%)</td>
+<td>272 / 57% / 2.23% / 1.78%</td>
+<td>376 / 54% / -1.14% / 1.01%</td>
+<td class='r'>-0.66</td>
+</tr>
+<tr>
+<td>M7 merger-arb spread</td>
+<td><strong>UNTESTED (data)</strong></td>
+<td>–</td>
+<td>–</td>
+<td>Targets delist on completion, so Yahoo drops most of them, and offer prices are not in a free structured feed. A survivorship-clean test needs CRSP-style delisting returns.</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>M8 earnings-revision / PEAD</td>
+<td><strong>UNTESTED (data)</strong></td>
+<td>–</td>
+<td>–</td>
+<td>No free point-in-time consensus estimates. A price-reaction proxy is possible but was not run this pass.</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>M9 fallen angels / forced IG selling</td>
+<td><strong>UNTESTED (data)</strong></td>
+<td>–</td>
+<td>–</td>
+<td>No free point-in-time rating-action history; agency press releases are not bulk-downloadable without registration.</td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<p><strong>How to read this.</strong>
+- Means are skewed by a few huge winners; check the medians.
+- Spin-off OOS mean +46% vs median +4% is a handful of multi-baggers, not a reliable edge. In-sample precision of 47% makes it FRAGILE.
+- <strong>Late-filer short:</strong> borrow cost decides it. OOS excess after a 100bp cost: 14.93%. After borrow at 5% / 20% / 50% a year: 5%/yr: 12.53%, 20%/yr: 5.33%, 50%/yr: -9.07%. Most of these names are sub-$1, often not borrowable. Treat it as an <strong>AVOID / risk</strong> signal, not a trade.
+- <strong>Survivorship:</strong> Yahoo drops delisted tickers. Coverage is 68–93%. Missing names are disproportionately failures, so long results are biased UP and the short result is biased DOWN (conservative).
+- <strong>Insider clusters killed:</strong> the academic edge (Cohen-Malloy-Pomorski) uses 'opportunistic' insiders and pre-2010 data. Our simple ≥3-insider rule over 2018–2026 loses money vs IWM after 50bp.
+- <strong>Lockup short:</strong> worked in-sample (t = 2.55) and failed OOS. It looks arbitraged away, as the literature predicts.
+- <strong>Post-reorg equity:</strong> the 'new equity' filter leaves 13 clean events. Our EDGAR text-search dating is too coarse; it needs court confirmation dates (our Ch11 data) to reach n ≥ 8 OOS.</p>
+<h2><span class="n">03</span>What we were overlooking (audit) and what we built</h2>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Why a billionaire sees it</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Deadlines that force behaviour</td>
+<td>SEC Rule 12b-25: a late filer gets 15 days (10-K) or 5 days (10-Q). Missing it leads to exchange deficiency notices and loss of S-3 eligibility, which forces dilutive financing. Public on EDGAR, but rarely aggregated.</td>
+<td>IMPLEMENTED: O2 late-filer watch + M5 backtest (KEPT on the short side, borrow-sensitive)</td>
+</tr>
+<tr>
+<td>Supply released on a fixed date</td>
+<td>IPO lockups end around day 180. The S-1 states it; nobody aggregates it for small IPOs.</td>
+<td>IMPLEMENTED: O1 forward lockup calendar (the backtest decayed: IS works, OOS fails)</td>
+</tr>
+<tr>
+<td>Public but not joined</td>
+<td>Insider buying, a new activist 13D and our restructuring calendar sit in separate databases. Joining them is the edge a desk with time has.</td>
+<td>IMPLEMENTED: O3 convergence screen (1 hit, a closed-end fund self-filing, so not meaningful today)</td>
+</tr>
+<tr>
+<td>Second-order effects</td>
+<td>China export-control suspension expires 27 Nov 2026 (MOFCOM Ann. 72/2025) → US defence primes need non-China Sb/Ga/Ge → small Western suppliers (Bottleneck Hunt).</td>
+<td>Already in Bottleneck Hunt</td>
+</tr>
+<tr>
+<td>Schedule 13D form-type change</td>
+<td>EDGAR now files new 13Ds as 'SCHEDULE 13D'. Screens still keyed to 'SC 13D' silently miss 2025+ activism. We found this in our own pipeline.</td>
+<td>FIXED in the live layer; M4 backtest is 2018-2024 only</td>
+</tr>
+</tbody>
+</table>
+<h2><span class="n">04</span>Live list (only from the mechanism that passed)</h2>
+<p>Paper AVOID / SHORT-WATCH calls from M5 (NT 10-K filed in the last 60 days, priced this week). Each is in the hash-chained ledger. <strong>Kill condition for every row:</strong> the company files its 10-K within the 12b-25 extension AND the stock beats IWM by &gt;20% within 60 days of the NT filing.</p>
+<table>
+<thead>
+<tr>
+<th>Ticker</th>
+<th>Company</th>
+<th>NT filed</th>
+<th>Last px</th>
+<th>Deadline</th>
+<th>Window end</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>AWCA</td>
+<td>Awaysis Capital, Inc.</td>
+<td>2026-09-29</td>
+<td class='r'>0.035</td>
+<td>15 calendar-day extension (Rule 12b-25) ends 2026-10-14</td>
+<td>2027-03-22</td>
+<td>https://www.sec.gov/Archives/edgar/data/1021917/0001493152-26-044681.txt</td>
+</tr>
+<tr>
+<td>CBLO</td>
+<td>C2 Blockchain, Inc.</td>
+<td>2026-09-29</td>
+<td class='r'>0.0298</td>
+<td>15 calendar-day extension (Rule 12b-25) ends 2026-10-14</td>
+<td>2027-03-22</td>
+<td>https://www.sec.gov/Archives/edgar/data/1882781/0001882781-26-000044.txt</td>
+</tr>
+<tr>
+<td>GTLL</td>
+<td>GLOBAL TECHNOLOGIES LTD</td>
+<td>2026-09-29</td>
+<td class='r'>0.0001</td>
+<td>15 calendar-day extension (Rule 12b-25) ends 2026-10-14</td>
+<td>2027-03-22</td>
+<td>https://www.sec.gov/Archives/edgar/data/932021/0001493152-26-044925.txt</td>
+</tr>
+<tr>
+<td>HSCT</td>
+<td>HOOPS SCOUTING USA</td>
+<td>2026-09-29</td>
+<td class='r'>0.39</td>
+<td>15 calendar-day extension (Rule 12b-25) ends 2026-10-14</td>
+<td>2027-03-22</td>
+<td>https://www.sec.gov/Archives/edgar/data/1721056/0001477932-26-005903.txt</td>
+</tr>
+<tr>
+<td>LNAI</td>
+<td>Lunai Bioworks Inc.</td>
+<td>2026-09-29</td>
+<td class='r'>0.47</td>
+<td>15 calendar-day extension (Rule 12b-25) ends 2026-10-14</td>
+<td>2027-03-22</td>
+<td>https://www.sec.gov/Archives/edgar/data/1527728/0001731122-26-001299.txt</td>
+</tr>
+<tr>
+<td>NVA-WT</td>
+<td>Nova Minerals Corp</td>
+<td>2026-09-29</td>
+<td class='r'>5.97</td>
+<td>15 calendar-day extension (Rule 12b-25) ends 2026-10-14</td>
+<td>2027-03-22</td>
+<td>https://www.sec.gov/Archives/edgar/data/1852551/0001493152-26-044708.txt</td>
+</tr>
+<tr>
+<td>SGLY</td>
+<td>Singularity Future Technology Ltd.</td>
+<td>2026-09-29</td>
+<td class='r'>0.4142</td>
+<td>15 calendar-day extension (Rule 12b-25) ends 2026-10-14</td>
+<td>2027-03-22</td>
+<td>https://www.sec.gov/Archives/edgar/data/1422892/0001213900-26-104272.txt</td>
+</tr>
+<tr>
+<td>VIPZ</td>
+<td>VIP Play, Inc.</td>
+<td>2026-09-29</td>
+<td class='r'>0.189</td>
+<td>15 calendar-day extension (Rule 12b-25) ends 2026-10-14</td>
+<td>2027-03-22</td>
+<td>https://www.sec.gov/Archives/edgar/data/1832161/0001493152-26-044847.txt</td>
+</tr>
+<tr>
+<td>VISM</td>
+<td>VISIUM TECHNOLOGIES, INC.</td>
+<td>2026-09-29</td>
+<td class='r'>0.0007</td>
+<td>15 calendar-day extension (Rule 12b-25) ends 2026-10-14</td>
+<td>2027-03-22</td>
+<td>https://www.sec.gov/Archives/edgar/data/1082733/0001654954-26-008617.txt</td>
+</tr>
+<tr>
+<td>ALDS</td>
+<td>APPlife Digital Solutions Inc</td>
+<td>2026-09-28</td>
+<td class='r'>0.09</td>
+<td>15 calendar-day extension (Rule 12b-25) ends 2026-10-13</td>
+<td>2027-03-21</td>
+<td>https://www.sec.gov/Archives/edgar/data/1755101/0001096906-26-001457.txt</td>
+</tr>
+<tr>
+<td>ADVB</td>
+<td>Advanced Biomed Inc.</td>
+<td>2026-09-28</td>
+<td class='r'>3.46</td>
+<td>15 calendar-day extension (Rule 12b-25) ends 2026-10-13</td>
+<td>2027-03-21</td>
+<td>https://www.sec.gov/Archives/edgar/data/1941029/0001213900-26-104071.txt</td>
+</tr>
+<tr>
+<td>BNET</td>
+<td>BION ENVIRONMENTAL TECHNOLOGIES INC</td>
+<td>2026-09-28</td>
+<td class='r'>0.247</td>
+<td>15 calendar-day extension (Rule 12b-25) ends 2026-10-13</td>
+<td>2027-03-21</td>
+<td>https://www.sec.gov/Archives/edgar/data/875729/0001079973-26-001291.txt</td>
+</tr>
+</tbody>
+</table>
+<h3>Context lists (not ledger calls: mechanisms not KEPT)</h3>
+<p><strong>Upcoming lockup expiries (O1), next 75 days:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Ticker</th>
+<th>Company</th>
+<th>IPO</th>
+<th>Est. expiry</th>
+<th>Since IPO</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>PS</td>
+<td>PERSHING SQUARE INC.</td>
+<td>2026-04-29</td>
+<td>2026-10-26</td>
+<td class='r'>86%</td>
+</tr>
+<tr>
+<td>PSUS</td>
+<td>Pershing Square USA, Ltd.</td>
+<td>2026-04-29</td>
+<td>2026-10-26</td>
+<td class='r'>-10%</td>
+</tr>
+<tr>
+<td>AVLN</td>
+<td>Avalyn Pharma Inc.</td>
+<td>2026-04-30</td>
+<td>2026-10-27</td>
+<td class='r'>-8%</td>
+</tr>
+<tr>
+<td>SBMT</td>
+<td>SILVER BOW MINING CORP.</td>
+<td>2026-04-30</td>
+<td>2026-10-27</td>
+<td class='r'>-41%</td>
+</tr>
+<tr>
+<td>COAG</td>
+<td>Hemab Therapeutics Holdings, Inc.</td>
+<td>2026-05-01</td>
+<td>2026-10-28</td>
+<td class='r'>2%</td>
+</tr>
+<tr>
+<td>SPTX</td>
+<td>Seaport Therapeutics, Inc.</td>
+<td>2026-05-01</td>
+<td>2026-10-28</td>
+<td class='r'>5%</td>
+</tr>
+<tr>
+<td>REA</td>
+<td>Rare Earths Americas, Inc.</td>
+<td>2026-05-05</td>
+<td>2026-11-01</td>
+<td class='r'>-62%</td>
+</tr>
+<tr>
+<td>HAWK</td>
+<td>HawkEye 360, Inc.</td>
+<td>2026-05-07</td>
+<td>2026-11-03</td>
+<td class='r'>-66%</td>
+</tr>
+<tr>
+<td>SUJA</td>
+<td>SUJA LIFE, INC.</td>
+<td>2026-05-07</td>
+<td>2026-11-03</td>
+<td class='r'>-46%</td>
+</tr>
+<tr>
+<td>MOBI</td>
+<td>Mobia Medical, Inc.</td>
+<td>2026-05-08</td>
+<td>2026-11-04</td>
+<td class='r'>-10%</td>
+</tr>
+<tr>
+<td>ODTX</td>
+<td>Odyssey Therapeutics, Inc.</td>
+<td>2026-05-08</td>
+<td>2026-11-04</td>
+<td class='r'>16%</td>
+</tr>
+<tr>
+<td>FRVO</td>
+<td>Fervo Energy Co</td>
+<td>2026-05-13</td>
+<td>2026-11-09</td>
+<td class='r'>-77%</td>
+</tr>
+<tr>
+<td>GMRS</td>
+<td>GMR Solutions Inc.</td>
+<td>2026-05-13</td>
+<td>2026-11-09</td>
+<td class='r'>-23%</td>
+</tr>
+<tr>
+<td>AIAI</td>
+<td>AIAI Holdings Corp</td>
+<td>2026-05-14</td>
+<td>2026-11-10</td>
+<td class='r'>-86%</td>
+</tr>
+<tr>
+<td>BXDC</td>
+<td>Blackstone Digital Infrastructure Trust Inc.</td>
+<td>2026-05-14</td>
+<td>2026-11-10</td>
+<td class='r'>-20%</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Spin-offs in registration (Form 10 filed in the last 150 days; FRAGILE mechanism):</strong></p>
+<ul>
+<li>Vylor Inc. (VYLR): first filed 2026-06-29, <a href="https://www.sec.gov/Archives/edgar/data/2128626/0001193125-26-288697.txt">sec.gov/Archives/edgar/data/21…6-288697.txt</a></li>
+<li>ADI GLOBAL DISTRIBUTION INC. (ADIG): first filed 2026-06-04, <a href="https://www.sec.gov/Archives/edgar/data/2105139/0001213900-26-065286.txt">sec.gov/Archives/edgar/data/21…6-065286.txt</a></li>
+<li>Honeywell Aerospace Inc. (HONA): first filed 2026-06-08, <a href="https://www.sec.gov/Archives/edgar/data/2089271/0001628280-26-041399.txt">sec.gov/Archives/edgar/data/20…6-041399.txt</a></li>
+<li>Midera Food Processing, Inc. (MFP): first filed 2026-05-27, <a href="https://www.sec.gov/Archives/edgar/data/2088281/0001193125-26-241891.txt">sec.gov/Archives/edgar/data/20…6-241891.txt</a></li>
+<li>Mobility Global Inc. (MBGL): first filed 2026-05-27, <a href="https://www.sec.gov/Archives/edgar/data/2090312/0001104659-26-066592.txt">sec.gov/Archives/edgar/data/20…6-066592.txt</a></li>
+<li>ALEXANDER TECH CORP (no ticker yet): first filed 2026-07-30, <a href="https://www.sec.gov/Archives/edgar/data/1347491/0001347491-26-000004.txt">sec.gov/Archives/edgar/data/13…6-000004.txt</a></li>
+<li>Archer SpinCo, Inc. (AXM): first filed 2026-09-15, <a href="https://www.sec.gov/Archives/edgar/data/2130999/0001193125-26-391224.txt">sec.gov/Archives/edgar/data/21…6-391224.txt</a></li>
+<li>MSGS Spinco, Inc. (MSGR): first filed 2026-08-14, <a href="https://www.sec.gov/Archives/edgar/data/2132873/0001193125-26-352589.txt">sec.gov/Archives/edgar/data/21…6-352589.txt</a></li>
+<li>Private Bancorp of America, Inc. (PBAM): first filed 2026-07-13, <a href="https://www.sec.gov/Archives/edgar/data/1705284/0001193125-26-302001.txt">sec.gov/Archives/edgar/data/17…6-302001.txt</a></li>
+<li>Trinzic, Inc. (TZIC): first filed 2026-09-30, <a href="https://www.sec.gov/Archives/edgar/data/2101664/0001140361-26-038098.txt">sec.gov/Archives/edgar/data/21…6-038098.txt</a></li>
+<li>West Coast Community Bancorp (WCCB): first filed 2026-08-31, <a href="https://www.sec.gov/Archives/edgar/data/2105965/0001628280-26-059592.txt">sec.gov/Archives/edgar/data/21…6-059592.txt</a></li>
+<li>BioStem Technologies, Inc. (BSEM): first filed 2026-07-24, <a href="https://www.sec.gov/Archives/edgar/data/1658678/0001213900-26-081252.txt">sec.gov/Archives/edgar/data/16…6-081252.txt</a></li>
+</ul>
+<p><strong>Live open-market insider clusters (≥3 insiders, ≥$100k, 21 days; KILLED mechanism, shown for transparency):</strong> BPRE (3 insiders, $23,285,979), ACCV (5 insiders, $4,098,600), HEI-A (8 insiders, $1,400,595), AGMB (3 insiders, $311,170), DX-PD (3 insiders, $267,230), IMSRW (3 insiders, $112,279)</p>
+<h2><span class="n">05</span>Gaps</h2>
+<ul>
+<li><strong>Non-US insider data:</strong> UK RNS director dealings, ASX Appendix 3Y and Japan large-holder reports are not ingested. There is no free bulk feed; the RNS and ASX pages need scraping, deferred to stay within the Apify cap. Crustdata/Apify spend: $0.</li>
+<li><strong>Merger arb, PEAD, fallen angels:</strong> need paid data (delisting returns, consensus estimates, rating history).</li>
+<li><strong>Index deletions:</strong> S&amp;P/Russell change history is not free.</li>
+<li><strong>Post-reorg dating:</strong> emergence is dated from 8-K text, not from confirmation orders.</li>
+<li><strong>ALFRED:</strong> point-in-time vintages still fail (the host keeps refusing this box), so the macro point-in-time rebuild is still pending.</li>
+<li><strong>UN Comtrade:</strong> 213 monthly China-export rows (2022+) arrived. They are not yet joined to signals.</li>
+<li><strong>Form 4 bulk data</strong> stops at 2026Q1; the live layer reads filings directly.</li>
+</ul><div class='disc avoid'><h3>Disclaimer and publisher's exclusion</h3><p>Published by TRIAGE for general information. Impersonal; not investment advice, a recommendation, or an offer or solicitation to buy or sell any security. Not tailored to any reader; intended to fall within the publisher's exclusion of section 202(a)(11)(D) of the US Investment Advisers Act of 1940. Facts are drawn from public filings and registries linked in the text; statements by parties are allegations; scenario figures are labelled assumptions. Companies only; no personal data.</p></div></body></html>

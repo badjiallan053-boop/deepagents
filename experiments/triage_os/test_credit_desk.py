@@ -15,3 +15,8 @@ def test_bottleneck():
     d = json.load(open("/workspace/triage_os_data/bottleneck.json"))
     assert len(d["top"]) == 15 and d["ledger_ok"] and all(c["kill"] and c["cat"][0] for c in d["top"])
     assert "100x" not in json.dumps(d["top"]).replace("claims 100x", "")
+def test_edge_lab():
+    d = json.load(open("/workspace/triage_os_data/edge_lab.json"))["results"]
+    kept = [k for k, v in d.items() if v["status"] == "KEPT"]
+    for k in kept: assert d[k]["OOS"]["n"] >= 8 and d[k]["OOS"]["mean"] > 0
+    assert len(d) >= 7

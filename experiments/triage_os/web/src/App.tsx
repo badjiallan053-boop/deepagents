@@ -21,6 +21,7 @@ const NAV = [
   { r: "control", label: "Control", icon: Crosshair },
   { r: "systemic", label: "Systemic radar", icon: Radar },
   { r: "world", label: "World", icon: Globe2 },
+  { r: "edge", label: "Edge Lab", icon: ShieldCheck },
   { r: "bottleneck", label: "Bottleneck Hunt", icon: Network },
   { r: "signals", label: "Signal Library", icon: Activity },
   { r: "radar", label: "Cross-Asset Radar", icon: Globe2 },
@@ -72,6 +73,7 @@ export default function App() {
         <main className="min-w-0 flex-1 overflow-auto">
           {top === "home" && <Home />}
           {top === "bottleneck" && <Bottleneck />}
+          {top === "edge" && <EdgeLab />}
           {top === "overview" && <Overview sits={sits} stats={stats} />}
           {top === "situations" && <Situations sits={sits} />}
           {top === "situation" && sits && <SituationView s={sits.find(s => s.key === base.split("/")[1]) ?? sits[0]} />}
@@ -246,6 +248,18 @@ function Bottleneck() {
     <PageHead kicker="Bottleneck Hunt · research only · paper WATCH calls" title="Small companies inside supply chokepoints" sub="Asymmetric setups, not promises. Nothing here claims 100x. Every name is vetoed by Quant Validation as recommendation-grade." />
     <Card title="Base rate: chokepoint small caps, entry cap under $300m, 12-month window (survivorship-biased upward)"><div className="grid grid-cols-5 gap-4 text-[12px]"><Stat label="Touched 10x" value={`${b.touch_10x_pct}%`} /><Stat label="Still ≥10x at 12m" value={`${b.hold_10x_pct}%`} /><Stat label="Touched 2x" value={`${b.touch_2x_pct}%`} /><Stat label="Lost ≥50%" value={`${b.lose_50_pct}%`} /><Stat label="Median max drawdown" value={`${b.median_maxdd}%`} /></div></Card>
     <Card title={`Top 15 (ledger chain ${J.ledger_ok ? "verified" : "BROKEN"})`}><table className="w-full text-[12px]"><thead><tr className="text-mute"><td>#</td><td>Company</td><td>Chain</td><td className="text-right">Mcap $m</td><td className="text-right">12m</td><td className="text-right">Score</td><td>Grade</td><td>Catalyst</td><td>Kill if</td></tr></thead><tbody>{J.top.map((c, i) => <tr key={c.t} className="border-t border-line align-top"><td className="py-1 pr-2">{i + 1}</td><td className="pr-2"><b>{c.name}</b><div className="text-mute">{c.t}</div></td><td className="pr-2 text-mute">{c.chain}<div className="mt-1">{c.ev.map(u => <a key={u} className="mr-2 text-info" href={u} target="_blank">src</a>)}</div></td><td className="num text-right">{c.mcap_usd}</td><td className="num text-right">{c.r12m ?? "–"}%</td><td className="num text-right">{c.score}</td><td>{c.grade}</td><td className="pr-2"><span className="num text-amber">{c.cat[0]}</span> {c.cat[1]}</td><td className="text-mute">{c.kill}</td></tr>)}</tbody></table></Card>
+  </div>
+}
+function EdgeLab() {
+  const { data: J } = useApi<{ playbook: Record<string, string>[]; results: Record<string, any>; overlooked: Record<string, string>[]; live: Record<string, any>[] }>("/api/edge")
+  if (!J || !J.playbook) return <div className="p-6 text-mute">Loading…</div>
+  const tone = (s: string) => s.startsWith("KEPT") ? "text-up" : s.startsWith("KILLED") ? "text-down" : "text-amber"
+  return <div className="space-y-5 p-6">
+    <PageHead kicker="Edge Lab · research only · paper ledger" title="How the big funds find edge, and what survives our tests" sub="Filing-date point-in-time events from EDGAR, costs, out-of-sample from 2022, kill rule enforced. One mechanism survives; it is an avoid/risk signal because borrow is scarce." />
+    <Card title="Backtests"><table className="w-full text-[12px]"><thead><tr className="text-mute"><td>Mechanism</td><td>Status</td><td className="text-right">OOS n</td><td className="text-right">OOS prec</td><td className="text-right">OOS mean</td><td className="text-right">OOS median</td><td className="text-right">IS mean</td></tr></thead><tbody>{Object.entries(J.results).map(([k, v]) => <tr key={k} className="border-t border-line"><td className="py-1 pr-2">{k}</td><td className={tone(v.status)}>{v.status}</td><td className="num text-right">{v.OOS?.n ?? "–"}</td><td className="num text-right">{v.OOS?.precision ?? "–"}%</td><td className="num text-right">{v.OOS?.mean ?? "–"}%</td><td className="num text-right">{v.OOS?.median ?? "–"}%</td><td className="num text-right">{v.IS?.mean ?? "–"}%</td></tr>)}</tbody></table></Card>
+    <Card title="Big-funds playbook"><table className="w-full text-[12px]"><tbody>{J.playbook.map(p => <tr key={p.fund} className="border-t border-line align-top"><td className="py-1 pr-2 font-semibold">{p.fund}</td><td className="pr-2">{p.mechanism}</td><td className="pr-2 text-mute">{p.free}</td><td>{p.grade}</td></tr>)}</tbody></table></Card>
+    <Card title="Overlooked audit"><ul className="space-y-1.5 text-[12px]">{J.overlooked.map(o => <li key={o.item}><b>{o.item}</b>: {o.why} <span className="text-amber">{o.status}</span></li>)}</ul></Card>
+    <Card title="Live AVOID / paper SHORT-WATCH (M5 late filers)"><table className="w-full text-[12px]"><tbody>{J.live.map(r => <tr key={r.ticker} className="border-t border-line"><td className="py-1 pr-2">{r.ticker}</td><td className="pr-2">{r.company}</td><td className="num pr-2">{r.filed}</td><td className="pr-2 text-mute">{r.deadline_note}</td><td><a className="text-info" href={r.src} target="_blank">filing</a></td></tr>)}</tbody></table></Card>
   </div>
 }
 function Committee() {
