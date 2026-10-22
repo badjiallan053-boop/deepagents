@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { Activity, ChevronRight, Command as Cmd, FileText, Gavel, LayoutDashboard, Network, ScrollText, ShieldCheck, TrendingDown, Waypoints, ExternalLink } from "lucide-react"
+import { Activity, ChevronRight, Command as Cmd, FileText, Gavel, LayoutDashboard, Network, ScrollText, ShieldCheck, TrendingDown, Waypoints, ExternalLink, Crosshair } from "lucide-react"
 import { cn, fmtChg, fmtInt, fmtM, fmtPx, fmtPct, host, useApi } from "./lib"
 import { Card, DataTable, SourceProvider, SourceLink, Stat, Tag, VBadge, Wordmark, Button, statusKey, useSource, type Col } from "./components/ui"
 import { MarkChart, Sparkline, Timeline, Waterfall, type Tranche } from "./components/charts"
@@ -17,6 +17,7 @@ const NAV = [
   { r: "overview", label: "Overview", icon: LayoutDashboard },
   { r: "situations", label: "Situations", icon: Gavel },
   { r: "marks", label: "Marks monitor", icon: TrendingDown },
+  { r: "control", label: "Control", icon: Crosshair },
   { r: "graph", label: "Relationship graph", icon: Waypoints },
   { r: "edges", label: "Cross-dataset edges", icon: Network },
   { r: "verify", label: "Verification ledger", icon: ShieldCheck },
@@ -66,6 +67,7 @@ export default function App() {
           {top === "situations" && <Situations sits={sits} />}
           {top === "situation" && sits && <SituationView s={sits.find(s => s.key === base.split("/")[1]) ?? sits[0]} />}
           {top === "marks" && <Marks />}
+          {top === "control" && <Control />}
           {top === "graph" && <GraphView q={params.get("q") ?? ""} />}
           {top === "edges" && <Edges />}
           {top === "verify" && <Verify />}
@@ -158,6 +160,39 @@ function Marks() {
     <div className="flex flex-wrap gap-1 border-b border-line px-5 py-2">{["ALL", ...bdcs].map(k => <Button key={k} variant={bdc === k ? "outline" : "ghost"} onClick={() => setBdc(k)} className="h-6 px-2 font-mono text-[10.5px]">{k === "ALL" ? "All lenders" : k}</Button>)}</div>
     <div className="p-3"><Card pad={false}><DistTable rows={rows} maxHeight={700} /></Card></div>
   </div>
+}
+
+// ---------------- Control ----------------
+type CClass = { cls: string; voting: number; block: number; cost: number | null; group: number; group_blocks: boolean; group_carries: boolean; outside: number; outside_can_block: boolean; insider_blocks: boolean }
+type Holder = { trust: string; label: string; directing_holder: string; special_servicer: string; controlling_class: string; cc_balance: string; source_url: string; filed: string }
+type CSit = { name: string; chokepoint: string; cost: string; date: string }
+function Control() {
+  const { data } = useApi<{ classes: CClass[]; holders: Holder[]; situations: CSit[]; prices: { secured: number; unsecured: number } }>("/api/control")
+  const yn = (b: boolean) => <Tag tone={b ? "up" : "down"}>{b ? "yes" : "no"}</Tag>
+  const ccols: Col<CClass>[] = [
+    { key: "c", label: "Hughes class", render: r => <span className="text-ink">{r.cls}</span> },
+    { key: "v", label: "Voting $m", align: "right", render: r => <span className="num">{fmtM(r.voting)}</span> },
+    { key: "b", label: "Block >1/3", align: "right", render: r => <span className="num text-amber">{fmtM(r.block)}</span> },
+    { key: "k", label: "Cost at FV", align: "right", render: r => <span className="num">{r.cost == null ? "n/a" : fmtM(r.cost)}</span> },
+    { key: "g", label: "Group (min)", align: "right", render: r => <span className="num">{fmtM(r.group)}</span> },
+    { key: "gb", label: "Group blocks", render: r => yn(r.group_blocks) },
+    { key: "gc", label: "Group carries", render: r => yn(r.group_carries) },
+    { key: "o", label: "Outside float", align: "right", render: r => <span className="num">{fmtM(r.outside)}</span> },
+    { key: "ob", label: "Float can block", render: r => yn(r.outside_can_block) },
+  ]
+  const hs = (data?.holders ?? []).filter(h => h.directing_holder)
+  const hcols: Col<Holder>[] = [
+    { key: "t", label: "Trust", sort: r => r.trust, text: r => r.trust, render: r => <span className="text-ink">{r.trust}</span> },
+    { key: "h", label: "Directing holder / CCR", sort: r => r.directing_holder, text: r => r.directing_holder, render: r => <span className="text-amber">{r.directing_holder}</span> },
+    { key: "s", label: "Special servicer", sort: r => r.special_servicer, text: r => r.special_servicer, render: r => <span className="text-mute">{r.special_servicer}</span> },
+    { key: "c", label: "Ctrl class", render: r => <Tag>{r.controlling_class || "–"}</Tag> },
+    { key: "b", label: "Class bal $m", align: "right", sort: r => Number(r.cc_balance || 0), render: r => <span className="num">{r.cc_balance ? fmtM(Number(r.cc_balance) / 1e6) : "–"}</span> },
+    { key: "u", label: "10-D", align: "right", render: r => <SourceLink s={{ title: `${r.trust}: ${r.label}`, url: r.source_url, status: "VERIFIED", checked: r.filed }} /> },
+  ]
+  return <div><PageHead kicker="Control analysis · 22 Oct 2026" title="Who decides, and what a seat costs" sub="§1126(c) voting math for Hughes 26-90739 at reported fair value, chokepoints in four other situations, and CMBS directing holders parsed from 10-D filings. Likelihoods in the PDF are judgement." right={<a href="/research/Control_Bottleneck.pdf" target="_blank" className="text-[12px] text-info">Open PDF</a>} />
+    <div className="grid grid-cols-5 gap-3 p-3">{(data?.situations ?? []).map(s => <Card key={s.name} title={s.name}><div className="text-[12px] text-ink">{s.chokepoint}</div><div className="mt-2 text-[11.5px] text-amber">{s.cost}</div><div className="mt-1 text-[11px] text-dim">{s.date}</div></Card>)}</div>
+    <div className="px-3"><Card title="Hughes voting math" right={`FV secured ${data?.prices.secured.toFixed(1) ?? ""} · unsecured ${data?.prices.unsecured.toFixed(1) ?? ""}`} pad={false}><DataTable rows={data?.classes ?? []} cols={ccols} maxHeight={260} /></Card></div>
+    <div className="p-3"><Card title={`CMBS directing holders (${hs.length}/${data?.holders.length ?? 0} trusts named)`} pad={false}><DataTable rows={hs} cols={hcols} maxHeight={420} /></Card></div></div>
 }
 
 // ---------------- Situations ----------------
@@ -294,6 +329,7 @@ function HitLog() {
 // ---------------- Research ----------------
 function Research() {
   const docs = [
+    { href: "/research/Control_Bottleneck.pdf", kicker: "Control analysis · 22 Oct 2026", title: "Control bottleneck: who decides, and what a seat costs", desc: "Hughes voting math and blocking costs, eight paths to control, five capital playbooks; Fresno CMBS, Loparex, BayWa, Branicks; CMBS directing holders." },
     { href: "/research/Hughes_Satellite_Note.pdf", kicker: "Situation note · 22 Oct 2026", title: "Hughes Satellite Systems (Case 26-90739): the fight is over who owns the litigation", desc: "Capital structure and recovery scenarios, holder map, 1 Dec exclusivity hearing, plan-fight dynamics, catalysts, risks and a line-by-line verification appendix." },
     { href: "/research/TRIAGE_Master_Report.pdf", kicker: "Desk report · 22 Oct 2026", title: "TRIAGE master report: private-credit distress, court calendar and the verification ledger", desc: "BDC marks, top-15 capital structures, claims calendar, cross-dataset edges and the signal track record." },
   ]
