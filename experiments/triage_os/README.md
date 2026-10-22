@@ -57,3 +57,11 @@ Native reimplementation of the patterns in the team research note (no third-part
 - Entities are keyed by CIK when known, else by normalized name. A name-only entity merges into a matching CIK entity. Ranked/exported rows carry `signal_count`, `sources`, `signal_types` and `all_urls`.
 - SEC full-text hits are kept only if the filing's `items` in the submissions JSON contain a wanted item, so text-only mentions are dropped.
 - The Verifier and IC Secretary read every message in the case.
+
+## Terminal UI, research note and landing page (design pass, 22 Oct 2026)
+- `web/`: React + Vite + Tailwind with shadcn-style components (Radix Dialog, cmdk, Cytoscape). It has a dark terminal theme, sortable and filterable tables, mark sparklines, a cap-structure waterfall, case timelines, verification badges, a source drawer and a Ctrl-K palette.
+  Build with `cd web && npm ci && npm run build`. Then `python3 app/server.py` serves `web/dist` and the read-only API at http://127.0.0.1:8765.
+- `design.py`: the shared print design system (CSS and SVG charts) used by the note, the master report and the landing page.
+- `research/hughes_note.py` builds `research/Hughes_Satellite_Note.pdf`. Its claims HN01–HN32 are token-checked against primary docs and written to the `verification` table.
+- `landing.py` builds `landing/index.html`, which is served at `/landing.html`.
+- Screenshots at 1440x900 are in `app/screenshots/v2/`.

@@ -5,6 +5,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 DB = os.environ.get("TRIAGE_DB", "/workspace/triage_os_data/triage.db")
 HITLOG = os.environ.get("TRIAGE_HITLOG", "/workspace/triage_os_data/hit_log.jsonl")
 STATIC = os.path.join(os.path.dirname(__file__), "static")
+DIST = os.path.join(os.path.dirname(__file__), "..", "web", "dist")
+DIST = os.path.normpath(DIST)
 def q(sql, a=()):
     c = sqlite3.connect(f"file:{DB}?mode=ro", uri=True, timeout=60); c.row_factory = sqlite3.Row
     try: return [dict(r) for r in c.execute(sql, a)]
@@ -77,7 +79,31 @@ def hitlog(n=200):
     rows = [json.loads(l) for l in open(HITLOG)] if os.path.exists(HITLOG) else []
     ok, bad = verify_chain(HITLOG) if rows else (True, None)
     return {"chain_ok": ok, "broken_at": bad, "count": len(rows), "entries": rows[-n:][::-1]}
-ROUTES = {"/api/stats": lambda p: stats(), "/api/search": lambda p: search(p.get("q", [""])[0]), "/api/graph": lambda p: graph(p.get("entity", ["EchoStar Corp"])[0]),
+def marks_history(borrower):
+    k = f"%{borrower.lower()}%"
+    rows = q("select bdc, period, avg(mark) mark, sum(par) par, min(source_url) url from (select bdc,period,mark,par,source_url from bdc_marks_hist where lower(borrower) like ? union all select bdc,period,mark,par,source_url from bdc_marks where lower(borrower) like ?) where mark>0 group by bdc, period order by period", (k, k))
+    out = {}
+    for r in rows: out.setdefault(r["bdc"], []).append(r)
+    return out
+def cap(situation):
+    return q("select * from cap_structures_top15 where situation like ? or issuer like ?", (f"%{situation}%", f"%{situation}%"))
+_DIST = None
+def distressed():
+    global _DIST
+    if _DIST is not None: return _DIST
+    rows = q("""select borrower_key, borrower, bdc, round(sum(fv)*100.0/sum(par),1) mark, round(min(mark),1) min_mark, round(sum(par)/1e6,1) par_m, round(sum(fv)/1e6,1) fv_m, count(*) tranches, min(source_url) source_url from bdc_marks
+                where period='2026-06-30' and mark>0 and borrower not like 'Investment%' and borrower not like 'Portfolio Company%' and borrower not like 'Debt Investments%' and borrower not like 'Total%' and length(borrower_key)>3 and borrower not like 'Senior Secured%' and borrower not like 'First Lien%' and borrower not like 'Second Lien%' and borrower not like 'Subordinated%'
+                group by borrower_key, bdc having sum(fv)*100.0/sum(par) between 1 and 75 and count(*)<40 order by sum(par) desc limit 400""")
+    hist = {}
+    for r in q("""select borrower_key, bdc, period, round(sum(fv)*100.0/nullif(sum(par),0),1) m from (select borrower_key,bdc,period,par,fv from bdc_marks_hist union all select borrower_key,bdc,period,par,fv from bdc_marks)
+                  where par>0 group by borrower_key, bdc, period order by period"""):
+        hist.setdefault((r["borrower_key"], r["bdc"]), []).append([r["period"], r["m"]])
+    for r in rows:
+        h = hist.get((r["borrower_key"], r["bdc"]), []); r["hist"] = h
+        r["qa"] = "units check" if (r["min_mark"] or 0) < 2 or r["mark"] < 15 else "ok"
+        r["chg_q"] = round(h[-1][1] - h[-2][1], 1) if len(h) >= 2 and h[-1][1] is not None and h[-2][1] is not None else None
+    _DIST = rows; return rows
+ROUTES = {"/api/marks": lambda p: marks_history(p.get("borrower", [""])[0]), "/api/cap": lambda p: cap(p.get("situation", [""])[0]), "/api/distressed": lambda p: distressed(),"/api/stats": lambda p: stats(), "/api/search": lambda p: search(p.get("q", [""])[0]), "/api/graph": lambda p: graph(p.get("entity", ["EchoStar Corp"])[0]),
           "/api/situations": lambda p: situations(), "/api/hitlog": lambda p: hitlog(), "/api/verification": lambda p: q("select * from verification order by claim_id"),
           "/api/edges": lambda p: q("select * from edges2 order by status, type, value desc"), "/api/concentration": lambda p: q("select * from fund_service_concentration")}
 class H(BaseHTTPRequestHandler):
@@ -87,9 +113,12 @@ class H(BaseHTTPRequestHandler):
         if u.path in ROUTES:
             body = json.dumps(ROUTES[u.path](p), default=str).encode(); ct = "application/json"
         else:
-            f = os.path.join(STATIC, "index.html" if u.path in ("/", "") else os.path.basename(u.path))
-            if not os.path.exists(f): self.send_response(404); self.end_headers(); return
-            body = open(f, "rb").read(); ct = "text/html; charset=utf-8" if f.endswith(".html") else "application/javascript"
+            root = DIST if os.path.isdir(DIST) else STATIC
+            rel = u.path.lstrip("/") or "index.html"
+            f = os.path.normpath(os.path.join(root, rel))
+            if not f.startswith(root) or not os.path.isfile(f): f = os.path.join(root, "index.html")
+            body = open(f, "rb").read()
+            ct = {".html": "text/html; charset=utf-8", ".js": "application/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".pdf": "application/pdf"}.get(os.path.splitext(f)[1], "application/octet-stream")
         self.send_response(200); self.send_header("Content-Type", ct); self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body)
 if __name__ == "__main__":
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8765

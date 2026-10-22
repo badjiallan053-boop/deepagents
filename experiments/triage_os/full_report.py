@@ -10,7 +10,7 @@ def build(md_path=f"{D}/TRIAGE_OS_Master_Report.md", pdf_path=f"{D}/TRIAGE_OS_Ma
     ver = c.execute("select claim_id,artifact,claim,status,primary_url,checked,method,fix from verification order by claim_id").fetchall()
     stats = dict(c.execute("select status,count(*) from verification group by 1").fetchall())
     good = [r for r in ver if r[3] in ("VERIFIED", "CORRECTED")]
-    S = [f"# TRIAGE OS — Special-Situations Desk: Master Report\n\nGenerated {v.TODAY} (Asia/Singapore). Public data only; firms only; read-only. Every fact below carries a status (VERIFIED / CORRECTED) and a primary source checked on the date shown. UNVERIFIABLE items are excluded from the body and listed in Appendix A.\n",
+    S = [f"# TRIAGE master report\n\nGenerated {v.TODAY} (Asia/Singapore). Public data only; firms only; read-only. Every fact below carries a status (VERIFIED / CORRECTED) and a primary source checked on the date shown. UNVERIFIABLE items are excluded from the body and listed in Appendix A.\n",
          f"## 1. Verification summary\n\n{table(['Status','Claims'], sorted(stats.items()))}\n\nTotal claims checked: {sum(stats.values())}. Method: live fetch of the primary document with required-token match (SEC EDGAR, HKEX, company IR), recomputation from SEC-derived tables (13F data sets, BDC 10-Q schedules, N-PORT XML), and court/claims-agent dockets.\n",
          "## 2. Key facts (VERIFIED or CORRECTED only)\n\n" + table(["ID", "Fact (as corrected)", "Status", "Source", "Checked"], [(r[0], r[2] + (f" → **{r[7]}**" if r[3] == "CORRECTED" and r[7] else (f" ({r[7]})" if r[7] else "")), r[3], r[4], r[5]) for r in good]) + "\n",
          "## 3. Notable corrections\n\n" + "\n".join(f"- **{r[0]}** {r[2]} → {r[7]} ([source]({r[4]}))" for r in ver if r[3] == "CORRECTED") + "\n"]
@@ -45,6 +45,13 @@ def build(md_path=f"{D}/TRIAGE_OS_Master_Report.md", pdf_path=f"{D}/TRIAGE_OS_Ma
     S.append("## Appendix A — UNVERIFIABLE (excluded from body)\n\n" + table(["ID", "Artifact", "Claim", "Note"], [(r[0], r[1], r[2], r[7]) for r in ver if r[3] == "UNVERIFIABLE"]) + "\n")
     S.append("## Appendix B — Full verification ledger\n\n" + table(["ID", "Status", "Claim", "Method", "Source", "Checked"], [(r[0], r[3], r[2], r[6], r[4], r[5]) for r in ver]) + "\n")
     S.append("## Appendix C — Charts\n\n![bdc](master/bdc.png)\n")
-    open(md_path, "w").write("\n".join(S)); mr.render(md_path, pdf_path); return md_path
+    open(md_path, "w").write("\n".join(S))
+    import design
+    s = c.execute("select count(*) from verification").fetchone()[0]
+    pages = design.report_from_markdown("\n".join(S), "TRIAGE master report: private-credit distress, court calendar and the verification ledger",
+        f"Desk report · {v.TODAY}", "BDC marks, top-15 capital structures, claims-agent calendar, WARN notices, dossiers, buyer and investor profiles, and the live hit log. Every fact carries a status and a primary source.",
+        [("Claims in ledger", s), ("Verified", stats.get("VERIFIED", 0)), ("Corrected", stats.get("CORRECTED", 0)), ("Unverifiable", stats.get("UNVERIFIABLE", 0)), ("As of", v.TODAY)],
+        md_path.replace(".md", ".html"), pdf_path)
+    return md_path
 if __name__ == "__main__":
     build(); import subprocess; print(subprocess.run(["pdfinfo", f"{D}/TRIAGE_OS_Master_Report.pdf"], capture_output=True, text=True).stdout)
