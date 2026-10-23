@@ -65,6 +65,43 @@ def jp_tdb():
     seen = set(); rows = [r for r in rows if not (r["url"] in seen or seen.add(r["url"]))]
     return rows, s, len(rows)
 
+
+# ---- CLI: last-N-days ingest into triage.db with dedupe (src,url) ----
+import os, sqlite3, argparse
+DEFAULT_DB = os.environ.get("TRIAGE_DB", "/workspace/triage_os_data/triage.db")
+FETCHERS = {"uk_gazette": lambda: uk_gazette(100)[0], "fr_bodacc": lambda: fr_bodacc(100)[0], "jp_tdb": lambda: jp_tdb()[0]}
+
+def _in_window(pub, days, today=None):
+    if not pub: return True  # undated (TDB flash): keep, dedupe handles repeats
+    try: d = dt.date.fromisoformat(str(pub)[:10])
+    except ValueError: return True
+    today = today or now().date()
+    return (today - d).days <= days
+
+def store(rows, db, days, today=None):
+    c = sqlite3.connect(db)
+    c.execute("""CREATE TABLE IF NOT EXISTS gap_entities(src TEXT, entity TEXT, event TEXT, published TEXT,
+                 court TEXT, url TEXT, detail TEXT, ingested_utc TEXT, UNIQUE(src, url))""")
+    new = 0
+    for r in rows:
+        if not r.get("url") or not r.get("entity") or not _in_window(r.get("published"), days, today): continue
+        cur = c.execute("INSERT OR IGNORE INTO gap_entities VALUES(?,?,?,?,?,?,?,?)",
+                        (r["src"], r["entity"], r.get("event"), r.get("published"), r.get("court"), r["url"], r.get("detail"), now().isoformat()))
+        new += cur.rowcount
+    c.commit(); c.close(); return new
+
+def cli(argv=None, fetchers=None):
+    ap = argparse.ArgumentParser(description="Ingest UK Gazette / BODACC (firms only) / TDB into triage.db")
+    ap.add_argument("--days", type=int, default=2); ap.add_argument("--db", default=DEFAULT_DB)
+    ap.add_argument("--sources", default="uk_gazette,fr_bodacc,jp_tdb")
+    a = ap.parse_args(argv); fetchers = fetchers or FETCHERS; res = {}
+    for name in a.sources.split(","):
+        try: res[name] = store(fetchers[name](), a.db, a.days)
+        except Exception as e: res[name] = "error: " + repr(e)[:150]
+    print(json.dumps(res)); return res
+
+if __name__ == "__main__" and len(sys.argv) > 1 and sys.argv[1].startswith("--"):
+    cli(); sys.exit(0)
 if __name__ == "__main__":
     out = {"run_at_utc": now().isoformat(), "sources": {}}
     for name, fn in [("uk_gazette", lambda: uk_gazette()), ("fr_bodacc", lambda: fr_bodacc()),
