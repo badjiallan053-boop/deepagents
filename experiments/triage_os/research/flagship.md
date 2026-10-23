@@ -221,7 +221,7 @@ Regime (Dalio-style, sources in the radar file): US 10y real yield 2.77% (99th p
 - **Signal library:** 23 cross-asset signals tested with publication lags, costs and a fixed out-of-sample rule. **1 kept (S21), 10 killed**, the rest fragile or untested. Short-crowding (5c) and district staking surges were also killed. Every kill is published in the Radar file.
 - **Point-in-time rebuild:** PENDING: ALFRED throttled this box (HTTP/2 INTERNAL_ERROR / timeouts on every request after a 12-thread burst); a polite sequential resumable fetch is queued. Until it lands, S21's KEPT status is on final revised data and is NOT point-in-time; the Quant Validation gate therefore vetoes it.
 - **Committee (multi-agent debate, adapted from AlphaAgents arXiv:2508.11152):** after costs it does **not** beat an equal-weight benchmark out of sample. We say so.
-- **Verified forward ledger:** 39 paper-only calls in a SHA-256 hash chain (verified = True), anchored daily at 23:30 SGT with OpenTimestamps in Bitcoin; anyone can check it with `verify_ledger.py` (ledger_proofs/README.md). This is the credibility asset: a dated record that cannot be back-filled.
+- **Verified forward ledger:** 85 paper-only calls in a SHA-256 hash chain (verified = True), anchored daily at 23:30 SGT with OpenTimestamps in Bitcoin; anyone can check it with `verify_ledger.py` (ledger_proofs/README.md). This is the credibility asset: a dated record that cannot be back-filled.
 - **Quant Validation agent has veto:** nothing is shown as recommendation-grade unless KEPT, ≥8 OOS events, stated OOS window and point-in-time data.
 
 ## 8. Pricing (JUDGEMENT, anchored on a verified comparable)
@@ -233,7 +233,7 @@ Anchor: Debtwire subscription £39.6k/yr (verified in World v2). TRIAGE prices u
 | Watchlist | Credit PMs, family offices | Weekly calendar + forced-seller note (PDF/email), app read-only | £12k/yr |
 | Desk | Special-sits / distressed teams (≤10 seats) | Full app: control maps, prices/gaps, alerts on dates and thresholds, sourcing log, analyst Q&A | £36k/yr |
 | Data licence | Funds, banks, data platforms | API/flat files: calendar, control holders, forced-seller series, ledger | £75k–£120k/yr |
-| Pilot | Design partners | 60-day Desk access, weekly call, feedback rights | £5k (credited to year 1) |
+| Pilot | Design partners | 4 weeks; 3 case files on the buyer's watchlist; weekly call, feedback rights | £5k (no credit toward year 1) |
 
 Revenue scenarios from World v2 (year 1, JUDGEMENT): bear £146k, base £294k, bull £920k ARR.
 
@@ -267,8 +267,11 @@ Japan (Kizuna, J-REIT) and Singapore (mm2 Asia) have no named partner yet: a gap
 
 | Dataset | Rows | Source | Note |
 |---|---|---|---|
+| alfred:RRPONTSYD 4-weekly vintages | 0 | https://alfred.stlouisfed.org/graph/alfredgraph.csv?id=..&vintage_date=.. | 5 vintages failed |
+| alfred:STLFSI4 4-weekly vintages | 0 | https://alfred.stlouisfed.org/graph/alfredgraph.csv?id=..&vintage_date=.. | 5 vintages failed |
 | alfred:WALCL 4-weekly vintages | 0 | https://alfred.stlouisfed.org/graph/alfredgraph.csv?id=..&vintage_date=.. | 155 vintages failed |
 | comtrade:China exports, 6 critical-mineral HS codes, monthly 2019+ | 0 | https://comtradeapi.un.org/public/v1/preview/C/M/HS (no key, preview) |  |
+| comtrade:China exports, 6 critical-mineral HS codes, monthly 2022+ | 213 | https://comtradeapi.un.org/public/v1/preview/C/M/HS (no key, preview) |  |
 | eia930:daily demand MWh by balancing authority (Jul–Dec 2026) | 5,979 | https://www.eia.gov/electricity/gridmonitor/sixMonthFiles/EIA930_BALANCE_2026_Ju |  |
 | shfe:weekly warehouse stocks+warrants (6 metals) | 45 | https://www.shfe.com.cn/data/tradedata/future/stockdata/weeklystock_<date>/ZH/al |  |
 | shorts:afm_current (NL) | 733 | https://www.afm.nl/export.aspx?type=8a46a4ef-f196-4467-a7ab-1ae1cb58f0e7&format= |  |

@@ -50,7 +50,7 @@ def main():
          "| Watchlist | Credit PMs, family offices | Weekly calendar + forced-seller note (PDF/email), app read-only | £12k/yr |",
          "| Desk | Special-sits / distressed teams (≤10 seats) | Full app: control maps, prices/gaps, alerts on dates and thresholds, sourcing log, analyst Q&A | £36k/yr |",
          "| Data licence | Funds, banks, data platforms | API/flat files: calendar, control holders, forced-seller series, ledger | £75k–£120k/yr |",
-         "| Pilot | Design partners | 60-day Desk access, weekly call, feedback rights | £5k (credited to year 1) |", "",
+         "| Pilot | Design partners | 4 weeks; 3 case files on the buyer's watchlist; weekly call, feedback rights | £5k (no credit toward year 1) |", "",
          f"Revenue scenarios from World v2 (year 1, JUDGEMENT): bear £{W['scenarios'][0]['arr']}k, base £{W['scenarios'][1]['arr']}k, bull £{W['scenarios'][2]['arr']}k ARR.", "",
          "## 9. First 10 design-partner targets by region (firms only; nothing sent)", "",
          "| # | Region | Firm | Why them (situation in the calendar) |", "|---|---|---|---|"]
@@ -75,7 +75,7 @@ def main():
     report_from_markdown(m, "TRIAGE OS - Credit & Forced-Seller Intelligence", "Flagship · 23 Oct 2026", "Who is forced to sell, who decides, and when, across 12 markets and US private credit",
         [("Core", "Restructuring calendar · control maps · forced sellers"), ("Proof", f"{n}-call hash-chained ledger, OpenTimestamps"), ("Rules", "public data · firms only · nothing sent")],
         f"{R}/TRIAGE_OS_Credit_Forced_Seller_Intelligence.html", f"{R}/TRIAGE_OS_Credit_Forced_Seller_Intelligence.pdf")
-    json.dump(dict(asof="2026-10-23", positioning="Who is forced to sell, who decides, and when.", tiers=[("Watchlist", "£12k/yr"), ("Desk", "£36k/yr"), ("Data licence", "£75k–£120k/yr"), ("Pilot", "£5k / 60 days")],
+    json.dump(dict(asof="2026-10-23", positioning="Who is forced to sell, who decides, and when.", tiers=[("Watchlist", "£12k/yr"), ("Desk", "£36k/yr"), ("Data licence", "£75k–£120k/yr"), ("Pilot", "£5k / 4 weeks / 3 case files, no credit")],
                    partners=[dict(region=r, firm=f, situation=B.get(f, {}).get("situation", "")) for r, f in picks], crowded=SC["live_crowded"][:12], short_bt=SC["stats"],
                    ledger=dict(n=n, ok=ok), kept=[s["id"] for s in kept], killed=[s["id"] for s in killed], pit=PIT, datasets=V4,
                    situations=[dict(entity=s["entity"], country=s["country"], date=s["date"], basis=s["basis"], price=s["price"], gap=s["gap"]) for s in W["situations"]]),
