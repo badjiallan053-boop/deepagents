@@ -281,6 +281,10 @@ def ingest_court(con, query, token=None, filed_after=None, max_pages=5, fetch=ge
     url = COURT_SEARCH + "?" + urllib.parse.urlencode(params)
     headers = {"User-Agent": "TRIAGE-OS-research/0.1"}
     token = token or os.getenv("COURTLISTENER_TOKEN")
+    if not token:
+        print("WARNING: COURTLISTENER_TOKEN unset; anonymous CourtListener search is heavily throttled "
+              "and mid-pagination failures are common. Set COURTLISTENER_TOKEN for higher limits.",
+              file=__import__("sys").stderr)
     if token:
         headers["Authorization"] = "Token " + token
     count = 0

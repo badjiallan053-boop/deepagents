@@ -36,7 +36,8 @@ Add state-specific property/foreclosure connectors, filing-document parser with 
 
 ## Connector notes (verified live 2026-10-22)
 
-- CourtListener: uses REST **v4** search (`type=r`, `order_by=dateFiled desc`, optional `filed_after`), follows the `next` cursor up to `--max-pages`. Anonymous search works; `COURTLISTENER_TOKEN` is optional (higher limits). Results are keyed on `docket_id` / `docket_absolute_url`; scoring uses case name, `chapter` and `recap_documents` descriptions.
+- Gap ingest (`gap_ingest.py`): UK Gazette Atom paginates `results-page` with Cache-Control/Pragma no-cache and a `_` cache-buster (stops at the days window / empty page). BODACC OpenDataSoft Explore v2.1 paginates `offset` past the 100-row `limit` cap with the date window in `where`; natural persons (`typePersonne=pp`) are dropped. Dedupe into `gap_entities` on `(src, url)`.
+- CourtListener: uses REST **v4** search (`type=r`, `order_by=dateFiled desc`, optional `filed_after`), follows the `next` cursor up to `--max-pages`. Anonymous search works but is heavily throttled; `COURTLISTENER_TOKEN` is optional and strongly recommended (higher limits). A WARNING is logged when the env var is unset. Results are keyed on `docket_id` / `docket_absolute_url`; scoring uses case name, `chapter` and `recap_documents` descriptions.
 - SEC: submissions API (`--history` also pages `filings.files`) and EDGAR full-text search (`ingest-sec-fulltext`, filtered by 8-K items such as 1.03, 2.04, 2.06, 3.01). 8-K item codes add to the priority score. Requests are throttled below 10 req/s and retried with backoff on 429/5xx.
 - `export --out signals.csv` writes the top ranked signals. All signals remain `unverified`.
 - Tests are offline and use recorded fixtures in `fixtures/`.
