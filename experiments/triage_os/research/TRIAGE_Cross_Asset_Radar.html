@@ -1,0 +1,2027 @@
+<!doctype html><html><head><meta charset='utf-8'><title>TRIAGE Cross-Asset Radar</title><style>
+@page { size: Letter; margin: 18mm 15mm 16mm 15mm;
+  @top-left { content: "TRIAGE  |  Special Situations Research"; font: 600 7pt 'Inter'; letter-spacing: .14em; color: #8a929c; }
+  @top-right { content: string(doctitle); font: 500 7pt 'Inter'; color: #8a929c; }
+  @bottom-left { content: "Not investment advice. See disclaimer on the final page."; font: 400 6.5pt 'Inter'; color: #8a929c; }
+  @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 500 7pt 'JetBrains Mono'; color: #8a929c; } }
+@page :first { @top-left { content: none } @top-right { content: none } }
+:root { --ink:#0d1218; --mute:#5b6570; --dim:#8a929c; --line:#d9dde2; --amber:#c97d06; --amberbg:#fff6e5; --navy:#0b0f14; --up:#1d8a52; --down:#c53340; --info:#1f6fd1; --violet:#6d4fd8; }
+* { box-sizing: border-box; }
+html { font-family: 'Inter', 'IBM Plex Sans', Arial, sans-serif; font-size: 9pt; color: var(--ink); line-height: 1.45; font-feature-settings: "tnum" 1; }
+body { margin: 0; }
+h1,h2,h3 { font-family: 'Inter Tight','Inter',sans-serif; letter-spacing: -.01em; margin: 0; }
+.doctitle { string-set: doctitle content(); }
+h2 { font-size: 13pt; margin: 14pt 0 5pt; padding-top: 6pt; border-top: 2px solid var(--navy); }
+h2 .n { color: var(--amber); font-family: 'JetBrains Mono', monospace; font-size: 9pt; margin-right: 6pt; vertical-align: 1pt; }
+h3 { font-size: 9.5pt; margin: 9pt 0 3pt; text-transform: uppercase; letter-spacing: .08em; color: var(--mute); }
+p { margin: 0 0 5pt; text-align: left; }
+.wm { display: inline-flex; align-items: center; gap: 6px; } .wm b { font: 700 11pt 'JetBrains Mono', monospace; letter-spacing: .32em; }
+.cover { background: var(--navy); color: #e8ecf0; margin: 0 0 4pt; padding: 9mm 10mm 7mm; border-radius: 2px; } .cover .wm b { color: #fff; }
+.cover .kick { color: #f5a524; font: 600 7.5pt 'Inter'; letter-spacing: .16em; text-transform: uppercase; margin-top: 7mm; }
+.cover h1 { font-size: 22pt; line-height: 1.12; margin: 4pt 0 6pt; color: #fff; max-width: 165mm; }
+.cover .sub { color: #aab3bd; font-size: 10pt; max-width: 160mm; }
+.cover .meta { display: flex; gap: 18pt; margin-top: 10pt; padding-top: 8pt; border-top: 1px solid #26303b; font-size: 7.5pt; color: #8f99a4; }
+.cover .meta b { display: block; color: #e8ecf0; font: 600 8.5pt 'JetBrains Mono', monospace; margin-top: 1pt; }
+.view { border-left: 3px solid var(--amber); background: var(--amberbg); padding: 7pt 9pt; margin: 9pt 0; }
+.view .lbl { font: 700 7pt 'Inter'; letter-spacing: .14em; color: var(--amber); text-transform: uppercase; }
+.view p { font-size: 10pt; margin: 2pt 0 0; }
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12pt; } .cols3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10pt; }
+.kpis { display: grid; grid-template-columns: repeat(5, 1fr); border: 1px solid var(--line); margin: 8pt 0; }
+.kpi { padding: 5pt 7pt; border-right: 1px solid var(--line); } .kpi:last-child { border-right: 0; }
+.kpi .l { font: 600 6.5pt 'Inter'; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); }
+.kpi .v { font: 600 13pt 'JetBrains Mono', monospace; margin-top: 2pt; } .kpi .s { font-size: 7pt; color: var(--mute); }
+table { width: 100%; border-collapse: collapse; margin: 4pt 0 8pt; font-size: 8pt; page-break-inside: auto; }
+thead th { font: 600 6.8pt 'Inter'; text-transform: uppercase; letter-spacing: .07em; color: var(--mute); text-align: left; border-bottom: 1.2px solid var(--navy); padding: 3pt 4pt; }
+td { padding: 3pt 4pt; border-bottom: .5px solid var(--line); vertical-align: top; } tr { page-break-inside: avoid; }
+td.r, th.r { text-align: right; } .num, td.r { font-family: 'JetBrains Mono', monospace; font-size: 7.6pt; }
+tr.tot td { font-weight: 700; border-top: 1px solid var(--navy); border-bottom: 0; }
+.fn { font-size: 6.8pt; color: var(--mute); } sup.f { font: 600 6pt 'JetBrains Mono'; color: var(--info); }
+.badge { display: inline-block; font: 700 6pt 'Inter'; letter-spacing: .08em; padding: 1pt 3pt; border-radius: 2px; text-transform: uppercase; border: .6px solid; white-space: nowrap; }
+.b-VERIFIED { color: var(--up); border-color: var(--up); } .b-CORRECTED { color: var(--amber); border-color: var(--amber); }
+.b-ALLEGATION { color: var(--violet); border-color: var(--violet); } .b-ASSUMPTION { color: var(--info); border-color: var(--info); } .b-UNVERIFIABLE { color: var(--dim); border-color: var(--dim); }
+.chart { margin: 4pt 0 2pt; page-break-inside: avoid; } h2, h3, .cap { page-break-after: avoid; } .chart svg { width: 100%; height: auto; display: block; }
+.cap { font: 600 7pt 'Inter'; color: var(--mute); text-transform: uppercase; letter-spacing: .08em; margin-top: 6pt; }
+.src { font-size: 6.6pt; color: var(--dim); margin-bottom: 6pt; }
+.box { border: 1px solid var(--line); padding: 6pt 8pt; margin: 6pt 0; } .box h3 { margin-top: 0; }
+ul { margin: 2pt 0 6pt; padding-left: 12pt; } li { margin: 1.5pt 0; }
+.pb { page-break-before: always; } .avoid { page-break-inside: avoid; }
+a { color: var(--info); text-decoration: none; word-break: break-all; }
+.disc { font-size: 6.8pt; color: var(--mute); line-height: 1.4; } .disc h3 { color: var(--ink); }
+.tl { position: relative; margin: 4pt 0 6pt 4pt; border-left: 1.2px solid var(--line); }
+.tl .e { position: relative; padding: 0 0 4.5pt 10pt; } .tl .e:before { content: ""; position: absolute; left: -4px; top: 3pt; width: 7px; height: 7px; border-radius: 50%; background: var(--navy); }
+.tl .e.f:before { background: #fff; border: 1.5px solid var(--amber); }
+.tl .d { font: 600 7.5pt 'JetBrains Mono', monospace; color: var(--mute); } .tl .e.f .d { color: var(--amber); }
+ table { font-size: 7pt; } td { word-break: break-word; } img { max-width: 100%; }</style></head><body><div class='cover'><span class="wm"><svg width="18" height="18" viewBox="0 0 32 32"><rect width="32" height="32" rx="5" fill="#f5a524"/><path d="M8 9h16v3h-6.5v12h-3V12H8z" fill="#0b0f14"/></svg><b>TRIAGE</b></span><div class='kick'>Signals · Mining + Land · Macro · Committee · 23 Oct 2026</div><h1 class='doctitle'>TRIAGE Cross-Asset Radar</h1><div class='sub'>23 signals backtested with a kill rule, committee v2 net of costs, mining + land, macro regime, ledger proofs, gap audit</div><div class='meta'><div>Layers<b>Signals, Committee, Mining + Land, Macro</b></div><div>Data<b>CFTC · EIA · Treasury · FRED · Bybit · DefiLlama · BLM · MOFCOM · USGS · IMF · FIRMS</b></div><div>Rules<b>public data · nothing sent</b></div></div></div>
+<p><em>As of 23 Oct 2026 (SGT). Public data only. Facts carry source + fetch date; <strong>JUDGEMENT</strong> marks our reads. Nothing sent.</em></p>
+<h2><span class="n">01</span>Signal library: 23 cross-asset signals, backtested, kill rule applied</h2>
+<p>Method: event = first trigger after a cooldown of h days; entry at the first close after publication; the excess move is drift-adjusted and signed; precision = share of events with positive excess; costs are deducted per event. <strong>KEPT</strong> = OOS mean &gt; 0 and OOS precision ≥ 52%, and in-sample agrees. <strong>FRAGILE</strong> = OOS passes but in-sample disagrees. <strong>UNTESTED</strong> = fewer than 8 OOS events. <strong>KILLED</strong> = fails OOS. Rules were set before the OOS numbers were read; nothing was re-tuned after (S3 lost KEPT when a data error was fixed: the 20 Apr 2020 negative WTI print had produced a +154% 'event').</p>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Class</th>
+<th>Signal (trigger → trade)</th>
+<th>h</th>
+<th>IS n / prec / mean / t</th>
+<th>OOS n / prec / mean / t</th>
+<th>Verdict</th>
+<th>Live now</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>S1</td>
+<td>commodities</td>
+<td>MM net/OI percentile vs 3y ≥95%; trade short 20d</td>
+<td>20d</td>
+<td>127 / 49% / +0.47% / t=None</td>
+<td>72 / 51% / -0.23% / t=None (OOS from 2019-01-01)</td>
+<td><strong>KILLED</strong></td>
+<td>FIRED: ZS=F pctile 97% (2026-10-13)</td>
+</tr>
+<tr>
+<td>S2</td>
+<td>commodities</td>
+<td>MM net/OI percentile vs 3y ≤5%; trade long 20d</td>
+<td>20d</td>
+<td>164 / 45% / -0.97% / t=None</td>
+<td>73 / 53% / +0.96% / t=None (OOS from 2019-01-01)</td>
+<td><strong>FRAGILE (IS disagrees)</strong></td>
+<td>—: no commodity at an extreme in the last 2 weeks</td>
+</tr>
+<tr>
+<td>S3</td>
+<td>commodities</td>
+<td>Weekly US crude stocks ex-SPR change vs same-week 5y average,</td>
+<td>z</td>
+<td>&gt;1.5; trade with the surp</td>
+<td>10d</td>
+<td>130 / 60% / +1.23% / t=2.06</td>
+<td>50 / 50% / -1.46% / t=-0.73 (OOS from 2019-01-01)</td>
+</tr>
+<tr>
+<td>S4</td>
+<td>commodities</td>
+<td>Lower-48 working gas vs 5y same-week avg beyond ±10%; trade toward normalisation 20d</td>
+<td>20d</td>
+<td>35 / 57% / -2.70% / t=-1.24</td>
+<td>36 / 44% / -2.24% / t=-0.86 (OOS from 2019-01-01)</td>
+<td><strong>KILLED</strong></td>
+<td>—: 2026-10-16 storage vs 5y -0.0%</td>
+</tr>
+<tr>
+<td>S5</td>
+<td>bonds</td>
+<td>10y/30y auction bid-to-cover z &lt; −1.5 vs prior 12 long-end auctions; short TLT 5d from nex</td>
+<td>5d</td>
+<td>30 / 37% / -0.49% / t=-1.61</td>
+<td>22 / 55% / +0.31% / t=0.82 (OOS from 2019-01-01)</td>
+<td><strong>FRAGILE (IS disagrees)</strong></td>
+<td>—: last long-end auction 2026-10-08 z=+0.08</td>
+</tr>
+<tr>
+<td>S6</td>
+<td>bonds</td>
+<td>HYG under-performs IEF by &gt;4% in 22 trading days; buy HYG 60d</td>
+<td>60d</td>
+<td>22 / 59% / +1.49% / t=1.01</td>
+<td>7 / 71% / +1.04% / t=0.69 (OOS from 2019-01-01)</td>
+<td><strong>UNTESTED (n_oos=7&lt;8)</strong></td>
+<td>—: HYG vs IEF 22d -2.0%</td>
+</tr>
+<tr>
+<td>S7</td>
+<td>stocks</td>
+<td>VIX closes above 30 for the first time in 60 days; long SPY 20d</td>
+<td>20d</td>
+<td>20 / 50% / -0.46% / t=-0.3</td>
+<td>10 / 80% / +3.02% / t=1.15 (OOS from 2019-01-01)</td>
+<td><strong>FRAGILE (IS disagrees)</strong></td>
+<td>—: VIX 16.7 (2026-10-21)</td>
+</tr>
+<tr>
+<td>S8</td>
+<td>stocks</td>
+<td>DXY +5% over 63 trading days; short EEM 20d</td>
+<td>20d</td>
+<td>41 / 44% / +0.11% / t=0.09</td>
+<td>11 / 64% / +0.38% / t=0.18 (OOS from 2019-01-01)</td>
+<td><strong>FRAGILE (IS disagrees)</strong></td>
+<td>—: DXY 3m +0.1%</td>
+</tr>
+<tr>
+<td>S9</td>
+<td>bonds</td>
+<td>Copper/gold ratio +10% in 63 days; short TLT 20d</td>
+<td>20d</td>
+<td>66 / 47% / +0.19% / t=0.54</td>
+<td>23 / 57% / -0.24% / t=-0.3 (OOS from 2019-01-01)</td>
+<td><strong>KILLED</strong></td>
+<td>—: Cu/Au 3m +1.8%</td>
+</tr>
+<tr>
+<td>S10</td>
+<td>crypto</td>
+<td>Total stablecoin market cap +5% in 30 days; long BTC 30d</td>
+<td>30d</td>
+<td>41 / 44% / -0.89% / t=-0.24</td>
+<td>9 / 11% / -7.94% / t=-2.48 (OOS from 2023-01-01)</td>
+<td><strong>KILLED</strong></td>
+<td>—: 30d supply change -0.5%</td>
+</tr>
+<tr>
+<td>S11</td>
+<td>crypto</td>
+<td>7d avg Bybit BTCUSDT funding &gt;0.03%; short BTC 7d</td>
+<td>7d</td>
+<td>34 / 47% / -0.84% / t=-0.43</td>
+<td>5 / 20% / -1.88% / t=-0.79 (OOS from 2023-01-01)</td>
+<td><strong>UNTESTED (n_oos=5&lt;8)</strong></td>
+<td>—: 7d funding 0.0055%/8h (2026-10-22)</td>
+</tr>
+<tr>
+<td>S12</td>
+<td>crypto</td>
+<td>7d avg Bybit BTCUSDT funding &lt;0; long BTC 7d</td>
+<td>7d</td>
+<td>35 / 51% / +0.75% / t=0.5</td>
+<td>16 / 50% / +0.12% / t=0.08 (OOS from 2023-01-01)</td>
+<td><strong>KILLED</strong></td>
+<td>—: 7d funding 0.0055%/8h (2026-10-22)</td>
+</tr>
+<tr>
+<td>S13</td>
+<td>crypto</td>
+<td>Bybit BTCUSDT OI +20% in 7 days; short BTC 7d</td>
+<td>7d</td>
+<td>35 / 60% / +1.33% / t=0.73</td>
+<td>3 / 67% / +3.28% / t=1.38 (OOS from 2023-01-01)</td>
+<td><strong>UNTESTED (n_oos=3&lt;8)</strong></td>
+<td>—: OI 7d +4.6%</td>
+</tr>
+<tr>
+<td>S14</td>
+<td>stocks</td>
+<td>KRE −20% from its 20-day high; long KRE 60d</td>
+<td>60d</td>
+<td>6 / 67% / +8.55% / t=1.04</td>
+<td>3 / 33% / -0.96% / t=-0.17 (OOS from 2019-01-01)</td>
+<td><strong>UNTESTED (n_oos=3&lt;8)</strong></td>
+<td>—: KRE vs 20d high +1.0%</td>
+</tr>
+<tr>
+<td>S15</td>
+<td>bonds</td>
+<td>Monthly IT–DE 10y spread +40bp m/m; short EWI 20d (lag 45d for publication)</td>
+<td>20d</td>
+<td>9 / 67% / +2.01% / t=0.86</td>
+<td>1 / 100% / +0.74% / t=None (OOS from 2019-01-01)</td>
+<td><strong>UNTESTED (n_oos=1&lt;8)</strong></td>
+<td>—: IT–DE spread 0.80pp (2026-08-01)</td>
+</tr>
+<tr>
+<td>S16</td>
+<td>critical minerals</td>
+<td>MOFCOM/GACC export-control announcement on a critical mineral; long REMX 5d</td>
+<td>5d</td>
+<td>1 / 100% / +1.69% / t=None</td>
+<td>3 / 67% / +2.01% / t=0.84 (OOS from 2024-01-01)</td>
+<td><strong>UNTESTED (n_oos=3&lt;8)</strong></td>
+<td>—: no new MOFCOM control in the last 30 days found (not monitored automat</td>
+</tr>
+<tr>
+<td>S17</td>
+<td>critical minerals</td>
+<td>District new BLM claims in a month ≥50 and ≥3× trailing-12m average; long nearby listed ow</td>
+<td>60d</td>
+<td>—</td>
+<td>19 / 42% / -11.09% / t=None (OOS from 2021-01-01)</td>
+<td><strong>KILLED</strong></td>
+<td>—: no surge in last 4 months</td>
+</tr>
+<tr>
+<td>S18</td>
+<td>bonds</td>
+<td>Japan 10y (OECD monthly) +20bp over 3 months; short EWJ 20d after 45d publication lag</td>
+<td>20d</td>
+<td>22 / 50% / +0.74% / t=0.53</td>
+<td>23 / 35% / -1.49% / t=-1.4 (OOS from 2019-01-01)</td>
+<td><strong>KILLED</strong></td>
+<td>FIRED: JGB 10y 3.05% (2026-09-01), 3m +0.38pp</td>
+</tr>
+<tr>
+<td>S19</td>
+<td>commodities</td>
+<td>US 10y TIPS yield −50bp in 63 days; long GLD 20d</td>
+<td>20d</td>
+<td>21 / 57% / +0.39% / t=0.28</td>
+<td>12 / 50% / +0.99% / t=0.74 (OOS from 2019-01-01)</td>
+<td><strong>KILLED</strong></td>
+<td>—: 10y real 2.77%, 63d +0.40pp</td>
+</tr>
+<tr>
+<td>S20</td>
+<td>critical minerals</td>
+<td>US new MLRS claims in a month &gt;1.5× trailing-12m average; long GDXJ 60d</td>
+<td>60d</td>
+<td>1 / 100% / +8.21% / t=None</td>
+<td>5 / 60% / -2.05% / t=-0.28 (OOS from 2023-01-01)</td>
+<td><strong>KILLED</strong></td>
+<td>FIRED: last month 2026-10: 3531 new claims vs 12m avg 5712</td>
+</tr>
+<tr>
+<td>S21</td>
+<td>bonds</td>
+<td>(WALCL − RRP) +$200bn over 13 weeks; long SPY 20d</td>
+<td>20d</td>
+<td>2 / 100% / +1.54% / t=None</td>
+<td>23 / 74% / +2.04% / t=2.06 (OOS from 2019-01-01)</td>
+<td><strong>KEPT</strong></td>
+<td>—: net liquidity 13w change +13bn</td>
+</tr>
+<tr>
+<td>S22</td>
+<td>stocks</td>
+<td>USDJPY −5% in 10 trading days; long EWJ 20d</td>
+<td>20d</td>
+<td>11 / 55% / -0.63% / t=-0.3</td>
+<td>3 / 67% / +0.75% / t=0.43 (OOS from 2019-01-01)</td>
+<td><strong>UNTESTED (n_oos=3&lt;8)</strong></td>
+<td>—: USDJPY 10d +0.2%</td>
+</tr>
+<tr>
+<td>S23</td>
+<td>stocks</td>
+<td>STLFSI4 crosses above 1.0; long SPY 60d</td>
+<td>60d</td>
+<td>12 / 50% / +1.52% / t=0.68</td>
+<td>2 / 100% / +19.80% / t=None (OOS from 2019-01-01)</td>
+<td><strong>UNTESTED (n_oos=2&lt;8)</strong></td>
+<td>—: STLFSI4 -0.63 (2026-10-16)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Score:</strong> 1 kept (S21), 4 fragile (S2, S5, S7, S8), 8 untested (S6, S11, S13, S14, S15, S16, S22, S23), 10 killed (S1, S3, S4, S9, S10, S12, S17, S18, S19, S20).</p>
+<p><strong>Honest read:</strong> only S21 (Fed net liquidity, WALCL − RRP) survives, and its OOS is dominated by the 2020–21 QE window. Its events from 2022 onward lose money, so treat it as regime-conditional. Killed: COT crowded-long fade, EIA crude surprise, NG storage, copper/gold → yields, stablecoin impulse, negative funding, JGB jump, real-rate → gold, and both staking signals (S17 district surges −11% vs GDXJ at 60d across 19 events; S20 national surges). Most mechanisms in the library are well known and already priced. The edge has to come from data others do not have (gap audit below), not from re-testing public series.</p>
+<h3>Staking-surge backtest (S17): dated claims from the BLM MLRS hub 'Created' field</h3>
+<p>BLM's public MLRS layers carry no location date, but the national hub FeatureServers do carry a record <code>Created</code> date. For MLRS-native serials (no legacy LR2000 number) this is the date the claim was filed into MLRS, so it is usable from 2021 onward. Legacy records were migrated in bulk and are excluded. LR2000 case recordation dates sit behind the interactive reports.blm.gov forms and were not scraped.</p>
+<table>
+<thead>
+<tr>
+<th>District</th>
+<th>Ticker</th>
+<th>Month after surge</th>
+<th>New claims</th>
+<th>Excess vs GDXJ +20d</th>
+<th>+60d</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Mountain Pass</td>
+<td>MP</td>
+<td>2023-04-01</td>
+<td class='r'>198</td>
+<td class='r'>-29.1%</td>
+<td class='r'>-6.3%</td>
+</tr>
+<tr>
+<td>Mountain Pass</td>
+<td>MP</td>
+<td>2024-07-01</td>
+<td class='r'>56</td>
+<td class='r'>-12.3%</td>
+<td class='r'>0.4%</td>
+</tr>
+<tr>
+<td>Mountain Pass</td>
+<td>MP</td>
+<td>2025-10-01</td>
+<td class='r'>110</td>
+<td class='r'>-4.8%</td>
+<td class='r'>-44.7%</td>
+</tr>
+<tr>
+<td>Mountain Pass</td>
+<td>MP</td>
+<td>2025-12-01</td>
+<td class='r'>129</td>
+<td class='r'>-26.5%</td>
+<td class='r'>-44.1%</td>
+</tr>
+<tr>
+<td>Mountain Pass</td>
+<td>MP</td>
+<td>2026-01-01</td>
+<td class='r'>205</td>
+<td class='r'>-3.1%</td>
+<td class='r'>-19.2%</td>
+</tr>
+<tr>
+<td>Mountain Pass</td>
+<td>MP</td>
+<td>2026-02-01</td>
+<td class='r'>146</td>
+<td class='r'>-10.9%</td>
+<td class='r'>11.2%</td>
+</tr>
+<tr>
+<td>Mountain Pass</td>
+<td>MP</td>
+<td>2026-03-01</td>
+<td class='r'>226</td>
+<td class='r'>-0.8%</td>
+<td class='r'>28.7%</td>
+</tr>
+<tr>
+<td>Thacker Pass</td>
+<td>LAC</td>
+<td>2021-08-01</td>
+<td class='r'>272</td>
+<td class='r'>-27.8%</td>
+<td class='r'>-33.3%</td>
+</tr>
+<tr>
+<td>Thacker Pass</td>
+<td>LAC</td>
+<td>2021-09-01</td>
+<td class='r'>159</td>
+<td class='r'>-24.7%</td>
+<td class='r'>-35.2%</td>
+</tr>
+<tr>
+<td>Thacker Pass</td>
+<td>LAC</td>
+<td>2025-04-01</td>
+<td class='r'>184</td>
+<td class='r'>0.9%</td>
+<td class='r'>-23.0%</td>
+</tr>
+<tr>
+<td>Stibnite</td>
+<td>PPTA</td>
+<td>2022-11-01</td>
+<td class='r'>201</td>
+<td class='r'>-26.3%</td>
+<td class='r'>27.8%</td>
+</tr>
+<tr>
+<td>Stibnite</td>
+<td>PPTA</td>
+<td>2025-10-01</td>
+<td class='r'>73</td>
+<td class='r'>23.7%</td>
+<td class='r'>-0.3%</td>
+</tr>
+<tr>
+<td>Stibnite</td>
+<td>PPTA</td>
+<td>2025-12-01</td>
+<td class='r'>54</td>
+<td class='r'>-11.7%</td>
+<td class='r'>1.5%</td>
+</tr>
+<tr>
+<td>Stibnite</td>
+<td>PPTA</td>
+<td>2026-01-01</td>
+<td class='r'>218</td>
+<td class='r'>1.0%</td>
+<td class='r'>7.5%</td>
+</tr>
+<tr>
+<td>Rhyolite Ridge</td>
+<td>INR.AX</td>
+<td>2022-01-01</td>
+<td class='r'>93</td>
+<td class='r'>-10.8%</td>
+<td class='r'>-46.8%</td>
+</tr>
+<tr>
+<td>Rhyolite Ridge</td>
+<td>INR.AX</td>
+<td>2022-03-01</td>
+<td class='r'>216</td>
+<td class='r'>-2.0%</td>
+<td class='r'>13.8%</td>
+</tr>
+<tr>
+<td>Rhyolite Ridge</td>
+<td>INR.AX</td>
+<td>2022-07-01</td>
+<td class='r'>204</td>
+<td class='r'>25.2%</td>
+<td class='r'>43.8%</td>
+</tr>
+<tr>
+<td>Rhyolite Ridge</td>
+<td>INR.AX</td>
+<td>2023-09-01</td>
+<td class='r'>431</td>
+<td class='r'>4.5%</td>
+<td class='r'>-49.4%</td>
+</tr>
+<tr>
+<td>Rhyolite Ridge</td>
+<td>INR.AX</td>
+<td>2024-05-01</td>
+<td class='r'>183</td>
+<td class='r'>-8.8%</td>
+<td class='r'>-43.1%</td>
+</tr>
+</tbody>
+</table>
+<p>Result: KILLED. The surges come <em>after</em> the nearby developer has already re-rated (staking follows price), so buying the developer after the surge loses. The inverse (fade) is not tested here, because testing it after seeing this result would be data-snooping.</p>
+<h3>Top 10 live signals (ranked: verdict tier, then distance to trigger)</h3>
+<p>No KEPT or candidate signal is firing today (23 Oct 2026). Ranking by how close each credible signal is to firing:</p>
+<table>
+<thead>
+<tr>
+<th>Rank</th>
+<th>Signal</th>
+<th>Verdict</th>
+<th>Now</th>
+<th>Trigger</th>
+<th>Distance</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class='r'>1</td>
+<td>S21 Fed net liquidity → SPY</td>
+<td>KEPT (regime-conditional)</td>
+<td>+$13bn / 13w</td>
+<td>+$200bn</td>
+<td>far</td>
+</tr>
+<tr>
+<td class='r'>2</td>
+<td>S6 HYG vs IEF credit flush → buy HYG</td>
+<td>UNTESTED (IS 59%/+1.5%, OOS 7 events 71%/+1.0%)</td>
+<td>−2.0% / 22d</td>
+<td>−4%</td>
+<td>halfway</td>
+</tr>
+<tr>
+<td class='r'>3</td>
+<td>S8 Dollar squeeze → short EEM</td>
+<td>FRAGILE</td>
+<td>DXY +0.1% / 3m</td>
+<td>+5%</td>
+<td>far</td>
+</tr>
+<tr>
+<td class='r'>4</td>
+<td>S7 VIX&gt;30 → long SPY</td>
+<td>FRAGILE</td>
+<td>VIX 16.7</td>
+<td class='r'>30</td>
+<td>far</td>
+</tr>
+<tr>
+<td class='r'>5</td>
+<td>S5 Weak long-end UST auction → short TLT</td>
+<td>FRAGILE</td>
+<td>last z +0.08 (8 Oct)</td>
+<td>z &lt; −1.5</td>
+<td>next 10y/30y auction</td>
+</tr>
+<tr>
+<td class='r'>6</td>
+<td>S2 COT crowded short → long</td>
+<td>FRAGILE</td>
+<td>none ≤5th pctile</td>
+<td>≤5%</td>
+<td>—</td>
+</tr>
+<tr>
+<td class='r'>7</td>
+<td>S13 BTC OI +20%/7d → short</td>
+<td>UNTESTED</td>
+<td>+4.6%</td>
+<td>+20%</td>
+<td>far</td>
+</tr>
+<tr>
+<td class='r'>8</td>
+<td>S15 BTP–Bund +40bp m/m → short EWI</td>
+<td>UNTESTED</td>
+<td>0.80pp (Aug)</td>
+<td>+0.40 m/m</td>
+<td>far</td>
+</tr>
+<tr>
+<td class='r'>9</td>
+<td>S23 STLFSI4 &gt; 1 → long SPY 60d</td>
+<td>UNTESTED</td>
+<td>−0.63</td>
+<td>+1.0</td>
+<td>far</td>
+</tr>
+<tr>
+<td class='r'>10</td>
+<td>S16 MOFCOM control → long REMX 5d</td>
+<td>UNTESTED (3 OOS)</td>
+<td>no new notice found</td>
+<td>announcement</td>
+<td>event-driven</td>
+</tr>
+</tbody>
+</table>
+<p>Fired but KILLED (shown, not traded): S1 soybeans MM 97th pctile; S18 JGB +38bp/3m; S20 national claims (October lower than average).</p>
+<h2><span class="n">02</span>Alpha Committee v2: signals only, costs included</h2>
+<p>Tier A = KEPT signals only (S21). Tier B adds candidates whose IS and OOS means are both positive (S6, S8, S13, S15, S16, S23). <strong>Tier B was chosen after seeing OOS, so its OOS number is biased upward. Treat it as an upper bound.</strong> Daily book: equal weight across open trades, cash otherwise. Costs: 10 bp round trip (20 bp crypto), 5 bp/month short borrow. Agents abstain when they disagree on the same asset (paper's consensus rule). The risk-averse profile halves gross exposure.</p>
+<table>
+<thead>
+<tr>
+<th>Book (OOS 2019-01 → 2026-10)</th>
+<th>CAGR</th>
+<th>Vol</th>
+<th>Sharpe</th>
+<th>Max DD</th>
+<th>Trades</th>
+<th>2022+ Sharpe</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>v2_tierA_kept_only · risk_neutral</td>
+<td class='r'>6.2%</td>
+<td class='r'>10.3%</td>
+<td class='r'>0.63</td>
+<td class='r'>-18.6%</td>
+<td class='r'>23</td>
+<td class='r'>-0.15</td>
+</tr>
+<tr>
+<td>v2_tierA_kept_only · risk_averse</td>
+<td class='r'>3.2%</td>
+<td class='r'>5.2%</td>
+<td class='r'>0.63</td>
+<td class='r'>-9.7%</td>
+<td class='r'>23</td>
+<td class='r'>-0.15</td>
+</tr>
+<tr>
+<td>v2_tierA+B_candidates · risk_neutral</td>
+<td class='r'>7.6%</td>
+<td class='r'>16.8%</td>
+<td class='r'>0.52</td>
+<td class='r'>-25.2%</td>
+<td class='r'>64</td>
+<td class='r'>0.72</td>
+</tr>
+<tr>
+<td>v2_tierA+B_candidates · risk_averse</td>
+<td class='r'>4.1%</td>
+<td class='r'>8.4%</td>
+<td class='r'>0.52</td>
+<td class='r'>-12.7%</td>
+<td class='r'>64</td>
+<td class='r'>0.72</td>
+</tr>
+<tr>
+<td>Equal-weight 22-asset benchmark</td>
+<td class='r'>13.6%</td>
+<td class='r'>15.4%</td>
+<td class='r'>0.91</td>
+<td class='r'>-27.5%</td>
+<td>—</td>
+<td class='r'>0.75</td>
+</tr>
+<tr>
+<td>Committee v1 (rule agents, monthly) net of costs</td>
+<td class='r'>12.9%</td>
+<td class='r'>15.1%</td>
+<td class='r'>0.88</td>
+<td class='r'>-28.7%</td>
+<td>—</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Honest result:</strong> after costs, no committee beats the equal-weight benchmark on Sharpe over 2019–2026. The tier-A book (S21 only) loses money from 2022. The biased tier-B book roughly matches the benchmark from 2022 with half the drawdown. The product claim therefore cannot be 'we have alpha' yet. It can be: (1) a verified, timestamped forward record; (2) forced-flow and credit-situation intelligence buyers can't easily assemble; (3) honest kill-lists that save a desk research time.</p>
+<h2><span class="n">03</span>Public ledger proofs (OpenTimestamps)</h2>
+<p>Ledger: 39 paper calls (32 v1 + 7 v2 FLAT records), SHA-256 chain verified. Anchored 23 Oct 2026 with the OpenTimestamps reference client: only the digest of <code>ledger_proofs/2026-10-23.anchor.txt</code> (which contains the last hash) went to 4 public calendars. Status at build time: <strong>pending Bitcoin confirmation</strong> (normal; upgrade after a few hours). Outsider steps: <code>ledger_proofs/README.md</code> and <code>verify_ledger.py</code>. Daily anchoring is a manual or scheduled command (<code>anchor_ledger.py</code>). No scheduler has been set up yet.</p>
+<h2><span class="n">04</span>Data added this pass</h2>
+<table>
+<thead>
+<tr>
+<th>Dataset</th>
+<th>Rows</th>
+<th>Source</th>
+<th>Fetched</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>blm_hub:Bear Lodge</td>
+<td class='r'>574</td>
+<td>https://nlsdbpubgis.blm.gov/arcgishub/rest/services/HUB/BLM_Natl_MLRS_</td>
+<td>2026-10-23T02:00</td>
+</tr>
+<tr>
+<td>blm_hub:Mountain Pass</td>
+<td class='r'>2,123</td>
+<td>https://nlsdbpubgis.blm.gov/arcgishub/rest/services/HUB/BLM_Natl_MLRS_</td>
+<td>2026-10-23T02:00</td>
+</tr>
+<tr>
+<td>blm_hub:Rhyolite Ridge</td>
+<td class='r'>2,599</td>
+<td>https://nlsdbpubgis.blm.gov/arcgishub/rest/services/HUB/BLM_Natl_MLRS_</td>
+<td>2026-10-23T02:00</td>
+</tr>
+<tr>
+<td>blm_hub:Stibnite</td>
+<td class='r'>2,837</td>
+<td>https://nlsdbpubgis.blm.gov/arcgishub/rest/services/HUB/BLM_Natl_MLRS_</td>
+<td>2026-10-23T02:00</td>
+</tr>
+<tr>
+<td>blm_hub:Thacker Pass</td>
+<td class='r'>2,605</td>
+<td>https://nlsdbpubgis.blm.gov/arcgishub/rest/services/HUB/BLM_Natl_MLRS_</td>
+<td>2026-10-23T02:00</td>
+</tr>
+<tr>
+<td>blm_hub:national_monthly</td>
+<td class='r'>70</td>
+<td>https://nlsdbpubgis.blm.gov/arcgishub/rest/services/HUB/BLM_Natl_MLRS_</td>
+<td>2026-10-23T02:02</td>
+</tr>
+<tr>
+<td>eia:NG storage L48 weekly</td>
+<td class='r'>877</td>
+<td>https://www.eia.gov/dnav/ng/hist_xls/NW2_EPG0_SWO_R48_BCFw.xls</td>
+<td>2026-10-23T02:00</td>
+</tr>
+<tr>
+<td>eia:WCESTUS1 weekly crude ex-SPR</td>
+<td class='r'>2,299</td>
+<td>https://www.eia.gov/dnav/pet/hist_xls/WCESTUS1w.xls</td>
+<td>2026-10-23T02:00</td>
+</tr>
+<tr>
+<td>firms:VIIRS NOAA-20 7d global (no key)</td>
+<td class='r'>478,400</td>
+<td>https://firms.modaps.eosdis.nasa.gov/data/active_fire/noaa-20-viirs-c2</td>
+<td>2026-10-23T02:00</td>
+</tr>
+<tr>
+<td>fiscaldata:auctions notes+bonds 2006+</td>
+<td class='r'>1,863</td>
+<td>https://api.fiscaldata.treasury.gov/.../auctions_query</td>
+<td>2026-10-23T02:00</td>
+</tr>
+<tr>
+<td>yahoo:EWI</td>
+<td class='r'>6,291</td>
+<td>query1.finance.yahoo.com/v8/finance/chart</td>
+<td>2026-10-23T01:57</td>
+</tr>
+<tr>
+<td>yahoo:EWJ</td>
+<td class='r'>6,291</td>
+<td>query1.finance.yahoo.com/v8/finance/chart</td>
+<td>2026-10-23T01:57</td>
+</tr>
+<tr>
+<td>yahoo:FXI</td>
+<td class='r'>5,545</td>
+<td>query1.finance.yahoo.com/v8/finance/chart</td>
+<td>2026-10-23T01:57</td>
+</tr>
+<tr>
+<td>yahoo:GDX</td>
+<td class='r'>5,138</td>
+<td>query1.finance.yahoo.com/v8/finance/chart</td>
+<td>2026-10-23T01:57</td>
+</tr>
+<tr>
+<td>yahoo:GDXJ</td>
+<td class='r'>4,262</td>
+<td>query1.finance.yahoo.com/v8/finance/chart</td>
+<td>2026-10-23T01:57</td>
+</tr>
+<tr>
+<td>yahoo:IBIT</td>
+<td class='r'>698</td>
+<td>query1.finance.yahoo.com/v8/finance/chart</td>
+<td>2026-10-23T01:57</td>
+</tr>
+<tr>
+<td>yahoo:INR.AX</td>
+<td class='r'>4,767</td>
+<td>query1.finance.yahoo.com/v8/finance/chart</td>
+<td>2026-10-23T01:57</td>
+</tr>
+<tr>
+<td>yahoo:KRE</td>
+<td class='r'>5,116</td>
+<td>query1.finance.yahoo.com/v8/finance/chart</td>
+<td>2026-10-23T01:57</td>
+</tr>
+<tr>
+<td>yahoo:LAC</td>
+<td class='r'>768</td>
+<td>query1.finance.yahoo.com/v8/finance/chart</td>
+<td>2026-10-23T01:57</td>
+</tr>
+<tr>
+<td>yahoo:UNG</td>
+<td class='r'>4,911</td>
+<td>query1.finance.yahoo.com/v8/finance/chart</td>
+<td>2026-10-23T01:57</td>
+</tr>
+<tr>
+<td>yahoo:USO</td>
+<td class='r'>5,167</td>
+<td>query1.finance.yahoo.com/v8/finance/chart</td>
+<td>2026-10-23T01:57</td>
+</tr>
+<tr>
+<td>yahoo:UUP</td>
+<td class='r'>4,944</td>
+<td>query1.finance.yahoo.com/v8/finance/chart</td>
+<td>2026-10-23T01:57</td>
+</tr>
+<tr>
+<td>yahoo:XLE</td>
+<td class='r'>6,291</td>
+<td>query1.finance.yahoo.com/v8/finance/chart</td>
+<td>2026-10-23T01:57</td>
+</tr>
+<tr>
+<td>FRED IT/DE/FR/GB 10y, WALCL, RRP, STLFSI4, DEXJPUS</td>
+<td>13,985 max</td>
+<td>fred.stlouisfed.org/graph/fredgraph.csv</td>
+<td>2026-10-23</td>
+</tr>
+</tbody>
+</table>
+<p>NASA FIRMS: the MAP_KEY is issued only through an email form on firms.modaps.eosdis.nasa.gov/api/map_key/ (submitting it is an outbound action that needs your email; not done). The <strong>no-key public 7-day VIIRS NOAA-20 global CSV</strong> was ingested instead (478,400 detections): Kolwezi (DRC) 12, Bayan Obo 2, Mountain Pass 1, Norilsk 1 detection within ±0.15° this week. VIIRS night lights (Black Marble) need an Earthdata login (yours).</p>
+<h2><span class="n">05</span>Gap audit: what a sceptical buyer (Citadel, Elliott, a sovereign fund, a trading house) would say is missing</h2>
+<table>
+<thead>
+<tr>
+<th>Gap</th>
+<th>Why it matters</th>
+<th>Free source?</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Point-in-time database (as-first-published values, vintages)</td>
+<td>Revised macro/positioning data inflate backtests</td>
+<td>ALFRED vintages (FRED) free</td>
+<td>MISSING — biggest methodological gap</td>
+</tr>
+<tr>
+<td>Survivorship-bias control</td>
+<td>Index/ETF lists today exclude dead names</td>
+<td>Wikipedia S&amp;P changes, delisted prices (paid)</td>
+<td>MISSING — S&amp;P inclusion signal not built for this reason</td>
+</tr>
+<tr>
+<td>Transaction costs and capacity</td>
+<td>A signal that can't be traded at size is worthless</td>
+<td>Spreads from exchange data (paid); bp assumptions</td>
+<td>PARTIAL — flat bp costs + short borrow; no capacity model</td>
+</tr>
+<tr>
+<td>Multiple-testing control</td>
+<td>23 signals tested → some pass by luck</td>
+<td>Deflated Sharpe / Bonferroni</td>
+<td>PARTIAL — t-stats shown; no deflation</td>
+</tr>
+<tr>
+<td>AIS ship tracking / port congestion</td>
+<td>Physical flows lead prices for oil, LNG, grains, metals</td>
+<td>AISHub (exchange), NOAA MarineCadastre (US, lagged), UN Global Platform</td>
+<td>MISSING</td>
+</tr>
+<tr>
+<td>Sentinel-1 SAR (oil tank floating roofs, stockpiles)</td>
+<td>Storage without clouds</td>
+<td>Copernicus/Earth Search sentinel-1-grd</td>
+<td>MISSING</td>
+</tr>
+<tr>
+<td>Customs data (China GACC, Comtrade monthly)</td>
+<td>Export-control effects show up in tonnages</td>
+<td>UN Comtrade (free tier, key), GACC site</td>
+<td>MISSING</td>
+</tr>
+<tr>
+<td>LME/SHFE/CME warehouse stocks &amp; cancelled warrants</td>
+<td>Squeeze precursors in metals</td>
+<td>LME (paid/delayed), SHFE weekly PDFs (free), CME depository reports (free xls)</td>
+<td>MISSING — CME xls is the top free next step</td>
+</tr>
+<tr>
+<td>JODI oil, USDA WASDE</td>
+<td>Global balances</td>
+<td>JODI csv (free), USDA WASDE xml (free)</td>
+<td>MISSING</td>
+</tr>
+<tr>
+<td>TIC foreign holdings, ECB SDW, BoJ</td>
+<td>Who must sell Treasuries/JGBs</td>
+<td>treasury.gov TIC (free), ECB data portal API (free), BoJ time-series (free)</td>
+<td>PARTIAL — OECD 10y yields via FRED only</td>
+</tr>
+<tr>
+<td>Sovereign CDS</td>
+<td>Default-risk pricing</td>
+<td>Paid (Markit)</td>
+<td>MISSING (paid)</td>
+</tr>
+<tr>
+<td>ESMA/FCA net short positions, Japan TDnet, HKEX DI, EDINET large holdings</td>
+<td>Forced covering / stake-building</td>
+<td>FCA daily xlsx (free), HKEX DI (free), EDINET API (free key)</td>
+<td>MISSING — FCA short-position xlsx is the top free next step</td>
+</tr>
+<tr>
+<td>Crypto: ETF flows, token unlocks, estate (Mt Gox/FTX) &amp; government wallets</td>
+<td>Mechanical supply</td>
+<td>Issuer sites (free), on-chain explorers</td>
+<td>MISSING (funding/OI/stablecoins only)</td>
+</tr>
+<tr>
+<td>Power &amp; grid (ENTSO-E, EIA-930)</td>
+<td>Industrial activity, data-centre load</td>
+<td>ENTSO-E (free key), EIA-930 (free)</td>
+<td>MISSING</td>
+</tr>
+<tr>
+<td>Patents, job postings, app data</td>
+<td>Alt-data growth signals</td>
+<td>USPTO/EPO bulk (free), job boards (ToS), app data (paid)</td>
+<td>MISSING</td>
+</tr>
+<tr>
+<td>ECB bank stress / EBA transparency</td>
+<td>Bank forced sellers</td>
+<td>EBA transparency exercise CSVs (free)</td>
+<td>MISSING</td>
+</tr>
+<tr>
+<td>Night lights (VIIRS Black Marble)</td>
+<td>Operating activity</td>
+<td>NASA LAADS (Earthdata login)</td>
+<td>MISSING — needs Earthdata account (user)</td>
+</tr>
+<tr>
+<td>Geology (MRDS/USMIN), GA, provincial registries</td>
+<td>Deposit join for staking signal</td>
+<td>USGS (403 to box), GA (403)</td>
+<td>BLOCKED from box — try from user's machine</td>
+</tr>
+</tbody>
+</table>
+<p>Top 5 free ingests done now: EIA weekly crude, EIA weekly gas storage, Treasury auction results (1,863), BLM MLRS dated claims (hub <code>Created</code>), NASA FIRMS VIIRS 7-day. Also: FRED sovereign/liquidity/stress series and 14 extra price series.
+Next free ingests by value: ALFRED point-in-time vintages, CME depository stocks, FCA short positions, EIA-930 grid, UN Comtrade (free key).</p>
+<h2><span class="n">06</span>Recommended new agents (charters only; not created)</h2>
+<ul>
+<li><strong>Quant Validation.</strong> Owns backtest hygiene for every signal and committee: point-in-time data (ALFRED vintages), publication lags, survivorship, multiple-testing (deflated Sharpe), cost and capacity models, and the kill rule. Nothing reaches the PDF or the ledger without its sign-off; it may only veto, never add signals. This is the agent a Citadel or Elliott diligence team would ask to meet first.</li>
+<li><strong>Commodities &amp; Shipping desk.</strong> Ingests physical-flow data — EIA/JODI/WASDE balances, CME/SHFE warehouse stocks and cancelled warrants, AIS/port congestion, Sentinel-1 storage — and maintains the commodity signals (S1–S4, S16). Output: weekly balance tables and squeeze watchlist for trading houses.</li>
+<li><strong>Crypto Flows desk.</strong> Tracks mechanical crypto supply/demand: stablecoin mint/burn, perp funding and OI, ETF creations/redemptions, token unlock calendars, estate and government wallet movements. Maintains S10–S13 and owns the on-chain source list and its address labels.</li>
+<li><strong>Macro Regime agent.</strong> Maintains the Dalio-style regime dashboard (real rates, credit, curve, debasement, COFER, central-bank gold, liquidity) with point-in-time vintages, and supplies the regime vote in the committee. Publishes a one-page regime note weekly.</li>
+<li><strong>Mining Geologist.</strong> Joins deposits (MRDS/USMIN, GA, provincial databases, historical reports) to tenure (BLM MLRS, state/provincial registries) and owners (SEDAR+/ASX). Maintains the staking signals (S17, S20) and the satellite site list; flags controlled-mineral deposits on lapsed ground.</li>
+<li><strong>Ledger &amp; Compliance clerk.</strong> Runs the daily OpenTimestamps anchor, checks the chain, keeps every published call impersonal (no personalised advice), and keeps the licensing memo current. Escalates anything that looks like advice to a person.</li>
+</ul>
+<h2><span class="n">07</span>Mining + Land: what this layer does</h2>
+<p>Joins (1) export-control events from MOFCOM primary text, (2) US federal mining-claim status around documented deposits of controlled minerals (BLM MLRS), (3) Sentinel-2 scene coverage at three sites (Earth Search STAC), (4) supply concentration (USGS MCS 2026) and (5) a Dalio-style macro regime. The target signal — <em>staking surge or lapse near a historically documented controlled-mineral deposit</em> — is only partly testable today; we say exactly where.</p>
+<h2><span class="n">08</span>Backtest: junior/REE equities after Chinese export-control announcements</h2>
+<p>Excess return vs SPY (US) or ^AXJO (ASX), base = close before the announcement date. MOFCOM announcements land 17:00–18:00 Beijing, i.e. before the US open the same day.</p>
+<table>
+<thead>
+<tr>
+<th>Event (MOFCOM, primary)</th>
+<th>Ticker</th>
+<th>+1d</th>
+<th>+5d</th>
+<th>+20d</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2023-07-03 Ga/Ge export controls (MOFCOM/GACC 2023 No.23, e</td>
+<td>REMX</td>
+<td>+1.6%</td>
+<td>+3.5%</td>
+<td class='r'>-5.1%</td>
+</tr>
+<tr>
+<td>2023-07-03 Ga/Ge export controls (MOFCOM/GACC 2023 No.23, e</td>
+<td>MP</td>
+<td>+1.1%</td>
+<td>+11.2%</td>
+<td>+1.0%</td>
+</tr>
+<tr>
+<td>2023-07-03 Ga/Ge export controls (MOFCOM/GACC 2023 No.23, e</td>
+<td>LYC.AX</td>
+<td>+0.3%</td>
+<td>+5.7%</td>
+<td class='r'>-7.0%</td>
+</tr>
+<tr>
+<td>2024-08-15 Antimony + superhard materials (2024 No.33, effe</td>
+<td>PPTA</td>
+<td>+22.0%</td>
+<td>+29.5%</td>
+<td>+28.7%</td>
+</tr>
+<tr>
+<td>2024-08-15 Antimony + superhard materials (2024 No.33, effe</td>
+<td>REMX</td>
+<td>+1.2%</td>
+<td>+6.3%</td>
+<td>+0.9%</td>
+</tr>
+<tr>
+<td>2025-04-04 Seven medium/heavy REEs incl. Sm, Gd, Tb, Dy, Lu</td>
+<td>MP</td>
+<td class='r'>-1.2%</td>
+<td class='r'>-2.9%</td>
+<td class='r'>-4.8%</td>
+</tr>
+<tr>
+<td>2025-04-04 Seven medium/heavy REEs incl. Sm, Gd, Tb, Dy, Lu</td>
+<td>LYC.AX</td>
+<td>+5.6%</td>
+<td>+8.7%</td>
+<td>+5.6%</td>
+</tr>
+<tr>
+<td>2025-04-04 Seven medium/heavy REEs incl. Sm, Gd, Tb, Dy, Lu</td>
+<td>ARU.AX</td>
+<td class='r'>-0.7%</td>
+<td>+1.9%</td>
+<td>+18.2%</td>
+</tr>
+<tr>
+<td>2025-04-04 Seven medium/heavy REEs incl. Sm, Gd, Tb, Dy, Lu</td>
+<td>REMX</td>
+<td class='r'>-1.9%</td>
+<td class='r'>-3.2%</td>
+<td class='r'>-3.9%</td>
+</tr>
+<tr>
+<td>2025-10-09 Ho, Er, Tm, Eu, Yb added (2025 No.57, effective</td>
+<td>MP</td>
+<td>+2.7%</td>
+<td>+28.5%</td>
+<td class='r'>-22.8%</td>
+</tr>
+<tr>
+<td>2025-10-09 Ho, Er, Tm, Eu, Yb added (2025 No.57, effective</td>
+<td>LYC.AX</td>
+<td class='r'>-4.0%</td>
+<td class='r'>-1.4%</td>
+<td class='r'>-34.6%</td>
+</tr>
+<tr>
+<td>2025-10-09 Ho, Er, Tm, Eu, Yb added (2025 No.57, effective</td>
+<td>ARU.AX</td>
+<td>+8.5%</td>
+<td>+45.1%</td>
+<td class='r'>-10.7%</td>
+</tr>
+<tr>
+<td>2025-10-09 Ho, Er, Tm, Eu, Yb added (2025 No.57, effective</td>
+<td>REMX</td>
+<td>+0.6%</td>
+<td>+5.7%</td>
+<td class='r'>-15.1%</td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead>
+<tr>
+<th>Horizon</th>
+<th>legs</th>
+<th>mean excess</th>
+<th>median</th>
+<th>% positive</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1d</td>
+<td class='r'>13</td>
+<td>+2.8%</td>
+<td>+1.1%</td>
+<td class='r'>69%</td>
+</tr>
+<tr>
+<td>5d</td>
+<td class='r'>13</td>
+<td>+10.7%</td>
+<td>+5.7%</td>
+<td class='r'>77%</td>
+</tr>
+<tr>
+<td>20d</td>
+<td class='r'>13</td>
+<td class='r'>-3.8%</td>
+<td class='r'>-4.8%</td>
+<td class='r'>38%</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Honest read (JUDGEMENT):</strong> four events, overlapping tickers — this is an event study, not a statistically powered backtest. Legs are not independent (same day, same theme). The April 2025 event coincides with the US tariff sell-off, which the market adjustment only partly removes. Use as a playbook with a known small-n, not a proven edge.</p>
+<p>Event sources (fetched 23 Oct 2026, quote = effective-date clause):</p>
+<ul>
+<li>2023-07-03: <a href="https://www.mofcom.gov.cn/zcfb/blgg/art/2023/art_ca2e9d349361441f847bdabac5d8331b.html">mofcom.gov.cn/zcfb/blgg/art/20…5d8331b.html</a> — “本公告自2023年8月1日起正式实施” (found)</li>
+<li>2024-08-15: <a href="https://www.mofcom.gov.cn/zcfb/zgdwjjmywg/art/2024/art_3840ffc4bd104de2aa673ccd74a646cc.html">mofcom.gov.cn/zcfb/zgdwjjmywg/…4a646cc.html</a> — “本公告自2024年9月15日起正式实施” (found)</li>
+<li>2025-04-04: <a href="https://www.mofcom.gov.cn/zcfb/blgg/gg/2025/art/2025/art_5e663d0bfec7452dabd950d0f0e42153.html">mofcom.gov.cn/zcfb/blgg/gg/202…0e42153.html</a> — “本公告自发布之日起正式实施” (found)</li>
+<li>2025-10-09: <a href="https://www.mofcom.gov.cn/zcfb/blgg/gg/2025/art/2025/art_9510f263c3c246d8936fbfa684a58ca8.html">mofcom.gov.cn/zcfb/blgg/gg/202…4a58ca8.html</a> — “本公告自2025年11月8日起正式实施” (found)</li>
+</ul>
+<h2><span class="n">09</span>Claims around controlled-mineral deposits (BLM MLRS, fetched 2026-10-23)</h2>
+<p>Box = ±0.15° around a district centre (JUDGEMENT: hand-placed, MRDS blocked).</p>
+<table>
+<thead>
+<tr>
+<th>District</th>
+<th>Mineral</th>
+<th>Active</th>
+<th>Filed/under review</th>
+<th>Closed</th>
+<th>Lapse ratio</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Mountain Pass (CA) — REE</td>
+<td>REE</td>
+<td class='r'>2,105</td>
+<td>880 (42%)</td>
+<td class='r'>4,785</td>
+<td class='r'>0.69</td>
+</tr>
+<tr>
+<td>Thacker Pass (NV) — lithium</td>
+<td>Li</td>
+<td class='r'>2,273</td>
+<td>10 (0%)</td>
+<td class='r'>8,136</td>
+<td class='r'>0.78</td>
+</tr>
+<tr>
+<td>Stibnite (ID) — antimony/gold</td>
+<td>Sb</td>
+<td class='r'>2,808</td>
+<td>577 (21%)</td>
+<td class='r'>3,533</td>
+<td class='r'>0.56</td>
+</tr>
+<tr>
+<td>Bear Lodge (WY) — REE</td>
+<td>REE</td>
+<td class='r'>574</td>
+<td>99 (17%)</td>
+<td class='r'>1,569</td>
+<td class='r'>0.73</td>
+</tr>
+<tr>
+<td>Rhyolite Ridge (NV) — lithium/boron</td>
+<td>Li</td>
+<td class='r'>1,642</td>
+<td>333 (20%)</td>
+<td class='r'>6,831</td>
+<td class='r'>0.81</td>
+</tr>
+</tbody>
+</table>
+<p>Caveat: Public MLRS layer has LOC_DT null for every record (count where LOC_DT IS NOT NULL = 0, both layers, checked 23 Oct 2026). This MapServer has no dates; the BLM hub FeatureServers do (record 'Created'), and are used for the dated staking backtest (S17/S20) in the signal library.</p>
+<p><strong>Read (JUDGEMENT):</strong> Mountain Pass (42% of active claims still pending) and Stibnite (21%) show the heaviest fresh staking; Thacker Pass has ~0.4% pending against 8,136 closed claims — a lapse-dominated district. That fits the playbook (follow-on staking near a permitted controlled-mineral project) but is cross-sectional, not timed.</p>
+<h2><span class="n">10</span>Satellite: Sentinel-2 L2A scenes (Earth Search STAC)</h2>
+<table>
+<thead>
+<tr>
+<th>Site</th>
+<th>Before (best ≤10% cloud)</th>
+<th>After</th>
+<th>scenes before/after</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Mountain Pass (CA) — REE</td>
+<td>S2B_11SPV_20241016_0_L2A</td>
+<td>S2C_11SPV_20261001_0_L2A</td>
+<td>5/8</td>
+</tr>
+<tr>
+<td>Thacker Pass (NV) — lithium</td>
+<td>S2A_11TMG_20240927_0_L2A</td>
+<td>S2C_11TMG_20260907_0_L2A</td>
+<td>6/3</td>
+</tr>
+<tr>
+<td>Stibnite (ID) — antimony/gold</td>
+<td>S2B_11TPK_20241108_0_L2A</td>
+<td>S2C_11TPK_20261007_0_L2A</td>
+<td>13/13</td>
+</tr>
+</tbody>
+</table>
+<p>Caveat: Whole-tile previews (110 km) — demonstrates the pipeline only; pit-scale change detection needs band COGs clipped to a site polygon (next step, rasterio not installed).</p>
+<h2><span class="n">11</span>Supply concentration (USGS MCS 2026, net import reliance / top import source)</h2>
+<table>
+<thead>
+<tr>
+<th>Mineral</th>
+<th>Quoted line</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Gallium</td>
+<td>Gallium · 100% · 28%, CA · 22%, JP · 18%, CN · 16%, DE · 16%, OT</td>
+</tr>
+<tr>
+<td>Antimony</td>
+<td>Antimony · 91% · 55%, CN3 · 12%, BE · 8%, TH · 6%, IN · 19%, OT</td>
+</tr>
+<tr>
+<td>Rare earths</td>
+<td>Rare earths · 67% · 71%, CN3 · 13%, MY · 5%, EE 5%, JP 6%, OT</td>
+</tr>
+<tr>
+<td>Germanium</td>
+<td>Germanium · &gt;50% · 41%, BE · 23%, CN · 17%, CA · 14%, DE · 5%, OT</td>
+</tr>
+<tr>
+<td>Tungsten</td>
+<td>Tungsten · &gt;50% · 26%, CN3 · 14%, DE · 8%, BO · 8%, VN · 44%, OT</td>
+</tr>
+<tr>
+<td>Graphite (natural)</td>
+<td>Graphite (natural) · — · — · 71,000 · 100 · China · China · 1,400,000 · 78 · 1,800,000</td>
+</tr>
+</tbody>
+</table>
+<p>Source: <a href="https://pubs.usgs.gov/periodicals/mcs2026/mcs2026.pdf">pubs.usgs.gov/periodicals/mcs2026/mcs2026.pdf</a></p>
+<h2><span class="n">12</span>Macro regime dashboard (Dalio-style)</h2>
+<table>
+<thead>
+<tr>
+<th>Pillar</th>
+<th>Metric</th>
+<th>Latest</th>
+<th>Change</th>
+<th>20y pctile</th>
+<th>Read (JUDGEMENT)</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Real rates</td>
+<td>US 10y TIPS real yield</td>
+<td>2.77% (2026-10-20)</td>
+<td>+1.03pp y/y</td>
+<td class='r'>99</td>
+<td>Restrictive</td>
+<td>FRED DFII10</td>
+</tr>
+<tr>
+<td>Debt cycle (credit)</td>
+<td>US HY OAS</td>
+<td>3.27% (2026-10-21)</td>
+<td>+0.30pp y/y</td>
+<td class='r'>79</td>
+<td>Stress building</td>
+<td>FRED BAMLH0A0HYM2</td>
+</tr>
+<tr>
+<td>Debt cycle (curve)</td>
+<td>UST 10y–2y</td>
+<td>0.32pp (2026-10-21)</td>
+<td>-0.21pp y/y</td>
+<td class='r'>27</td>
+<td>Re-steepening after inversion</td>
+<td>FRED T10Y2Y</td>
+</tr>
+<tr>
+<td>Currency debasement</td>
+<td>Gold $/oz vs DXY, 1y</td>
+<td>gold 4,061 (2026-10-22); DXY 101.6</td>
+<td>gold -0% / DXY +3%</td>
+<td class='r'>95</td>
+<td>Neutral</td>
+<td>Yahoo GC=F, DX-Y.NYB</td>
+</tr>
+<tr>
+<td>Reserve-currency share</td>
+<td>USD share of FX reserves (IMF COFER, all reserves, post-2025Q3 method)</td>
+<td>56.7% (2026-Q2)</td>
+<td>-2.2pp vs 2024-Q2</td>
+<td>—</td>
+<td>Slow erosion</td>
+<td>IMF COFER SDMX api.imf.org</td>
+</tr>
+<tr>
+<td>Central-bank gold buying</td>
+<td>WGC Gold Demand Trends (central banks, tonnes)</td>
+<td>not ingested</td>
+<td></td>
+<td>—</td>
+<td>GAP</td>
+<td>WGC requires site download (Goldhub); not fetched this pass</td>
+</tr>
+<tr>
+<td>Commodity super-cycle</td>
+<td>Geo-mean(gold, copper, WTI) / S&amp;P 500</td>
+<td>0.018 (2026-10-22)</td>
+<td></td>
+<td class='r'>13</td>
+<td>Commodities cheap vs equities</td>
+<td>Yahoo GC=F, HG=F, CL=F, ^GSPC</td>
+</tr>
+<tr>
+<td>Supply concentration</td>
+<td>China share, controlled minerals (USGS MCS 2026)</td>
+<td>see table</td>
+<td></td>
+<td>—</td>
+<td>Extreme (Ga, graphite, REE, W)</td>
+<td>USGS MCS 2026</td>
+</tr>
+</tbody>
+</table>
+<h2><span class="n">13</span>Gaps (honest)</h2>
+<ul>
+<li>USGS MRDS/USMIN/NGDB bulk download: mrdata.usgs.gov returns 403 to the box (curl, 23 Oct) → deposit join uses hand-placed district centres (labelled).</li>
+<li>Geoscience Australia services.ga.gov.au 403; WA DMIRS/QLD, Ontario MLAS, BC MTO, GESTIM, BGS, EGDI, GEUS, Chile/Peru/DRC cadastres: not ingested this pass.</li>
+<li>BLM MLRS MapServer has no location dates; solved via hub FeatureServer 'Created' dates (2021+, MLRS-native serials). LR2000 legacy recordation dates still not ingested.</li>
+<li>NASA FIRMS MAP_KEY needs an email form (not submitted); no-key 7-day VIIRS CSV ingested; Black Marble night lights need Earthdata login.</li>
+<li>WGC central-bank gold: not fetched. SEDAR+/ASX owner mapping: not done.</li>
+<li>Internet Archive: search works (leads saved) but no deposit has been matched to a lapsed claim yet.</li>
+</ul>
+<h2><span class="n">14</span>Who pays for this layer (JUDGEMENT)</h2>
+<ul>
+<li>Resource/royalty funds and critical-minerals desks (event playbook + claim-pressure map).</li>
+<li>Government/strategic buyers and DFIs tracking Western supply response.</li>
+<li>Credit desks holding miner/battery-chain paper: export-control shock → forced-seller map in the TRIAGE credit layer.</li>
+</ul>
+<h2><span class="n">15</span>TRIAGE Alpha Committee (adapted from AlphaAgents, arXiv:2508.11152)</h2>
+<p>Source paper: Zhao, Lyu, Jones, Garber, Pasquali, Mehta (BlackRock), <em>AlphaAgents: Large Language Model based Multi-Agents for Equity Portfolio Constructions</em>, arXiv:2508.11152v1, <a href="https://arxiv.org/html/2508.11152v1">arxiv.org/html/2508.11152v1</a> (read in full 23 Oct 2026).</p>
+<p><strong>What we kept from the paper:</strong> role agents with data access restricted to their role (paper Table 1); the paper's coordinator prompt for debate ("every agent ... has a chance to speak at least twice. Each agent can not decide for the whole group ... You must invoke all agents before deciding to Terminate"); round-robin debate to consensus; explicit risk-neutral vs risk-averse profiles (§2.3); equal-weight portfolios from agent picks compared with single-agent portfolios and the benchmark using return and Sharpe (§3.2, §4.3); full debate logs kept for review.</p>
+<p><strong>Role mapping:</strong> paper Fundamental → <em>Forced Seller</em> (who must sell, from credit-spread shocks) and <em>LME</em> (CFTC managed-money positioning); paper Sentiment → <em>Signal/Radar</em> (trend/flow) and <em>Contrarian</em> (crowding); paper Valuation → <em>Valuation</em> (annualised return and volatility tools, exactly the paper's §2.2.3 formulas); added Macro (Dalio regime), which the paper names as future work.</p>
+<p><strong>What we changed, and why (honest):</strong> the agents are deterministic tool-based rules, not LLM calls. An LLM committee backtested on 2012–2026 would already 'know' those years from training data, so its backtest would be contaminated. The paper's prompts and our role prompts are stored in <code>committee.py</code> (PROMPTS) for a later LLM backend that runs only forward (live, paper-only). Debate rule: an agent whose conviction is below the mean conviction of disagreeing peers withdraws; nobody adopts a view without evidence; unresolved → majority, and the risk-averse profile takes no position on any dissent.</p>
+<h3>Backtest — monthly, 22 cross-asset instruments, 2012-02-29 → 2026-09-30, long-only equal-weight, cash when no BUY</h3>
+<p><strong>risk-neutral, full period</strong></p>
+<table>
+<thead>
+<tr>
+<th>Portfolio</th>
+<th>CAGR</th>
+<th>Vol</th>
+<th>Sharpe (no rf)</th>
+<th>Max DD</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Committee (debate)</td>
+<td class='r'>9.0%</td>
+<td class='r'>13.1%</td>
+<td class='r'>0.69</td>
+<td class='r'>-28.5%</td>
+</tr>
+<tr>
+<td>Equal-weight benchmark</td>
+<td class='r'>8.5%</td>
+<td class='r'>13.2%</td>
+<td class='r'>0.65</td>
+<td class='r'>-29.1%</td>
+</tr>
+<tr>
+<td>Single agent: signal</td>
+<td class='r'>10.4%</td>
+<td class='r'>19.6%</td>
+<td class='r'>0.53</td>
+<td class='r'>-44.5%</td>
+</tr>
+<tr>
+<td>Single agent: valuation</td>
+<td class='r'>8.6%</td>
+<td class='r'>16.2%</td>
+<td class='r'>0.53</td>
+<td class='r'>-41.8%</td>
+</tr>
+<tr>
+<td>Single agent: contrarian</td>
+<td class='r'>-2.3%</td>
+<td class='r'>11.7%</td>
+<td class='r'>-0.19</td>
+<td class='r'>-46.5%</td>
+</tr>
+<tr>
+<td>Single agent: forced_seller</td>
+<td class='r'>0.1%</td>
+<td class='r'>0.4%</td>
+<td class='r'>0.26</td>
+<td class='r'>0%</td>
+</tr>
+<tr>
+<td>Single agent: lme</td>
+<td class='r'>-4.1%</td>
+<td class='r'>17.9%</td>
+<td class='r'>-0.23</td>
+<td class='r'>-63.4%</td>
+</tr>
+<tr>
+<td>Single agent: macro</td>
+<td class='r'>1.0%</td>
+<td class='r'>2.5%</td>
+<td class='r'>0.39</td>
+<td class='r'>-1.6%</td>
+</tr>
+</tbody>
+</table>
+<p><strong>risk-neutral, 2021 onward (rules fixed before; treat as out-of-sample)</strong></p>
+<table>
+<thead>
+<tr>
+<th>Portfolio</th>
+<th>CAGR</th>
+<th>Vol</th>
+<th>Sharpe (no rf)</th>
+<th>Max DD</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Committee (debate)</td>
+<td class='r'>10.2%</td>
+<td class='r'>14.9%</td>
+<td class='r'>0.68</td>
+<td class='r'>-28.5%</td>
+</tr>
+<tr>
+<td>Equal-weight benchmark</td>
+<td class='r'>11.9%</td>
+<td class='r'>13.3%</td>
+<td class='r'>0.89</td>
+<td class='r'>-18.3%</td>
+</tr>
+<tr>
+<td>Single agent: signal</td>
+<td class='r'>5.7%</td>
+<td class='r'>18.9%</td>
+<td class='r'>0.3</td>
+<td class='r'>-44.5%</td>
+</tr>
+<tr>
+<td>Single agent: valuation</td>
+<td class='r'>12.6%</td>
+<td class='r'>17.3%</td>
+<td class='r'>0.73</td>
+<td class='r'>-31.6%</td>
+</tr>
+<tr>
+<td>Single agent: contrarian</td>
+<td class='r'>2.6%</td>
+<td class='r'>10.2%</td>
+<td class='r'>0.26</td>
+<td class='r'>-10.5%</td>
+</tr>
+<tr>
+<td>Single agent: forced_seller</td>
+<td class='r'>0.3%</td>
+<td class='r'>0.7%</td>
+<td class='r'>0.42</td>
+<td class='r'>0%</td>
+</tr>
+<tr>
+<td>Single agent: lme</td>
+<td class='r'>-1.0%</td>
+<td class='r'>14.2%</td>
+<td class='r'>-0.07</td>
+<td class='r'>-23.1%</td>
+</tr>
+<tr>
+<td>Single agent: macro</td>
+<td class='r'>2.5%</td>
+<td class='r'>4.0%</td>
+<td class='r'>0.63</td>
+<td class='r'>-1.6%</td>
+</tr>
+</tbody>
+</table>
+<p>Committee BUY calls: 1988; share that beat the equal-weight month: 47%.</p>
+<p><strong>risk-averse, full period</strong></p>
+<table>
+<thead>
+<tr>
+<th>Portfolio</th>
+<th>CAGR</th>
+<th>Vol</th>
+<th>Sharpe (no rf)</th>
+<th>Max DD</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Committee (debate)</td>
+<td class='r'>7.4%</td>
+<td class='r'>14.0%</td>
+<td class='r'>0.53</td>
+<td class='r'>-38.5%</td>
+</tr>
+<tr>
+<td>Equal-weight benchmark</td>
+<td class='r'>8.5%</td>
+<td class='r'>13.2%</td>
+<td class='r'>0.65</td>
+<td class='r'>-29.1%</td>
+</tr>
+<tr>
+<td>Single agent: signal</td>
+<td class='r'>10.4%</td>
+<td class='r'>19.6%</td>
+<td class='r'>0.53</td>
+<td class='r'>-44.5%</td>
+</tr>
+<tr>
+<td>Single agent: valuation</td>
+<td class='r'>6.3%</td>
+<td class='r'>10.0%</td>
+<td class='r'>0.63</td>
+<td class='r'>-27.6%</td>
+</tr>
+<tr>
+<td>Single agent: contrarian</td>
+<td class='r'>-2.3%</td>
+<td class='r'>11.7%</td>
+<td class='r'>-0.19</td>
+<td class='r'>-46.5%</td>
+</tr>
+<tr>
+<td>Single agent: forced_seller</td>
+<td class='r'>0.1%</td>
+<td class='r'>0.4%</td>
+<td class='r'>0.26</td>
+<td class='r'>0%</td>
+</tr>
+<tr>
+<td>Single agent: lme</td>
+<td class='r'>-4.1%</td>
+<td class='r'>17.9%</td>
+<td class='r'>-0.23</td>
+<td class='r'>-63.4%</td>
+</tr>
+<tr>
+<td>Single agent: macro</td>
+<td class='r'>1.0%</td>
+<td class='r'>2.5%</td>
+<td class='r'>0.39</td>
+<td class='r'>-1.6%</td>
+</tr>
+</tbody>
+</table>
+<p><strong>risk-averse, 2021 onward (rules fixed before; treat as out-of-sample)</strong></p>
+<table>
+<thead>
+<tr>
+<th>Portfolio</th>
+<th>CAGR</th>
+<th>Vol</th>
+<th>Sharpe (no rf)</th>
+<th>Max DD</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Committee (debate)</td>
+<td class='r'>10.1%</td>
+<td class='r'>13.3%</td>
+<td class='r'>0.76</td>
+<td class='r'>-21.5%</td>
+</tr>
+<tr>
+<td>Equal-weight benchmark</td>
+<td class='r'>11.9%</td>
+<td class='r'>13.3%</td>
+<td class='r'>0.89</td>
+<td class='r'>-18.3%</td>
+</tr>
+<tr>
+<td>Single agent: signal</td>
+<td class='r'>5.7%</td>
+<td class='r'>18.9%</td>
+<td class='r'>0.3</td>
+<td class='r'>-44.5%</td>
+</tr>
+<tr>
+<td>Single agent: valuation</td>
+<td class='r'>13.0%</td>
+<td class='r'>9.5%</td>
+<td class='r'>1.38</td>
+<td class='r'>-11.0%</td>
+</tr>
+<tr>
+<td>Single agent: contrarian</td>
+<td class='r'>2.6%</td>
+<td class='r'>10.2%</td>
+<td class='r'>0.26</td>
+<td class='r'>-10.5%</td>
+</tr>
+<tr>
+<td>Single agent: forced_seller</td>
+<td class='r'>0.3%</td>
+<td class='r'>0.7%</td>
+<td class='r'>0.42</td>
+<td class='r'>0%</td>
+</tr>
+<tr>
+<td>Single agent: lme</td>
+<td class='r'>-1.0%</td>
+<td class='r'>14.2%</td>
+<td class='r'>-0.07</td>
+<td class='r'>-23.1%</td>
+</tr>
+<tr>
+<td>Single agent: macro</td>
+<td class='r'>2.5%</td>
+<td class='r'>4.0%</td>
+<td class='r'>0.63</td>
+<td class='r'>-1.6%</td>
+</tr>
+</tbody>
+</table>
+<p>Committee BUY calls: 1753; share that beat the equal-weight month: 47%.</p>
+<p><strong>Honest result:</strong> over the full period the risk-neutral committee edges the equal-weight benchmark (Sharpe 0.69 vs 0.65, max drawdown -28.5% vs -29.1%) and beats every single agent on Sharpe. From 2021 it <strong>underperforms</strong> the benchmark (Sharpe 0.68 vs 0.89), and the single Valuation agent is better than the committee (Sharpe 0.73; risk-averse 1.38). Only 47% of committee picks beat the equal-weight month. The paper's headline (multi-agent beats single agents and benchmark) is <strong>not reproduced out-of-sample</strong> here; debate mainly cuts drawdown versus single agents. Contrarian and LME agents lose money alone. This is why the product proof is the forward, hash-chained record, not this backtest.</p>
+<h3>PAPER-ONLY live track record (hash-chained)</h3>
+<p>Ledger <code>track_record.jsonl</code>: 39 calls, chain verified = True. Each record holds entry (last public close), thesis (each agent's view), catalyst, exit rule, benchmark, previous hash and SHA-256 hash, logged in SGT. No trades placed; not advice to anyone.</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Kind</th>
+<th>Instrument</th>
+<th>Call</th>
+<th>Entry</th>
+<th>Entry date</th>
+<th>Exit rule</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class='r'>1</td>
+<td>cross-asset</td>
+<td>SPY</td>
+<td>BUY</td>
+<td class='r'>763.7</td>
+<td>2026-10-22</td>
+<td>close at the next month-end committee or if th</td>
+</tr>
+<tr>
+<td class='r'>2</td>
+<td>cross-asset</td>
+<td>EEM</td>
+<td>SELL</td>
+<td class='r'>61.74</td>
+<td>2026-10-22</td>
+<td>close at the next month-end committee or if th</td>
+</tr>
+<tr>
+<td class='r'>3</td>
+<td>cross-asset</td>
+<td>I_HSI</td>
+<td>SELL</td>
+<td>2.365e+04</td>
+<td>2026-10-21</td>
+<td>close at the next month-end committee or if th</td>
+</tr>
+<tr>
+<td class='r'>4</td>
+<td>cross-asset</td>
+<td>I_N225</td>
+<td>BUY</td>
+<td>6.462e+04</td>
+<td>2026-10-21</td>
+<td>close at the next month-end committee or if th</td>
+</tr>
+<tr>
+<td class='r'>5</td>
+<td>cross-asset</td>
+<td>I_STOXX50E</td>
+<td>SELL</td>
+<td class='r'>6087</td>
+<td>2026-10-22</td>
+<td>close at the next month-end committee or if th</td>
+</tr>
+<tr>
+<td class='r'>6</td>
+<td>cross-asset</td>
+<td>COPX</td>
+<td>SELL</td>
+<td class='r'>73.34</td>
+<td>2026-10-22</td>
+<td>close at the next month-end committee or if th</td>
+</tr>
+<tr>
+<td class='r'>7</td>
+<td>cross-asset</td>
+<td>SIL</td>
+<td>SELL</td>
+<td class='r'>76.16</td>
+<td>2026-10-22</td>
+<td>close at the next month-end committee or if th</td>
+</tr>
+<tr>
+<td class='r'>8</td>
+<td>cross-asset</td>
+<td>URA</td>
+<td>SELL</td>
+<td class='r'>34.15</td>
+<td>2026-10-22</td>
+<td>close at the next month-end committee or if th</td>
+</tr>
+<tr>
+<td class='r'>9</td>
+<td>cross-asset</td>
+<td>REMX</td>
+<td>SELL</td>
+<td class='r'>51.63</td>
+<td>2026-10-22</td>
+<td>close at the next month-end committee or if th</td>
+</tr>
+<tr>
+<td class='r'>10</td>
+<td>cross-asset</td>
+<td>HYG</td>
+<td>SELL</td>
+<td class='r'>77.1</td>
+<td>2026-10-22</td>
+<td>close at the next month-end committee or if th</td>
+</tr>
+<tr>
+<td class='r'>11</td>
+<td>cross-asset</td>
+<td>JNK</td>
+<td>SELL</td>
+<td class='r'>92.56</td>
+<td>2026-10-22</td>
+<td>close at the next month-end committee or if th</td>
+</tr>
+<tr>
+<td class='r'>12</td>
+<td>cross-asset</td>
+<td>TLT</td>
+<td>BUY</td>
+<td class='r'>81.64</td>
+<td>2026-10-22</td>
+<td>close at the next month-end committee or if th</td>
+</tr>
+<tr>
+<td class='r'>13</td>
+<td>cross-asset</td>
+<td>IEF</td>
+<td>BUY</td>
+<td class='r'>91.24</td>
+<td>2026-10-22</td>
+<td>close at the next month-end committee or if th</td>
+</tr>
+<tr>
+<td class='r'>14</td>
+<td>cross-asset</td>
+<td>GLD</td>
+<td>BUY</td>
+<td class='r'>370.5</td>
+<td>2026-10-22</td>
+<td>close at the next month-end committee or if th</td>
+</tr>
+<tr>
+<td class='r'>15</td>
+<td>cross-asset</td>
+<td>BTC-USD</td>
+<td>SELL</td>
+<td>8.122e+04</td>
+<td>2026-10-22</td>
+<td>close at the next month-end committee or if th</td>
+</tr>
+<tr>
+<td class='r'>16</td>
+<td>cross-asset</td>
+<td>CL_F</td>
+<td>BUY</td>
+<td class='r'>99.36</td>
+<td>2026-10-22</td>
+<td>close at the next month-end committee or if th</td>
+</tr>
+<tr>
+<td class='r'>17</td>
+<td>cross-asset</td>
+<td>HG_F</td>
+<td>BUY</td>
+<td class='r'>6.418</td>
+<td>2026-10-22</td>
+<td>close at the next month-end committee or if th</td>
+</tr>
+<tr>
+<td class='r'>18</td>
+<td>cross-asset</td>
+<td>SI_F</td>
+<td>BUY</td>
+<td class='r'>55.01</td>
+<td>2026-10-22</td>
+<td>close at the next month-end committee or if th</td>
+</tr>
+<tr>
+<td class='r'>19</td>
+<td>cross-asset</td>
+<td>NG_F</td>
+<td>SELL</td>
+<td class='r'>2.819</td>
+<td>2026-10-22</td>
+<td>close at the next month-end committee or if th</td>
+</tr>
+<tr>
+<td class='r'>20</td>
+<td>cross-asset</td>
+<td>ZS_F</td>
+<td>SELL</td>
+<td class='r'>1254</td>
+<td>2026-10-22</td>
+<td>close at the next month-end committee or if th</td>
+</tr>
+<tr>
+<td class='r'>21</td>
+<td>cross-asset</td>
+<td>ZW_F</td>
+<td>BUY</td>
+<td class='r'>625.5</td>
+<td>2026-10-22</td>
+<td>close at the next month-end committee or if th</td>
+</tr>
+<tr>
+<td class='r'>22</td>
+<td>credit-situation</td>
+<td>Bigben Interactive — BIG.PA shares</td>
+<td>WATCH</td>
+<td class='r'>0.069</td>
+<td>2026-10-22</td>
+<td>mark at catalyst date + 5 trading days; close</td>
+</tr>
+<tr>
+<td class='r'>23</td>
+<td>credit-situation</td>
+<td>Nacon (56.72% owned by Bigben) — NACON.PA shares</td>
+<td>WATCH</td>
+<td class='r'>0.053</td>
+<td>2026-10-22</td>
+<td>mark at catalyst date + 5 trading days; close</td>
+</tr>
+<tr>
+<td class='r'>24</td>
+<td>credit-situation</td>
+<td>Agile Group — 6.875% senior perpetual (XS1785422</td>
+<td>AVOID (price &gt; recovery)</td>
+<td class='r'>0.375</td>
+<td>2026-10-22</td>
+<td>mark at catalyst date + 5 trading days; close</td>
+</tr>
+<tr>
+<td class='r'>25</td>
+<td>credit-situation</td>
+<td>BayWa / Kronos EKS €100m hybrid (DE000A351PD9) —</td>
+<td>WATCH</td>
+<td class='r'>6</td>
+<td>2026-10-22</td>
+<td>mark at catalyst date + 5 trading days; close</td>
+</tr>
+<tr>
+<td class='r'>26</td>
+<td>credit-situation</td>
+<td>Booster Precision Components (€60m bond NO001271</td>
+<td>WATCH</td>
+<td class='r'>39</td>
+<td>2026-10-22</td>
+<td>mark at catalyst date + 5 trading days; close</td>
+</tr>
+<tr>
+<td class='r'>27</td>
+<td>credit-situation</td>
+<td>Zhenro Properties — 6158.HK shares</td>
+<td>WATCH</td>
+<td class='r'>0.017</td>
+<td>2026-10-22</td>
+<td>mark at catalyst date + 5 trading days; close</td>
+</tr>
+<tr>
+<td class='r'>28</td>
+<td>credit-situation</td>
+<td>KWG Group — 1813.HK shares</td>
+<td>WATCH</td>
+<td class='r'>0.088</td>
+<td>2026-10-22</td>
+<td>mark at catalyst date + 5 trading days; close</td>
+</tr>
+<tr>
+<td class='r'>29</td>
+<td>credit-situation</td>
+<td>Redco Properties — 1622.HK shares</td>
+<td>WATCH</td>
+<td class='r'>0.141</td>
+<td>2026-10-22</td>
+<td>mark at catalyst date + 5 trading days; close</td>
+</tr>
+<tr>
+<td class='r'>30</td>
+<td>credit-situation</td>
+<td>VPower Group — 1608.HK shares</td>
+<td>WATCH</td>
+<td class='r'>0.031</td>
+<td>2026-10-22</td>
+<td>mark at catalyst date + 5 trading days; close</td>
+</tr>
+<tr>
+<td class='r'>31</td>
+<td>credit-situation</td>
+<td>Branicks Group (€400m bond) — BRNK.DE shares</td>
+<td>WATCH</td>
+<td class='r'>0.41</td>
+<td>2026-10-22</td>
+<td>mark at catalyst date + 5 trading days; close</td>
+</tr>
+<tr>
+<td class='r'>32</td>
+<td>credit-situation</td>
+<td>China Aoyuan (secured assets) — 3883.HK shares</td>
+<td>WATCH</td>
+<td class='r'>0.031</td>
+<td>2026-10-22</td>
+<td>mark at catalyst date + 5 trading days; close</td>
+</tr>
+<tr>
+<td class='r'>33</td>
+<td>committee-v2</td>
+<td>S6 HYG</td>
+<td>FLAT (trigger not met)</td>
+<td class='r'>0</td>
+<td>2026-10-23</td>
+<td>open only when trigger fires; hold 60d; costs</td>
+</tr>
+<tr>
+<td class='r'>34</td>
+<td>committee-v2</td>
+<td>S8 EEM</td>
+<td>FLAT (trigger not met)</td>
+<td class='r'>0</td>
+<td>2026-10-23</td>
+<td>open only when trigger fires; hold 20d; costs</td>
+</tr>
+<tr>
+<td class='r'>35</td>
+<td>committee-v2</td>
+<td>S13 BTC</td>
+<td>FLAT (trigger not met)</td>
+<td class='r'>0</td>
+<td>2026-10-23</td>
+<td>open only when trigger fires; hold 7d; costs p</td>
+</tr>
+<tr>
+<td class='r'>36</td>
+<td>committee-v2</td>
+<td>S15 EWI</td>
+<td>FLAT (trigger not met)</td>
+<td class='r'>0</td>
+<td>2026-10-23</td>
+<td>open only when trigger fires; hold 20d; costs</td>
+</tr>
+<tr>
+<td class='r'>37</td>
+<td>committee-v2</td>
+<td>S16 REMX</td>
+<td>FLAT (trigger not met)</td>
+<td class='r'>0</td>
+<td>2026-10-23</td>
+<td>open only when trigger fires; hold 5d; costs p</td>
+</tr>
+<tr>
+<td class='r'>38</td>
+<td>committee-v2</td>
+<td>S21 SPY</td>
+<td>FLAT (trigger not met)</td>
+<td class='r'>0</td>
+<td>2026-10-23</td>
+<td>open only when trigger fires; hold 20d; costs</td>
+</tr>
+<tr>
+<td class='r'>39</td>
+<td>committee-v2</td>
+<td>S23 SPY</td>
+<td>FLAT (trigger not met)</td>
+<td class='r'>0</td>
+<td>2026-10-23</td>
+<td>open only when trigger fires; hold 60d; costs</td>
+</tr>
+</tbody>
+</table>
+<p>First hash 891dbead90cbf53a… → last hash eceda098e4ba71ae…. To make the record externally verifiable, publish each day's last hash somewhere timestamped (e.g. a public git commit or an OpenTimestamps proof) — a user action, not done.</p>
+<h3>Monetisation (JUDGEMENT) — the track record is the product proof</h3>
+<ol>
+<li><strong>Signal subscription</strong> (impersonal, same feed to all subscribers; no personalised recommendations): radar + committee calls + mining layer. Fits the publisher-style exclusions below only if it stays impersonal and regularly published.</li>
+<li><strong>Model-portfolio licence</strong> to managers/platforms who run the money themselves (B2B data/IP licence). Still check per jurisdiction whether the licensee relationship counts as advice.</li>
+<li><strong>Later: SMA or fund</strong> — needs a licence in each place the money is managed or marketed. The user must handle this with counsel; nothing here is legal advice.</li>
+</ol>
+<table>
+<thead>
+<tr>
+<th>Jurisdiction</th>
+<th>Source (fetched 23 Oct 2026)</th>
+<th>Grade</th>
+<th>Exact quote</th>
+<th>What it means for TRIAGE</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Singapore (MAS)</td>
+<td>https://sso.agc.gov.sg/Act/SFA2001?ProvIds=Sc2-</td>
+<td>PRIMARY (statute)</td>
+<td>“fund management” means managing the property of, or operating, a collective investment scheme, or undertaking on behalf of a customer ... the management of a portfolio of capital markets products</td>
+<td>An SMA or fund run from Singapore = regulated activity 'fund management' → capital markets services licence (or registered/licensed fund manager regime). Paid recommendations to Singapore clients may also be a financial advisory service under the Financial Advisers Act — FAA text not retrieved today (sso.agc.gov.sg timed out; mas.gov.sg licensing page in maintenance), so treat as OPEN.</td>
+</tr>
+<tr>
+<td>United Kingdom (FCA)</td>
+<td>https://www.legislation.gov.uk/ukpga/2000/8/section/19</td>
+<td>PRIMARY (statute)</td>
+<td>No person may carry on a regulated activity in the United Kingdom, or purport to do so, unless he is— (a) an authorised person; or (b) an exempt person.</td>
+<td>Managing an SMA/fund needs Part 4A permission. A non-personalised periodical/data service can fall in the RAO art. 54 exclusion (below) only if its principal purpose is not advice or leading persons to buy/sell; personal recommendations are carved out (art. 54(2A)).</td>
+</tr>
+<tr>
+<td>United Kingdom (FCA)</td>
+<td>https://www.legislation.gov.uk/uksi/2001/544/article/54</td>
+<td>PRIMARY (statute)</td>
+<td>Paragraphs (1) and (2) do not apply to advice which is a personal recommendation falling within article 53(1A).</td>
+<td>Signal subscriptions must stay non-personalised; FCA can certify a publication under art. 54(3).</td>
+</tr>
+<tr>
+<td>United States (SEC)</td>
+<td>https://www.law.cornell.edu/uscode/text/15/80b-2</td>
+<td>SECONDARY copy of statute (LII)</td>
+<td>publisher of any bona fide newspaper, news magazine or business or financial publication of general and regular circulation</td>
+<td>Advisers Act §202(a)(11)(D) publisher exclusion covers impersonal, regularly published research; an SMA or tailored advice requires SEC or state investment-adviser registration.</td>
+</tr>
+<tr>
+<td>United States (CFTC)</td>
+<td>https://www.law.cornell.edu/cfr/text/17/4.14</td>
+<td>SECONDARY copy of regulation (LII)</td>
+<td>Providing commodity trading advice based on, or tailored to, the commodity interest or cash market positions or other circumstances or characteristics of particular clients</td>
+<td>17 CFR 4.14(a)(9): CTA registration exemption only if advice is not tailored and no client accounts are directed. Futures-based model portfolios or managed futures accounts → CTA/CPO registration with the CFTC/NFA.</td>
+</tr>
+</tbody>
+</table>
+<p>Gates before any money: (a) 12+ months of forward paper calls with the chain anchored publicly; (b) hit rate and excess return reported net of costs vs the stated benchmark; (c) a licensing opinion for each target jurisdiction.</p><div class='disc avoid'><h3>Disclaimer and publisher's exclusion</h3><p>Published by TRIAGE for general information. Impersonal; not investment advice, a recommendation, or an offer or solicitation to buy or sell any security. Not tailored to any reader; intended to fall within the publisher's exclusion of section 202(a)(11)(D) of the US Investment Advisers Act of 1940. Facts are drawn from public filings and registries linked in the text; statements by parties are allegations; scenario figures are labelled assumptions. Companies only; no personal data.</p></div></body></html>

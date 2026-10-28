@@ -1,0 +1,1512 @@
+<!doctype html><html><head><meta charset='utf-8'><title>TRIAGE World: situations, revenue, backers</title><style>
+@page { size: Letter; margin: 18mm 15mm 16mm 15mm;
+  @top-left { content: "TRIAGE  |  Special Situations Research"; font: 600 7pt 'Inter'; letter-spacing: .14em; color: #8a929c; }
+  @top-right { content: string(doctitle); font: 500 7pt 'Inter'; color: #8a929c; }
+  @bottom-left { content: "Not investment advice. See disclaimer on the final page."; font: 400 6.5pt 'Inter'; color: #8a929c; }
+  @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 500 7pt 'JetBrains Mono'; color: #8a929c; } }
+@page :first { @top-left { content: none } @top-right { content: none } }
+:root { --ink:#0d1218; --mute:#5b6570; --dim:#8a929c; --line:#d9dde2; --amber:#c97d06; --amberbg:#fff6e5; --navy:#0b0f14; --up:#1d8a52; --down:#c53340; --info:#1f6fd1; --violet:#6d4fd8; }
+* { box-sizing: border-box; }
+html { font-family: 'Inter', 'IBM Plex Sans', Arial, sans-serif; font-size: 9pt; color: var(--ink); line-height: 1.45; font-feature-settings: "tnum" 1; }
+body { margin: 0; }
+h1,h2,h3 { font-family: 'Inter Tight','Inter',sans-serif; letter-spacing: -.01em; margin: 0; }
+.doctitle { string-set: doctitle content(); }
+h2 { font-size: 13pt; margin: 14pt 0 5pt; padding-top: 6pt; border-top: 2px solid var(--navy); }
+h2 .n { color: var(--amber); font-family: 'JetBrains Mono', monospace; font-size: 9pt; margin-right: 6pt; vertical-align: 1pt; }
+h3 { font-size: 9.5pt; margin: 9pt 0 3pt; text-transform: uppercase; letter-spacing: .08em; color: var(--mute); }
+p { margin: 0 0 5pt; text-align: left; }
+.wm { display: inline-flex; align-items: center; gap: 6px; } .wm b { font: 700 11pt 'JetBrains Mono', monospace; letter-spacing: .32em; }
+.cover { background: var(--navy); color: #e8ecf0; margin: 0 0 4pt; padding: 9mm 10mm 7mm; border-radius: 2px; } .cover .wm b { color: #fff; }
+.cover .kick { color: #f5a524; font: 600 7.5pt 'Inter'; letter-spacing: .16em; text-transform: uppercase; margin-top: 7mm; }
+.cover h1 { font-size: 22pt; line-height: 1.12; margin: 4pt 0 6pt; color: #fff; max-width: 165mm; }
+.cover .sub { color: #aab3bd; font-size: 10pt; max-width: 160mm; }
+.cover .meta { display: flex; gap: 18pt; margin-top: 10pt; padding-top: 8pt; border-top: 1px solid #26303b; font-size: 7.5pt; color: #8f99a4; }
+.cover .meta b { display: block; color: #e8ecf0; font: 600 8.5pt 'JetBrains Mono', monospace; margin-top: 1pt; }
+.view { border-left: 3px solid var(--amber); background: var(--amberbg); padding: 7pt 9pt; margin: 9pt 0; }
+.view .lbl { font: 700 7pt 'Inter'; letter-spacing: .14em; color: var(--amber); text-transform: uppercase; }
+.view p { font-size: 10pt; margin: 2pt 0 0; }
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12pt; } .cols3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10pt; }
+.kpis { display: grid; grid-template-columns: repeat(5, 1fr); border: 1px solid var(--line); margin: 8pt 0; }
+.kpi { padding: 5pt 7pt; border-right: 1px solid var(--line); } .kpi:last-child { border-right: 0; }
+.kpi .l { font: 600 6.5pt 'Inter'; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); }
+.kpi .v { font: 600 13pt 'JetBrains Mono', monospace; margin-top: 2pt; } .kpi .s { font-size: 7pt; color: var(--mute); }
+table { width: 100%; border-collapse: collapse; margin: 4pt 0 8pt; font-size: 8pt; page-break-inside: auto; }
+thead th { font: 600 6.8pt 'Inter'; text-transform: uppercase; letter-spacing: .07em; color: var(--mute); text-align: left; border-bottom: 1.2px solid var(--navy); padding: 3pt 4pt; }
+td { padding: 3pt 4pt; border-bottom: .5px solid var(--line); vertical-align: top; } tr { page-break-inside: avoid; }
+td.r, th.r { text-align: right; } .num, td.r { font-family: 'JetBrains Mono', monospace; font-size: 7.6pt; }
+tr.tot td { font-weight: 700; border-top: 1px solid var(--navy); border-bottom: 0; }
+.fn { font-size: 6.8pt; color: var(--mute); } sup.f { font: 600 6pt 'JetBrains Mono'; color: var(--info); }
+.badge { display: inline-block; font: 700 6pt 'Inter'; letter-spacing: .08em; padding: 1pt 3pt; border-radius: 2px; text-transform: uppercase; border: .6px solid; white-space: nowrap; }
+.b-VERIFIED { color: var(--up); border-color: var(--up); } .b-CORRECTED { color: var(--amber); border-color: var(--amber); }
+.b-ALLEGATION { color: var(--violet); border-color: var(--violet); } .b-ASSUMPTION { color: var(--info); border-color: var(--info); } .b-UNVERIFIABLE { color: var(--dim); border-color: var(--dim); }
+.chart { margin: 4pt 0 2pt; page-break-inside: avoid; } h2, h3, .cap { page-break-after: avoid; } .chart svg { width: 100%; height: auto; display: block; }
+.cap { font: 600 7pt 'Inter'; color: var(--mute); text-transform: uppercase; letter-spacing: .08em; margin-top: 6pt; }
+.src { font-size: 6.6pt; color: var(--dim); margin-bottom: 6pt; }
+.box { border: 1px solid var(--line); padding: 6pt 8pt; margin: 6pt 0; } .box h3 { margin-top: 0; }
+ul { margin: 2pt 0 6pt; padding-left: 12pt; } li { margin: 1.5pt 0; }
+.pb { page-break-before: always; } .avoid { page-break-inside: avoid; }
+a { color: var(--info); text-decoration: none; word-break: break-all; }
+.disc { font-size: 6.8pt; color: var(--mute); line-height: 1.4; } .disc h3 { color: var(--ink); }
+.tl { position: relative; margin: 4pt 0 6pt 4pt; border-left: 1.2px solid var(--line); }
+.tl .e { position: relative; padding: 0 0 4.5pt 10pt; } .tl .e:before { content: ""; position: absolute; left: -4px; top: 3pt; width: 7px; height: 7px; border-radius: 50%; background: var(--navy); }
+.tl .e.f:before { background: #fff; border: 1.5px solid var(--amber); }
+.tl .d { font: 600 7.5pt 'JetBrains Mono', monospace; color: var(--mute); } .tl .e.f .d { color: var(--amber); }
+ table { font-size: 7pt; } td { word-break: break-word; } img { max-width: 100%; }</style></head><body><div class='cover'><span class="wm"><svg width="18" height="18" viewBox="0 0 32 32"><rect width="32" height="32" rx="5" fill="#f5a524"/><path d="M8 9h16v3h-6.5v12h-3V12H8z" fill="#0b0f14"/></svg><b>TRIAGE</b></span><div class='kick'>World desk · v2 · 23 Oct 2026</div><h1 class='doctitle'>TRIAGE World: situations, revenue, backers</h1><div class='sub'>25 live non-US situations re-verified today from primary sources, with who decides, when, and what the market price says.</div><div class='meta'><div>Situations<b>25 live · 3 killed</b></div><div>Sourcing<b>URL · fetch time · exact quote</b></div><div>Rules<b>public data · firms only · nothing sent</b></div></div></div><h2><span class="n">01</span>Summary</h2>
+<ul>
+<li><strong>25 live non-US situations</strong>: 21 confirmed from primary sources fetched on 23 Oct 2026 (Asia/Singapore time), 4 labelled secondary-only, 0 unverified. Every fact in the sourcing appendix has its URL, fetch time and exact quote.</li>
+<li><strong>Killed:</strong> LVGEM, China SCE and Toys"R"Us Japan. <strong>Kept:</strong> Booster, because the debate's kill is contradicted by the primary notice. <strong>Added:</strong> Nacon, Grupo Antolin (secondary only) and Stark Group (pre-filing, secondary only).</li>
+<li><strong>Prices:</strong> 11 situations have a public price. Each is labelled as a trade or a stale trade. A recovery-vs-price gap is computed only where both exist and the price is current (1 cases).</li>
+<li><strong>Commercial anchor:</strong> a Debtwire subscription at <strong>£39,606 per year</strong>. This is £118,818.24 over 26 Jun 2023–25 Jun 2026, from UK Contracts Finder; it includes VAT and an inflation contingency.</li>
+<li><strong>No fundraising yet.</strong> Milestones before raising: 3–5 design partners, 2–3 paid pilots at £5–10k, about £150k ARR in letters of intent, and one backtest that dated a catalyst correctly before the market.</li>
+</ul>
+<div style="page-break-before:always"></div>
+
+<h2><span class="n">02</span>Changelog: what was killed or fixed, and why</h2>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Decision and reason</th>
+<th>Primary check</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>LVGEM (HK)</td>
+<td>Restructuring support agreement signed 30 Sep 2026; petition adjourned to 6 Apr 2027 — no near-term catalyst</td>
+<td>PRIMARY: “Restructuring Support Agreement” found</td>
+</tr>
+<tr>
+<td>China SCE (HK)</td>
+<td>Restructuring conditions expected to be satisfied and effective date on or before 26 Oct 2026</td>
+<td>PRIMARY: “26 October 2026” found</td>
+</tr>
+<tr>
+<td>Toys"R"Us Japan</td>
+<td>Sponsor/business-transfer agreement with PPIH (OSS) executed 1 Oct 2026; completion scheduled 30 Oct</td>
+<td>PRIMARY: “October 30, 2026 (scheduled)” found</td>
+</tr>
+<tr>
+<td>Gefion Group</td>
+<td>7 Oct written-procedure date passed; result not found</td>
+<td>no source / not found</td>
+</tr>
+<tr>
+<td>Booster — NOT killed</td>
+<td>Debate kill rejected: the €3m super senior is StaRUG interim financing; standstill runs to 1 Nov</td>
+<td>PRIMARY: “EUR 3,000,000 super senior interim facility” found</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Fixes</strong></p>
+<ul>
+<li>Thames: catalyst moved from 'March 2027' to 29 Oct 2026 (16th consent vote); added 66.66% RP2 threshold, £2.4bn upsize to £5.4bn, runway to end-2026/early-2027, SPP Extension ('RP 1.5'); Ofwat/government named as controlling.</li>
+<li>Bigben: chokepoint changed to the shareholders' class; backstop group ≈93.4%; added Bigben Connected sale (€35m cash + ≈€13m vendor loan to Modelabs), capital structure, AMF URD D.26-0631, BODACC notice.</li>
+<li>Agile: primary text keeps a UK Part 26A plan + HK schemes — the debate's 'UK scheme, not Part 26A' is not supported. CoCom 61.50%, RSA within six weeks, petition 7 Dec.</li>
+<li>BayWa: unverified 30 Nov date dropped; 16 Oct results PDF sourced (quorate, not adopted).</li>
+<li>mm2 Asia: SGX attachment + Government Gazette notice (meetings 4 Nov 10am); 28c recovery labelled secondary.</li>
+<li>Poseidon Bidco corrected to sauvegarde accélérée (BODACC).</li>
+<li>Debtwire anchor recomputed: £118,818.24 over 26 Jun 2023–25 Jun 2026 = £39,606/yr incl. VAT and inflation contingency.</li>
+<li>Fundraising removed: no raise until milestones are met.</li>
+</ul>
+<div style="page-break-before:always"></div>
+
+<h2><span class="n">03</span>The 25: chokepoint, catalyst, status</h2>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Mkt</th>
+<th>Situation</th>
+<th>Who decides</th>
+<th>Catalyst</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>WD01</td>
+<td>UK</td>
+<td><strong>Thames Water Utilities</strong> — RP1 done; 16th consent requests + STID proposals (super senior upsize £2.4bn to £5.4bn); SPP Extension Transaction ('RP 1.5'); RP2 recapitalisation</td>
+<td>Ofwat and the government (Ofwat consultation is a Class B TSA condition); Class A and super senior creditors at ≥66.66% for RP2; super senior creditors for each drawdown</td>
+<td><strong>2026-10-29</strong><br/><span style='color:#64748b'>16th consent requests voting date; June Release Condition 31 Oct → proposed 30 Nov; facility liquidity 'until the end of 2026 or the start of 2027'</span></td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'>-PRIMARY</span></td>
+</tr>
+<tr>
+<td>WD02</td>
+<td>FR</td>
+<td><strong>Bigben Interactive</strong> — Sauvegarde accélérée (TC Lille Métropole); plan vote by classes of affected parties; Bigben Connected sold</td>
+<td>Shareholders' class (creditors are locked up: backstop group ≈93.4% of the exchangeables) and the court cram-down test</td>
+<td><strong>2026-12-09</strong><br/><span style='color:#64748b'>plan hearing; proceeding extended to 17 Dec 2026 (judgment of 7 Oct)</span></td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'>-PRIMARY</span></td>
+</tr>
+<tr>
+<td>WD03</td>
+<td>FR</td>
+<td><strong>Nacon (56.72% owned by Bigben)</strong> — Redressement judiciaire (TC Lille Métropole, opened 2 Mar 2026); observation period to 2 Mar 2027</td>
+<td>Administrateurs judiciaires + bank/unsecured creditors choosing 30% cash-out vs 50% haircut/8-yr; plan tied to Bigben new money</td>
+<td><strong>2027-03-02</strong><br/><span style='color:#64748b'>end of extended observation period (judgment of 1 Jul 2026)</span></td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'>-PRIMARY</span></td>
+</tr>
+<tr>
+<td>WD04</td>
+<td>HK/CN</td>
+<td><strong>Agile Group</strong> — RSA to be launched with CoCom; inter-conditional UK Part 26A plan ('Listco UK RP') + HK schemes; HK winding-up petition</td>
+<td>CoCom (≈61.50% of syndicated loans) and plan/scheme classes; HK High Court on the petition</td>
+<td><strong>2026-11-16</strong><br/><span style='color:#64748b'>RSA launch 'within six weeks' of 5 Oct (JUDGEMENT: = 16 Nov); petition hearing 7 Dec 2026</span></td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'>-PRIMARY</span></td>
+</tr>
+<tr>
+<td>WD05</td>
+<td>DE</td>
+<td><strong>BayWa / Kronos EKS €100m hybrid (DE000A351PD9)</strong> — SchVG vote without meeting 12–14 Oct: quorate, all resolutions (issuer's and holders' countermotions) not adopted</td>
+<td>Hybrid holders hold a blocking minority under SchVG; next route (second vote / StaRUG) not announced</td>
+<td><strong>TBC</strong><br/><span style='color:#64748b'>no new date published — the earlier 30 Nov estimate was dropped</span></td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'>-PRIMARY</span></td>
+</tr>
+<tr>
+<td>WD06</td>
+<td>DE/NO</td>
+<td><strong>Booster Precision Components (€60m bond NO0012713520)</strong> — StaRUG restructuring agreed in principle; €3m super senior interim facility approved by written procedure; standstill to 1 Nov</td>
+<td>Ad-hoc Group of bondholders (standstill/lock-up) and the StaRUG plan vote</td>
+<td><strong>2026-11-01</strong><br/><span style='color:#64748b'>standstill expiry</span></td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'>-PRIMARY</span></td>
+</tr>
+<tr>
+<td>WD07</td>
+<td>ES</td>
+<td><strong>Grupo Antolin-Irausa</strong> — Spanish homologación (Juzgado Mercantil 1 Burgos, suspended); standstill with SteerCo ran to 16 Oct; Chapter 15 recognition pending</td>
+<td>SteerCo of 2028/2030 noteholders (secondary: ≈67.2% bloc) vs bank class; Burgos court on homologation</td>
+<td><strong>2026-11-04</strong><br/><span style='color:#64748b'>US recognition hearing (court docket summary); post-16 Oct status not confirmed</span></td>
+<td>SECONDARY-LABELLED</td>
+</tr>
+<tr>
+<td>WD08</td>
+<td>SG</td>
+<td><strong>mm2 Asia + mm2 Entertainment</strong> — IRDA s.64/65 moratoria to 21 Nov; s.210 scheme meetings</td>
+<td>Scheme creditors: majority in number and three-fourths in value per class, then court sanction</td>
+<td><strong>2026-11-04</strong><br/><span style='color:#64748b'>scheme meetings 10am (Government Gazette notice); moratorium to 21 Nov</span></td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'>-PRIMARY</span></td>
+</tr>
+<tr>
+<td>WD09</td>
+<td>HK/CN</td>
+<td><strong>Zhenro Properties</strong> — Winding-up petition adjourned; offshore negotiations</td>
+<td>Petitioner + HK High Court</td>
+<td><strong>2026-11-09</strong><br/><span style='color:#64748b'>adjourned petition hearing</span></td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'>-PRIMARY</span></td>
+</tr>
+<tr>
+<td>WD10</td>
+<td>HK/CN</td>
+<td><strong>KWG Group</strong> — RSA in place; consent-fee deadlines expired; accession continues</td>
+<td>RSA majority; scheme thresholds</td>
+<td><strong>TBC</strong><br/><span style='color:#64748b'>scheme timetable not announced</span></td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'>-PRIMARY</span></td>
+</tr>
+<tr>
+<td>WD11</td>
+<td>HK/CN</td>
+<td><strong>Redco Properties</strong> — Schemes approved at 16 Oct scheme meeting</td>
+<td>HK court sanction</td>
+<td><strong>TBC</strong><br/><span style='color:#64748b'>sanction hearing not yet announced</span></td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'>-PRIMARY</span></td>
+</tr>
+<tr>
+<td>WD12</td>
+<td>HK</td>
+<td><strong>VPower Group</strong> — Scheme convening order 21 Oct 2026</td>
+<td>Scheme creditors at the scheme meeting</td>
+<td><strong>TBC</strong><br/><span style='color:#64748b'>meeting notice to follow</span></td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'>-PRIMARY</span></td>
+</tr>
+<tr>
+<td>WD13</td>
+<td>SE</td>
+<td><strong>Point Properties Portfolio 1 (SEK 800m SE0015556535)</strong> — Written procedure: final redemption date moved to 30 Nov 2026 (pre-filing)</td>
+<td>Bondholders via written procedure</td>
+<td><strong>2026-11-30</strong><br/><span style='color:#64748b'>amended final redemption date</span></td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'>-PRIMARY</span></td>
+</tr>
+<tr>
+<td>WD14</td>
+<td>DE</td>
+<td><strong>Branicks Group (€400m bond)</strong> — SchVG vote 17–19 Oct: 99% in favour; €375m to 2030, €220m to 2038</td>
+<td>Implementation conditions; holders' representative MR Treuhand</td>
+<td><strong>2027-03-31</strong><br/><span style='color:#64748b'>plan effective by end-2026 or 31 Mar 2027 at the latest</span></td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'>-PRIMARY</span></td>
+</tr>
+<tr>
+<td>WD15</td>
+<td>IT</td>
+<td><strong>Clabo S.p.A.</strong> — Accordo di ristrutturazione (artt. 57/61/63 CCII) signed</td>
+<td>Tribunale di Ancona (omologazione) + tax/INPS adhesion</td>
+<td><strong>2026-11-04</strong><br/><span style='color:#64748b'>omologazione petition to be filed by this date</span></td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'>-PRIMARY</span></td>
+</tr>
+<tr>
+<td>WD16</td>
+<td>CA</td>
+<td><strong>Goodfood Market Corp.</strong> — CCAA (initial order 5 Aug 2026); sales process</td>
+<td>Monitor Raymond Chabot + court-approved SISP</td>
+<td><strong>TBC</strong><br/><span style='color:#64748b'>SISP milestones on monitor site</span></td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'>-PRIMARY</span></td>
+</tr>
+<tr>
+<td>WD17</td>
+<td>FR</td>
+<td><strong>ODAS</strong> — Sauvegarde (TAE Nanterre) opened 5 Aug 2026</td>
+<td>Administrateur judiciaire + classes</td>
+<td><strong>2027-02-05</strong><br/><span style='color:#64748b'>JUDGEMENT: end of 6-month observation</span></td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'>-PRIMARY</span></td>
+</tr>
+<tr>
+<td>WD18</td>
+<td>FR</td>
+<td><strong>Poseidon Bidco</strong> — Sauvegarde ACCÉLÉRÉE (TAE Nanterre) opened 13 Aug 2026</td>
+<td>Lender classes (LBO holdco)</td>
+<td><strong>TBC</strong><br/><span style='color:#64748b'>accelerated: plan within 2–4 months (JUDGEMENT: Oct–Dec 2026)</span></td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'>-PRIMARY</span></td>
+</tr>
+<tr>
+<td>WD19</td>
+<td>FR</td>
+<td><strong>Dumarey Powerglide Bouthéon</strong> — Sauvegarde (TAE Lyon) opened 22 Jul 2026</td>
+<td>Parent + administrateur</td>
+<td><strong>2027-01-22</strong><br/><span style='color:#64748b'>JUDGEMENT: end of 6-month observation</span></td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'>-PRIMARY</span></td>
+</tr>
+<tr>
+<td>WD20</td>
+<td>HK/CN</td>
+<td><strong>China Aoyuan (secured assets)</strong> — Receivers (FTI) over mortgaged assets</td>
+<td>Secured lender + receivers</td>
+<td><strong>TBC</strong><br/><span style='color:#64748b'>asset sales</span></td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'>-PRIMARY</span></td>
+</tr>
+<tr>
+<td>WD21</td>
+<td>JP</td>
+<td><strong>Kizuna Holdings group</strong> — Corporate reorganisation dismissed; preservation order</td>
+<td>Preservation administrator</td>
+<td><strong>TBC</strong><br/><span style='color:#64748b'>not in source</span></td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'>-PRIMARY</span></td>
+</tr>
+<tr>
+<td>WD22</td>
+<td>JP</td>
+<td><strong>Gaia Funding</strong> — Bankruptcy commenced</td>
+<td>Trustee; 2,700+ lender-investors</td>
+<td><strong>TBC</strong><br/><span style='color:#64748b'>not in source</span></td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'>-PRIMARY</span></td>
+</tr>
+<tr>
+<td>WD23</td>
+<td>DK/UK</td>
+<td><strong>Stark Group (Winterfell) — pre-filing</strong> — Stressed; TLB sell-off; lenders reportedly organising</td>
+<td>TLB lenders (€1.345bn + €450m add-on) and CLO holders</td>
+<td><strong>TBC</strong><br/><span style='color:#64748b'>none</span></td>
+<td>SECONDARY-LABELLED</td>
+</tr>
+<tr>
+<td>WD24</td>
+<td>ES</td>
+<td><strong>Urbas / Guadahermosa Proyectos</strong> — Concurso necesario (Juzgado Mercantil 12 Madrid)</td>
+<td>Petitioning creditor RS Lender + administración concursal</td>
+<td><strong>TBC</strong><br/><span style='color:#64748b'>none</span></td>
+<td>SECONDARY-LABELLED</td>
+</tr>
+<tr>
+<td>WD25</td>
+<td>IN</td>
+<td><strong>SVOGL Oil Gas and Energy</strong> — NCLT Delhi admitted CIRP</td>
+<td>Committee of Creditors (PNB-led)</td>
+<td><strong>TBC</strong><br/><span style='color:#64748b'>none</span></td>
+<td>SECONDARY-LABELLED</td>
+</tr>
+</tbody>
+</table>
+<div style="page-break-before:always"></div>
+
+<h2><span class="n">04</span>Weekly layer: court calendar next to forced sellers</h2>
+<table>
+<thead>
+<tr>
+<th>Week (Mon)</th>
+<th>Court / vote calendar (dated, primary)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2026-10-26</td>
+<td>10-29 Thames Water Utilities; 11-01 Booster Precision Components</td>
+</tr>
+<tr>
+<td>2026-11-02</td>
+<td>11-04 Grupo Antolin-Irausa; 11-04 mm2 Asia + mm2 Entertainment; 11-04 Clabo S.p.A.</td>
+</tr>
+<tr>
+<td>2026-11-09</td>
+<td>11-09 Zhenro Properties</td>
+</tr>
+<tr>
+<td>2026-11-16</td>
+<td>11-16 Agile Group</td>
+</tr>
+<tr>
+<td>2026-11-30</td>
+<td>11-30 Point Properties Portfolio 1</td>
+</tr>
+<tr>
+<td>2026-12-07</td>
+<td>12-09 Bigben Interactive</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Forced-seller layer</strong> (the supply that lands on the same desks)</p>
+<table>
+<thead>
+<tr>
+<th>Seller</th>
+<th>Fact</th>
+<th>Grade</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>China bank NPL transfers</td>
+<td>≈RMB 341bn principal+interest transferred Q1–Q3 2026; RMB 76.2bn in September (record month)</td>
+<td>Securities Times via cnfin, citing Yindeng data — SECONDARY; Yindeng primary data not reached. Pilot end 31 Dec 2026 NOT confirmed today → Q4-wave is JUDGEMENT. (token found)</td>
+</tr>
+<tr>
+<td>Hong Kong banks</td>
+<td>Gross classified loan ratio 1.82% (Q2 2026), from 2.01% at end-2025</td>
+<td>PRIMARY (HKMA). (token found)</td>
+</tr>
+<tr>
+<td>UK DB pension illiquids</td>
+<td>51% of trustees considering buyout explore in-specie or secondary sales; £4–8bn of private-markets secondaries expected in 2026</td>
+<td>Standard Life release PRIMARY for 51%; £4–8bn from MeltX/mallowstreet company release; BoE Truran speech NOT found → omitted. (token found)</td>
+</tr>
+<tr>
+<td>European CLOs 2021–22</td>
+<td>2021/2022 vintages reaching the end of reinvestment; Stark Group exposure ≈€1.38bn across 50 managers (Mar 2026)</td>
+<td>Manager blog + Octus — SECONDARY; Stark figure is March 2026. (token found)</td>
+</tr>
+<tr>
+<td>J-REIT: JRE</td>
+<td>LTV 44.8% (31 Mar 2026) vs conservative target 30–40%</td>
+<td>PRIMARY (j-re.co.jp). (token found)</td>
+</tr>
+</tbody>
+</table>
+<div style="page-break-before:always"></div>
+
+<h2><span class="n">05</span>Prices and recovery gaps</h2>
+<p>Rule: the gap is shown only where a current public price and a stated or modelled recovery both exist. Otherwise <strong>ABSTAIN</strong>.</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Situation</th>
+<th>Price (type, date)</th>
+<th>Recovery (basis)</th>
+<th>Gap</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>WD01</td>
+<td>Thames Water Utilities</td>
+<td>none found</td>
+<td>5.9% — Class B recovery c.5.9% in post-restructured equity (company)</td>
+<td>ABSTAIN</td>
+</tr>
+<tr>
+<td>WD02</td>
+<td>Bigben Interactive</td>
+<td>0.069 EUR — BIG.PA shares; TRADE (last close, public chart feed — not the exchange page); 2026-10-22</td>
+<td>none public</td>
+<td>ABSTAIN</td>
+</tr>
+<tr>
+<td>WD03</td>
+<td>Nacon (56.72% owned by Bigben)</td>
+<td>0.053 EUR — NACON.PA shares; TRADE (last close, public chart feed — not the exchange page); 2026-10-22</td>
+<td>30.0% — Short option: 30% cash for bank/unsecured claims (company)</td>
+<td>ABSTAIN</td>
+</tr>
+<tr>
+<td>WD04</td>
+<td>Agile Group</td>
+<td>0.375 % of par — 6.875% senior perpetual (XS1785422731); TRADE (Börse Frankfurt last price; thin); 2026-10-22</td>
+<td>3.3% — MODEL: 9,199,067,647 new shares × HK$0.143 (22 Oct close) ÷ HK$7.78/US$ ÷ US$5.183bn in-scope debt</td>
+<td><strong>-2.9 pts</strong></td>
+</tr>
+<tr>
+<td>WD05</td>
+<td>BayWa / Kronos EKS €100m hybrid (DE000A351PD9)</td>
+<td>6 % of par — Kronos EKS hybrid (DE000A351PD9); TRADE (Börse Frankfurt last price; thin); 2026-10-22</td>
+<td>none public</td>
+<td>ABSTAIN</td>
+</tr>
+<tr>
+<td>WD06</td>
+<td>Booster Precision Components (€60m bond NO0012713520)</td>
+<td>39 % of par — Booster FRN 2022/2026 (NO0012713520); TRADE (Börse Frankfurt last price; thin); 2026-10-22</td>
+<td>none public</td>
+<td>ABSTAIN</td>
+</tr>
+<tr>
+<td>WD07</td>
+<td>Grupo Antolin-Irausa</td>
+<td>none found</td>
+<td>none public</td>
+<td>ABSTAIN</td>
+</tr>
+<tr>
+<td>WD08</td>
+<td>mm2 Asia + mm2 Entertainment</td>
+<td>none found</td>
+<td>28.0% — 28 cents per dollar from a $25m investment (Straits Times, citing the Dec 2025 court filing) — SECONDARY</td>
+<td>ABSTAIN</td>
+</tr>
+<tr>
+<td>WD09</td>
+<td>Zhenro Properties</td>
+<td>0.017 HKD — 6158.HK shares; TRADE (last close, public chart feed — not the exchange page); 2026-10-22</td>
+<td>none public</td>
+<td>ABSTAIN</td>
+</tr>
+<tr>
+<td>WD10</td>
+<td>KWG Group</td>
+<td>0.088 HKD — 1813.HK shares; TRADE (last close, public chart feed — not the exchange page); 2026-10-22</td>
+<td>none public</td>
+<td>ABSTAIN</td>
+</tr>
+<tr>
+<td>WD11</td>
+<td>Redco Properties</td>
+<td>0.141 HKD — 1622.HK shares; TRADE (last close, public chart feed — not the exchange page); 2026-10-22</td>
+<td>none public</td>
+<td>ABSTAIN</td>
+</tr>
+<tr>
+<td>WD12</td>
+<td>VPower Group</td>
+<td>0.031 HKD — 1608.HK shares; TRADE (last close, public chart feed — not the exchange page); 2026-10-22</td>
+<td>none public</td>
+<td>ABSTAIN</td>
+</tr>
+<tr>
+<td>WD13</td>
+<td>Point Properties Portfolio 1 (SEK 800m SE0015556535)</td>
+<td>none found</td>
+<td>none public</td>
+<td>ABSTAIN</td>
+</tr>
+<tr>
+<td>WD14</td>
+<td>Branicks Group (€400m bond)</td>
+<td>0.41 EUR — BRNK.DE shares; TRADE (last close, public chart feed — not the exchange page); 2026-10-22</td>
+<td>none public</td>
+<td>ABSTAIN</td>
+</tr>
+<tr>
+<td>WD15</td>
+<td>Clabo S.p.A.</td>
+<td>none found</td>
+<td>none public</td>
+<td>ABSTAIN</td>
+</tr>
+<tr>
+<td>WD16</td>
+<td>Goodfood Market Corp.</td>
+<td>none found</td>
+<td>none public</td>
+<td>ABSTAIN</td>
+</tr>
+<tr>
+<td>WD17</td>
+<td>ODAS</td>
+<td>none found</td>
+<td>none public</td>
+<td>ABSTAIN</td>
+</tr>
+<tr>
+<td>WD18</td>
+<td>Poseidon Bidco</td>
+<td>none found</td>
+<td>none public</td>
+<td>ABSTAIN</td>
+</tr>
+<tr>
+<td>WD19</td>
+<td>Dumarey Powerglide Bouthéon</td>
+<td>none found</td>
+<td>none public</td>
+<td>ABSTAIN</td>
+</tr>
+<tr>
+<td>WD20</td>
+<td>China Aoyuan (secured assets)</td>
+<td>0.031 HKD — 3883.HK shares; TRADE (last close, public chart feed — not the exchange page); 2026-10-22</td>
+<td>none public</td>
+<td>ABSTAIN</td>
+</tr>
+<tr>
+<td>WD21</td>
+<td>Kizuna Holdings group</td>
+<td>none found</td>
+<td>none public</td>
+<td>ABSTAIN</td>
+</tr>
+<tr>
+<td>WD22</td>
+<td>Gaia Funding</td>
+<td>none found</td>
+<td>none public</td>
+<td>ABSTAIN</td>
+</tr>
+<tr>
+<td>WD23</td>
+<td>Stark Group (Winterfell) — pre-filing</td>
+<td>none found</td>
+<td>none public</td>
+<td>ABSTAIN</td>
+</tr>
+<tr>
+<td>WD24</td>
+<td>Urbas / Guadahermosa Proyectos</td>
+<td>none found</td>
+<td>none public</td>
+<td>ABSTAIN</td>
+</tr>
+<tr>
+<td>WD25</td>
+<td>SVOGL Oil Gas and Energy</td>
+<td>none found</td>
+<td>none public</td>
+<td>ABSTAIN</td>
+</tr>
+</tbody>
+</table>
+<p><em>Agile: the perpetuals at about 0.4% of par against a modelled recovery of about 3.3% (shares only) imply the market prices the RSA below the equity value issued. This is JUDGEMENT; the Frankfurt trades are thin.</em></p>
+<div style="page-break-before:always"></div>
+
+<h2><span class="n">06</span>Control maps: top 10</h2>
+<p><strong>Thames Water Utilities (UK) — 2026-10-29.</strong> RP1 done; 16th consent requests + STID proposals (super senior upsize £2.4bn to £5.4bn); SPP Extension Transaction ('RP 1.5'); RP2 recapitalisation. <em>Who decides:</em> Ofwat and the government (Ofwat consultation is a Class B TSA condition); Class A and super senior creditors at ≥66.66% for RP2; super senior creditors for each drawdown. Class B price not found on a public exchange page → gap abstains.<br/><span style='color:#64748b'>Quote: “…action. The 16th Consent Requests and STID Proposals have a voting date of 29 October 2026 and follow fifteen previous sets of consent requests which were approved by creditors. Voting may close earlier if the requisite majority o…” — <a href="https://www.thameswater.co.uk/news/2026/oct/twul-sixteenth-consent-requests-results">thameswater.co.uk/news/2026/oc…ests-results</a></span></p>
+<p><strong>Bigben Interactive (FR) — 2026-12-09.</strong> Sauvegarde accélérée (TC Lille Métropole); plan vote by classes of affected parties; Bigben Connected sold. <em>Who decides:</em> Shareholders' class (creditors are locked up: backstop group ≈93.4% of the exchangeables) and the court cram-down test. Exchangeable FR0014001WC2 last traded 16 Feb 2026 (stale) — not used.<br/><span style='color:#64748b'>Quote: “…dication de la Garantie, les Garants représentent désormais environ 93,4 % de l'encours total des Obligations ; le prix de souscription de l'Augmentation de Capital n°3 – Garants est porté de 0,01523 € à 0,0209 € par action, étant…” — <a href="https://www.boursorama.com/bourse/actualites/bigben-resultats-annuels-de-l-exercice-2025-2">boursorama.com/bourse/actualit…rcice-2025-2</a></span></p>
+<p><strong>Agile Group (HK/CN) — 2026-11-16.</strong> RSA to be launched with CoCom; inter-conditional UK Part 26A plan ('Listco UK RP') + HK schemes; HK winding-up petition. <em>Who decides:</em> CoCom (≈61.50% of syndicated loans) and plan/scheme classes; HK High Court on the petition. Primary text says UK Part 26A plan + HK schemes — the debate's 'not Part 26A' is wrong. 7 Dec petition date is from the company's 12 Oct release (agile.com.cn PDF did not download; secondary copy).<br/><span style='color:#64748b'>Quote: “… the date of this announcement, the CoCom collectively hold approximately 61.50% of the aggregate outstanding principal amount of the Existing Syndicated Loans. –1– As of the date of this announcement, the Company and the CoCom ar…” — <a href="https://www1.hkexnews.hk/listedco/listconews/sehk/2026/1005/2026100500001.pdf">www1.hkexnews.hk/listedco/list…00500001.pdf</a></span></p>
+<p><strong>BayWa / Kronos EKS €100m hybrid (DE000A351PD9) (DE) — TBC.</strong> SchVG vote without meeting 12–14 Oct: quorate, all resolutions (issuer's and holders' countermotions) not adopted. <em>Who decides:</em> Hybrid holders hold a blocking minority under SchVG; next route (second vote / StaRUG) not announced. <br/><span style='color:#64748b'>Quote: “…ter), has informed the Issuer that the Vote without Meeting was quorate pursuant to Section 18 para. 1 SchVG in conjunction with Section 15 para. 3 sentence 1 SchVG with respect to the resolutions proposed by the Issuer but that t…” — <a href="https://www.baywa.com/binaries/pdf/content/documents/baywacms-en/downloadcenter/other-ir/k">baywa.com/binaries/pdf/content…r/other-ir/k</a></span></p>
+<p><strong>Booster Precision Components (€60m bond NO0012713520) (DE/NO) — 2026-11-01.</strong> StaRUG restructuring agreed in principle; €3m super senior interim facility approved by written procedure; standstill to 1 Nov. <em>Who decides:</em> Ad-hoc Group of bondholders (standstill/lock-up) and the StaRUG plan vote. NOT killed: the €3m super senior is interim financing for a StaRUG restructuring that is not yet implemented (LME Watch view upheld).<br/><span style='color:#64748b'>Quote: “…g, the Ad-hoc Group has agreed to provide the Issuer with a EUR 3,000,000 super senior interim facility, which, if utilised, may be applied by the Issuer for general corporate purposes of the Group (including refinancing of certai…” — <a href="https://booster-precision.com/files/pdf/investor-relations/2026-09-02-no0012713520_sb_01_2">booster-precision.com/files/pd…3520_sb_01_2</a></span></p>
+<p><strong>mm2 Asia + mm2 Entertainment (SG) — 2026-11-04.</strong> IRDA s.64/65 moratoria to 21 Nov; s.210 scheme meetings. <em>Who decides:</em> Scheme creditors: majority in number and three-fourths in value per class, then court sanction. Debt size not in a primary document fetched today; shares suspended since Nov 2025.<br/><span style='color:#64748b'>Quote: “…ongst others, (i) an extension of the mm2A Moratorium Order until 21 November 2026 or until such further order (“3rd Extended mm2A Moratorium Order”), and (ii) an extension of the mm2E Moratorium Order until 21 November 2026 or un…” — <a href="https://links.sgx.com/1.0.0/corporate-announcements/OIE6XIYRP79E1JZM/904568_mm2%20-%20Appl">links.sgx.com/1.0.0/corporate-…2%20-%20Appl</a></span></p>
+<p><strong>Nacon (56.72% owned by Bigben) (FR) — 2027-03-02.</strong> Redressement judiciaire (TC Lille Métropole, opened 2 Mar 2026); observation period to 2 Mar 2027. <em>Who decides:</em> Administrateurs judiciaires + bank/unsecured creditors choosing 30% cash-out vs 50% haircut/8-yr; plan tied to Bigben new money. No public price for Nacon bank claims → gap abstains.<br/><span style='color:#64748b'>Quote: “…ment Judiciaire »). La période d’observation a été prorogée jusqu’au 2 mars 2027 par jugement du 1er juillet 2026. Dans ce cadre, la Société a engagé, avec l'aide de ses conseils et des administrateurs judiciaires, l'élaboration d…” — <a href="https://corporate.nacongaming.com/wp-content/uploads/2026/09/Nacon-CP-22.09.2026-FR.pdf">corporate.nacongaming.com/wp-c….2026-FR.pdf</a></span></p>
+<p><strong>Branicks Group (€400m bond) (DE) — 2027-03-31.</strong> SchVG vote 17–19 Oct: 99% in favour; €375m to 2030, €220m to 2038. <em>Who decides:</em> Implementation conditions; holders' representative MR Treuhand. Bond XS2388910270 last traded 17 Sep (stale).<br/><span style='color:#64748b'>Quote: “… favor of a restructuring of the Company’s liabilities with 99% of the votes cast. In doing so, they have also endorsed the financial restructuring plan developed by the Company for Branicks. The restructuring of liabilities arisi…” — <a href="https://branicks.com/en/branicks-group-ag-creditors-vote-to-extend-maturity-and-pave-the-w">branicks.com/en/branicks-group…d-pave-the-w</a></span></p>
+<p><strong>Zhenro Properties (HK/CN) — 2026-11-09.</strong> Winding-up petition adjourned; offshore negotiations. <em>Who decides:</em> Petitioner + HK High Court. <br/><span style='color:#64748b'>Quote: “…aring for the Petition be further adjourned to 9:30 a.m. on 9 November 2026. The Company is currently in negotiations with the Group’s offshore creditors (including the Petitioner). As announced by the Company on 20 August 2026, a…” — <a href="https://www1.hkexnews.hk/listedco/listconews/sehk/2026/1020/2026102000255.pdf">www1.hkexnews.hk/listedco/list…02000255.pdf</a></span></p>
+<p><strong>Clabo S.p.A. (IT) — 2026-11-04.</strong> Accordo di ristrutturazione (artt. 57/61/63 CCII) signed. <em>Who decides:</em> Tribunale di Ancona (omologazione) + tax/INPS adhesion. <br/><span style='color:#64748b'>Quote: “…'omologazione ex art. 48 CCII presso il Tribunale di Ancona entro il 4 novembre 2026. Jesi (AN), 9 ottobre 2026 – Clabo S.p.A. (“Clabo”, la “Società” o l'“Emittente”), società leader mondiale nel settore delle vetrine espositive p…” — <a href="https://euroborsa.it/public/euroborsa/Comunicati_Stampa/Clabo/20261009_190453_1_.pdf">euroborsa.it/public/euroborsa/…90453_1_.pdf</a></span></p>
+<div style="page-break-before:always"></div>
+
+<h2><span class="n">07</span>Bigben Interactive: investment-committee file</h2>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Fact (primary)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Procedure</td>
+<td>Sauvegarde accélérée opened 17 Aug 2026, TC Lille Métropole. BODACC A202601622253 (published 26 Aug) records the opening judgment.</td>
+</tr>
+<tr>
+<td>Timetable</td>
+<td>Extended 17 Oct → 17 Dec 2026 (judgment of 7 Oct). Plan hearing on <strong>9 Dec 2026</strong>; votes by classes of affected parties beforehand. Company expects completion by end-Q1 2027.</td>
+</tr>
+<tr>
+<td>Asset sold</td>
+<td><strong>Bigben Connected</strong> to <strong>Modelabs</strong>: <strong>€35m cash</strong> paid at closing on 7 Oct, plus a <strong>≈€13m vendor loan</strong> over 5 years (≈€48m total). The vendor loan is final after closing-accounts review.</td>
+</tr>
+<tr>
+<td>Backstop</td>
+<td>€20m backstop of the rights issue (DPS) of up to €25m at €0.017. Guarantors hold ≈<strong>93.4%</strong> of the exchangeables after syndication: TT International 2.16, Syquant 4.35, LMR 3.94, CIC 3.37, Cigogne 2.84, Sparinvest 3.00, Rhodium 0.17, Swan 0.17 (€m).</td>
+</tr>
+<tr>
+<td>Capital-increase prices</td>
+<td>Rights issue €0.017; non-guarantor conversion €0.051 (3×); guarantor tranche raised from €0.01523 to €0.0209.</td>
+</tr>
+<tr>
+<td>Plan economics (URD)</td>
+<td>€55–60m of new resources; ≈€47.2m of claims converted to equity; €26m repaid from sale proceeds; the €0.9m syndicated balance waived.</td>
+</tr>
+<tr>
+<td>Balance sheet 31 Mar 2026</td>
+<td>Equity <strong>−€55.8m</strong>; cash €31.6m; net debt <strong>€167.9m</strong> including the bond carried at <strong>€59.1m</strong>; FY25/26 revenue €284.5m, EBITDA €55.5m; impairments €369.4m.</td>
+</tr>
+<tr>
+<td>Group link</td>
+<td>Owns 56.72% of Nacon's capital (68.74% of votes). Nacon is in its own redressement judiciaire; Bigben reinvests €16m of new money into Nacon's €31m rights issue.</td>
+</tr>
+<tr>
+<td>Regulator</td>
+<td>Universal Registration Document filed with the AMF on 16 Oct 2026 under no. <strong>D.26-0631</strong>. The AMF BDIF page itself was not fetched (gap).</td>
+</tr>
+<tr>
+<td>Prices</td>
+<td>Shares €0.069, last close 22 Oct (public chart feed). The exchangeable FR0014001WC2 last traded on 16 Feb 2026 at 84.69 (stale, 'pending deletion'). No current bond mark.</td>
+</tr>
+<tr>
+<td>Who decides</td>
+<td>Creditors are locked up. <strong>Shareholders' class</strong> and a cross-class cram-down are the open questions (JUDGEMENT).</td>
+</tr>
+<tr>
+<td>IC readiness</td>
+<td><strong>Partial.</strong> Done: procedure, timetable, sale, backstop, balance sheet, URD number. Missing: the court judgment text, the BALO n°118 class notification text, the class composition and voting thresholds, a current bond mark, and the post-plan cap table.</td>
+</tr>
+</tbody>
+</table>
+<div style="page-break-before:always"></div>
+
+<h2><span class="n">08</span>Money</h2>
+<table>
+<thead>
+<tr>
+<th>Comparable</th>
+<th>Public price</th>
+<th>Grade</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Debtwire (The Pensions Regulator)</td>
+<td>£118,818.24 for 26 Jun 2023–25 Jun 2026 → <strong>£39,606/yr</strong> incl. VAT</td>
+<td>PRIMARY (verified)</td>
+</tr>
+<tr>
+<td>9fin</td>
+<td>≈$100k/yr</td>
+<td>SECONDARY</td>
+</tr>
+<tr>
+<td>Octus</td>
+<td>$30–120k/yr (2017 record)</td>
+<td>SECONDARY</td>
+</tr>
+<tr>
+<td><strong>TRIAGE World (proposed)</strong></td>
+<td>£18k/desk/yr; £5k per situation map</td>
+<td>JUDGEMENT</td>
+</tr>
+</tbody>
+</table>
+<p><svg viewBox='0 0 520 58' xmlns='http://www.w3.org/2000/svg'><text x='184' y='12' text-anchor='end' font-family='Inter, Arial' font-size='8' fill='#0d1218'>Debtwire (TPR, per yr)</text><rect x='190' y='2' width='260.0' height='13' fill='#64748b'/><text x='454.0' y='12' font-family='JetBrains Mono' font-size='7.5' fill='#5b6570'>£39.6k</text><text x='184' y='30' text-anchor='end' font-family='Inter, Arial' font-size='8' fill='#0d1218'>TRIAGE desk</text><rect x='190' y='20' width='118.2' height='13' fill='#2563eb'/><text x='312.1818181818182' y='30' font-family='JetBrains Mono' font-size='7.5' fill='#5b6570'>£18.0k</text><text x='184' y='48' text-anchor='end' font-family='Inter, Arial' font-size='8' fill='#0d1218'>TRIAGE map</text><rect x='190' y='38' width='32.8' height='13' fill='#93c5fd'/><text x='226.82828282828282' y='48' font-family='JetBrains Mono' font-size='7.5' fill='#5b6570'>£5.0k</text></svg></p>
+<table>
+<thead>
+<tr>
+<th>Scenario (year 1, JUDGEMENT)</th>
+<th>Desks × price</th>
+<th>Maps × £5k</th>
+<th style="text-align: right;">ARR</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Bear</td>
+<td>8 × £12k = £96k</td>
+<td>10 × £5k = £50k</td>
+<td style="text-align: right;"><strong>£146k</strong></td>
+</tr>
+<tr>
+<td>Base</td>
+<td>13 × £18k = £234k</td>
+<td>12 × £5k = £60k</td>
+<td style="text-align: right;"><strong>£294k</strong></td>
+</tr>
+<tr>
+<td>Bull</td>
+<td>35 × £24k = £840k</td>
+<td>16 × £5k = £80k</td>
+<td style="text-align: right;"><strong>£920k</strong></td>
+</tr>
+</tbody>
+</table>
+<p>The recheck matches the Valuation figures exactly: £146k, £294k and £920k.</p>
+<p><strong>Milestones before any raise:</strong> 3–5 design partners; 2–3 paid pilots at £5–10k; ≈£150k ARR in letters of intent; one backtest where a catalyst was dated correctly before the market. Candidate backtests from this list: Thames 29 Oct vote, Booster 1 Nov standstill, mm2 4 Nov meetings.</p>
+<h3>30 buyers, each fitted to a live situation (fit is JUDGEMENT; no firm contacted)</h3>
+<table>
+<thead>
+<tr>
+<th>Firm</th>
+<th>Base</th>
+<th>Situation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Attestor</td>
+<td>London</td>
+<td>Thames Water Class B / RP2 new money</td>
+</tr>
+<tr>
+<td>Arini</td>
+<td>London</td>
+<td>Bigben shareholder-class / new-money DPS</td>
+</tr>
+<tr>
+<td>Cheyne Capital</td>
+<td>London</td>
+<td>Point Properties (SEK bond)</td>
+</tr>
+<tr>
+<td>Davidson Kempner (London)</td>
+<td>London</td>
+<td>Agile Part 26A plan</td>
+</tr>
+<tr>
+<td>Strategic Value Partners Europe</td>
+<td>London</td>
+<td>BayWa hybrid blocking stake</td>
+</tr>
+<tr>
+<td>Bain Capital Credit EMEA</td>
+<td>London</td>
+<td>Poseidon Bidco lender class</td>
+</tr>
+<tr>
+<td>Värde Partners Europe</td>
+<td>London</td>
+<td>Urbas concurso assets</td>
+</tr>
+<tr>
+<td>ADV Partners</td>
+<td>Hong Kong</td>
+<td>Zhenro</td>
+</tr>
+<tr>
+<td>Alcentra</td>
+<td>London</td>
+<td>Booster StaRUG plan</td>
+</tr>
+<tr>
+<td>Hayfin</td>
+<td>London</td>
+<td>Clabo new finance</td>
+</tr>
+<tr>
+<td>Tikehau Capital</td>
+<td>Paris</td>
+<td>ODAS sauvegarde</td>
+</tr>
+<tr>
+<td>Ares Europe</td>
+<td>London</td>
+<td>Dumarey Powerglide</td>
+</tr>
+<tr>
+<td>Tor Investment Management</td>
+<td>Hong Kong</td>
+<td>Redco post-sanction paper</td>
+</tr>
+<tr>
+<td>Kaiyuan Capital</td>
+<td>Hong Kong</td>
+<td>KWG RSA</td>
+</tr>
+<tr>
+<td>Clearwater Capital Partners</td>
+<td>Hong Kong</td>
+<td>VPower scheme</td>
+</tr>
+<tr>
+<td>Shoreline Capital</td>
+<td>Shanghai</td>
+<td>China NPL packages (forced-seller layer)</td>
+</tr>
+<tr>
+<td>Mitsubishi Corporation</td>
+<td>Tokyo</td>
+<td>Kizuna HD assets (JUDGEMENT)</td>
+</tr>
+<tr>
+<td>Mitsui &amp; Co.</td>
+<td>Tokyo</td>
+<td>J-REIT asset sales (JUDGEMENT)</td>
+</tr>
+<tr>
+<td>Japan Industrial Solutions</td>
+<td>Tokyo</td>
+<td>Kizuna HD</td>
+</tr>
+<tr>
+<td>Asian family offices (generic)</td>
+<td>Singapore</td>
+<td>mm2 Asia</td>
+</tr>
+<tr>
+<td>FRP Advisory</td>
+<td>London</td>
+<td>UK late-filer pipeline</td>
+</tr>
+<tr>
+<td>Interpath Advisory</td>
+<td>London</td>
+<td>Thames Water contingency</td>
+</tr>
+<tr>
+<td>Teneo</td>
+<td>London/Asia</td>
+<td>VPower</td>
+</tr>
+<tr>
+<td>Kroll APAC</td>
+<td>Hong Kong</td>
+<td>Zhenro / Agile petitions</td>
+</tr>
+<tr>
+<td>Borrelli Walsh</td>
+<td>Hong Kong</td>
+<td>HK petitions</td>
+</tr>
+<tr>
+<td>KPMG (ex-Ferrier Hodgson)</td>
+<td>Sydney/HK</td>
+<td>ASX administrations</td>
+</tr>
+<tr>
+<td>Raymond Chabot</td>
+<td>Montréal</td>
+<td>Goodfood SISP</td>
+</tr>
+<tr>
+<td>Polus Capital</td>
+<td>London</td>
+<td>Stark TLB</td>
+</tr>
+<tr>
+<td>Sona Asset Management</td>
+<td>London</td>
+<td>Branicks new paper</td>
+</tr>
+<tr>
+<td>Benefit Street Partners Europe</td>
+<td>London</td>
+<td>Antolin notes (named in secondary press)</td>
+</tr>
+</tbody>
+</table>
+<div style="page-break-before:always"></div>
+
+<h2><span class="n">09</span>Backers (when the milestones are met)</h2>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Backer</th>
+<th>Type</th>
+<th>Evidence from its own site (fetched today)</th>
+<th>Check</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class='r'>1</td>
+<td>Fitch Ventures</td>
+<td>Strategic CVC</td>
+<td>Own site title; portfolio page needs JavaScript (Cognitive Credit/Versana names from search = secondary)</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'>: “Backing the future of global credit markets”</span></td>
+</tr>
+<tr>
+<td class='r'>2</td>
+<td>Illuminate Financial</td>
+<td>Fintech VC</td>
+<td>Portfolio filters incl. 'Financial Markets Infrastructure'; bank strategic LPs</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'>: “We support founders solving critical challenges for financial services”</span></td>
+</tr>
+<tr>
+<td class='r'>3</td>
+<td>Work-Bench</td>
+<td>B2B seed (NYC)</td>
+<td>Portfolio lists an AI credit-rating platform and Alkymi (data workflows)</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'>: “AI-Powered Credit Rating Platform”</span></td>
+</tr>
+<tr>
+<td class='r'>4</td>
+<td>Seedcamp</td>
+<td>Seed VC (London)</td>
+<td>9fin on its homepage portfolio</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'>: “9fin”</span></td>
+</tr>
+<tr>
+<td class='r'>5</td>
+<td>Fintech Collective</td>
+<td>Fintech VC (NYC)</td>
+<td>Fintech-only portfolio (Vestwell, Simetrik)</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'>: “Simetrik”</span></td>
+</tr>
+<tr>
+<td class='r'>6</td>
+<td>Vertex Ventures SEA &amp; India</td>
+<td>VC</td>
+<td>Site: 22 fintech companies; Singapore base</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'>: “22 fintech”</span></td>
+</tr>
+<tr>
+<td class='r'>7</td>
+<td>Balderton Capital</td>
+<td>VC</td>
+<td>Backs European-founded tech</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'>: “European”</span></td>
+</tr>
+<tr>
+<td class='r'>8</td>
+<td>Index Ventures</td>
+<td>VC</td>
+<td>Multi-stage VC (site)</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'>: “Index Ventures”</span></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Removed as passes:</strong> Highland Europe (owns the 9fin comp — conflict); Augmentum Fintech; ION Group (owns Debtwire — competitor); Antler; Redalpine (9fin investor — conflict).</p>
+<p>Eight drafts, each headed <em>DO NOT SEND - DRAFT</em>, ask for feedback or a design-partner introduction, not money. They are saved to <code>/workspace/triage_os_data/world/email_drafts_DO_NOT_SEND.txt</code>. Nothing was sent.</p>
+<h2><span class="n">10</span>Remaining gaps</h2>
+<ul>
+<li>Thames Class B ISINs and marks: no public exchange page found → gap abstains.</li>
+<li>Bigben: court judgment text, BALO n°118 text and the AMF BDIF entry were not fetched (the URD number comes from the company release).</li>
+<li>Grupo Antolin: antolin.com blocked from the box; status after 16 Oct is unconfirmed (secondary only).</li>
+<li>Stark Group: Fitch page did not render; the Octus quote dates from March 2026. Treat as a watch item, not a verified pre-filing.</li>
+<li>mm2 Asia: debt size not in a primary document fetched today.</li>
+<li>Yindeng primary NPL data not reached; the end date of China's NPL pilot is not confirmed. The BoE Truran speech was not found.</li>
+<li>Equity prices come from a public chart feed, not the exchange pages; bond prices are thin Frankfurt trades.</li>
+<li>Urbas, SVOGL, Antolin and Stark are secondary-only and kept only because they are labelled.</li>
+</ul>
+<div style="page-break-before:always"></div>
+
+<h2><span class="n">11</span>Appendix: sourcing log (URL · fetched · exact quote)</h2>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Grade</th>
+<th>Token</th>
+<th>Fetched</th>
+<th>URL</th>
+<th>Quote</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>WD01</td>
+<td>PRIMARY</td>
+<td>voting date of 29 October 2026</td>
+<td>2026-10-23T01:11</td>
+<td>https://www.thameswater.co.uk/news/2026/oct/twul-sixteenth-consent-req</td>
+<td>and STID Proposals) to facilitate the ongoing steps required to implement its recapitalisation transaction. The 16th Consent Requests and STID Proposals have a voting date of 29 October 2026 and follow fifteen previous sets of con</td>
+</tr>
+<tr>
+<td>WD01</td>
+<td>PRIMARY</td>
+<td>until the end of 2026 or the start of 20</td>
+<td>2026-10-23T01:11</td>
+<td>https://www.thameswater.co.uk/news/2026/oct/twul-sixteenth-consent-req</td>
+<td>e latest available forecast, TWUL expects that, subject to the satisfaction and/or waiver of relevant conditions precedent, the Facility will provide liquidity until the end of 2026 or the start of 2027. TWUL does not expect to co</td>
+</tr>
+<tr>
+<td>WD01</td>
+<td>PRIMARY</td>
+<td>by £2.4bn to £5.4bn</td>
+<td>2026-10-23T01:11</td>
+<td>https://www.thameswater.co.uk/news/2026/oct/twul-sixteenth-consent-req</td>
+<td>not expect to complete its recapitalisation process ahead of this date. Accordingly, TWUL proposes to increase the maximum amount available under the Facility by £2.4bn to £5.4bn, and for commitments in respect of such increased</td>
+</tr>
+<tr>
+<td>WD01</td>
+<td>PRIMARY</td>
+<td>at least 66.66% of the Class A and super</td>
+<td>2026-10-23T01:11</td>
+<td>https://www.thameswater.co.uk/news/2026/oct/class-b-creditors-update</td>
+<td>(the " Class B Terms ") under any future recapitalisation of the Thames Water group which is supported by Class A creditors and super senior creditors who hold at least 66.66% of the Class A and super senior debt respectively (the</td>
+</tr>
+<tr>
+<td>WD01</td>
+<td>PRIMARY</td>
+<td>SPP Extension Transaction</td>
+<td>2026-10-23T01:11</td>
+<td>https://www.thameswater.co.uk/news/2026/oct/class-b-creditors-update</td>
+<td>therefore intends to implement a further interim transaction to extend the maturities of certain senior debt instruments and the stable platform period (the " SPP Extension Transaction "). The Company is in constructive discussio</td>
+</tr>
+<tr>
+<td>WD01</td>
+<td>PRIMARY</td>
+<td>recovery of c.5.9%</td>
+<td>2026-10-23T01:11</td>
+<td>https://www.thameswater.co.uk/news/2026/oct/class-b-creditors-update</td>
+<td>billion of Class B Debt, Class B Creditors will receive: post restructured equity in the Thames Water group of a percentage which gives the Class B creditors a recovery of c.5.9%; the right to participate in £150 million of any ne</td>
+</tr>
+<tr>
+<td>WD01</td>
+<td>PRIMARY</td>
+<td>on or before 30 December 2027</td>
+<td>2026-10-23T01:11</td>
+<td>https://www.thameswater.co.uk/news/2026/oct/class-b-creditors-update</td>
+<td>d in any Recapitalisation which is proposed by the Thames Water group; and (ii) Ofwat having launched a public consultation in relation to the Recapitalisation on or before 30 December 2027. The Class B TSA does not impose any obl</td>
+</tr>
+<tr>
+<td>WD02</td>
+<td>COMPANY RELEASE (distributor copy)</td>
+<td>environ 93,4 %</td>
+<td>2026-10-23T01:20</td>
+<td>https://www.boursorama.com/bourse/actualites/bigben-resultats-annuels-</td>
+<td>e 16,72% de l’encours des Obligations, ont rejoint la Garantie. En conséquence : à l'issue de la Syndication de la Garantie, les Garants représentent désormais environ 93,4 % de l'encours total des Obligations ; le prix de souscri</td>
+</tr>
+<tr>
+<td>WD02</td>
+<td>COMPANY RELEASE (distributor copy)</td>
+<td>au 9 décembre 2026</td>
+<td>2026-10-23T01:20</td>
+<td>https://www.boursorama.com/bourse/actualites/bigben-resultats-annuels-</td>
+<td>taires (du 17 octobre 2026 au 17 décembre 2026), la Procédure de Sauvegarde Accélérée et fixé l’audience d’examen du plan de sauvegarde accélérée de la Société au 9 décembre 2026. RÉSULTATS ANNUELS 2025-2026 Il est rappelé que dan</td>
+</tr>
+<tr>
+<td>WD02</td>
+<td>PRIMARY</td>
+<td>à hauteur de 35 M€</td>
+<td>2026-10-23T01:13</td>
+<td>https://rss.globenewswire.com/news-release/2026/10/08/3377554/0/fr/big</td>
+<td>pensives ayant pu être levées, la Cession a été définitivement réalisée. Conformément aux stipulations du Contrat de Cession, une partie du prix de la Cession, à hauteur de 35 M€, a été versée par Modelabs à la Société à la date d</td>
+</tr>
+<tr>
+<td>WD02</td>
+<td>PRIMARY</td>
+<td>environ 13 M€</td>
+<td>2026-10-23T01:13</td>
+<td>https://rss.globenewswire.com/news-release/2026/10/08/3377554/0/fr/big</td>
+<td>éances semestrielles (le « Crédit Vendeur »). Le montant du Crédit Vendeur a été arrêté entre les parties à la date de réalisation de la Cession à un montant d’environ 13 M€ ; il est précisé que le montant du Crédit Vendeur sera d</td>
+</tr>
+<tr>
+<td>WD02</td>
+<td>COMPANY RELEASE (distributor copy)</td>
+<td>D.26-0631</td>
+<td>2026-10-23T01:20</td>
+<td>https://www.boursorama.com/bourse/actualites/bigben-resultats-annuels-</td>
+<td>onsolidés. Le Document d’Enregistrement Universel de la société au 31 mars 2026 a été déposé auprès de l’Autorité des Marchés Financiers ce jour sous le numéro D.26-0631. Il est également mis à la disposition du public sur son sit</td>
+</tr>
+<tr>
+<td>WD02</td>
+<td>PRIMARY</td>
+<td>A202601622253</td>
+<td>2026-10-23</td>
+<td>https://bodacc-datadila.opendatasoft.com (API, annonces-commerciales)</td>
+<td>mmerciales/records?where=registre+like+%22%25320992977%25%22&amp;limit=10&amp;order_by=dateparution+desc", "fetched": "2026-10-23T01:17:17.804963", "results": [{"id": "A202601622253", "dateparution": "2026-08-26", "familleavis_lib": "Proc</td>
+</tr>
+<tr>
+<td>WD03</td>
+<td>PRIMARY</td>
+<td>jusqu’au 2 mars 2027</td>
+<td>2026-10-23T01:11</td>
+<td>https://corporate.nacongaming.com/wp-content/uploads/2026/09/Nacon-CP-</td>
+<td>gement du Tribunal de commerce de Lille Métropole en date du 2 mars 2026 (la « Procédure de Redressement Judiciaire »). La période d’observation a été prorogée jusqu’au 2 mars 2027 par jugement du 1er juillet 2026. Dans ce cadre,</td>
+</tr>
+<tr>
+<td>WD03</td>
+<td>PRIMARY</td>
+<td>paiement de 30 %</td>
+<td>2026-10-23T01:11</td>
+<td>https://corporate.nacongaming.com/wp-content/uploads/2026/09/Nacon-CP-</td>
+<td>ours de Bigben envers Nacon au titre des cautions (13,7m€). 1 ➢ Traitement des créances bancaires et chirographaires (101m€) : • Choix entre une option courte (paiement de 30 % pour solde de tout compte) et une option longue (aban</td>
+</tr>
+<tr>
+<td>WD03</td>
+<td>PRIMARY</td>
+<td>56,72 %</td>
+<td>2026-10-23T01:11</td>
+<td>https://corporate.nacongaming.com/wp-content/uploads/2026/09/Nacon-CP-</td>
+<td>s, en ce compris ses créanciers financiers. Il est par ailleurs rappelé que Bigben Interactive, actionnaire majoritaire de la Société détenant au 31 août 2026, 56,72 % du capital social et 68,74 % des droits de vote, fait elle-mêm</td>
+</tr>
+<tr>
+<td>WD03</td>
+<td>PRIMARY</td>
+<td>A202600482211</td>
+<td>2026-10-23</td>
+<td>https://bodacc-datadila.opendatasoft.com (API, annonces-commerciales)</td>
+<td>ull, "divers": null, "parutionavisprecedent": null, "url_complete": "https://www.bodacc.fr/pages/annonces-commerciales-detail/?q.id=id:A202600676421"}, {"id": "A202600482211", "publicationavis": "A", "parution": "20260048", "datep</td>
+</tr>
+<tr>
+<td>WD04</td>
+<td>PRIMARY</td>
+<td>approximately 61.50%</td>
+<td>2026-10-23T01:13</td>
+<td>https://www1.hkexnews.hk/listedco/listconews/sehk/2026/1005/2026100500</td>
+<td>o are holders of the Existing Syndicated Loans. Based on information available to the Company, as of the date of this announcement, the CoCom collectively hold approximately 61.50% of the aggregate outstanding principal amount of</td>
+</tr>
+<tr>
+<td>WD04</td>
+<td>PRIMARY</td>
+<td>within six weeks of the date of this ann</td>
+<td>2026-10-23T01:13</td>
+<td>https://www1.hkexnews.hk/listedco/listconews/sehk/2026/1005/2026100500</td>
+<td>ng support agreement (‘‘RSA’’) setting out the terms of the Restructuring. Thereafter the Company and CoCom intend to launch the RSA (appending the Term Sheet) within six weeks of the date of this announcement, subject to the prog</td>
+</tr>
+<tr>
+<td>WD04</td>
+<td>PRIMARY</td>
+<td>Part 26A of the Companies Act 2006 (UK)</td>
+<td>2026-10-23T01:13</td>
+<td>https://www1.hkexnews.hk/listedco/listconews/sehk/2026/1005/2026100500</td>
+<td>he Restructuring through one or more inter-conditional restructuring processes, which may include: (a) a restructuring plan to be proposed by the Company under Part 26A of the Companies Act 2006 (UK) (the ‘‘Listco UK RP’’); (b) a</td>
+</tr>
+<tr>
+<td>WD04</td>
+<td>PRIMARY</td>
+<td class='r'>9,199,067,647</td>
+<td>2026-10-23T01:13</td>
+<td>https://www1.hkexnews.hk/listedco/listconews/sehk/2026/1005/2026100500</td>
+<td>ge for restructuring consideration to be provided under the terms of the Restructuring (the ‘‘Restructuring Consideration’’), comprising an aggregate amount of 9,199,067,647 new ordinary and fully paid up shares in the Company (th</td>
+</tr>
+<tr>
+<td>WD05</td>
+<td>PRIMARY</td>
+<td>was quorate</td>
+<td>2026-10-23T01:11</td>
+<td>https://www.baywa.com/binaries/pdf/content/documents/baywacms-en/downl</td>
+<td>astian Herrler with seat in Munich, who was commissioned by the Issuer as scrutineer (Abstimmungsleiter), has informed the Issuer that the Vote without Meeting was quorate pursuant to Section 18 para. 1 SchVG in conjunction with S</td>
+</tr>
+<tr>
+<td>WD05</td>
+<td>PRIMARY</td>
+<td>the resolutions were not adopted</td>
+<td>2026-10-23T01:11</td>
+<td>https://www.baywa.com/binaries/pdf/content/documents/baywacms-en/downl</td>
+<td>te pursuant to Section 18 para. 1 SchVG in conjunction with Section 15 para. 3 sentence 1 SchVG with respect to the resolutions proposed by the Issuer but that the resolutions were not adopted, and that the resolutions proposed by</td>
+</tr>
+<tr>
+<td>WD06</td>
+<td>PRIMARY</td>
+<td>EUR 3,000,000 super senior interim facil</td>
+<td>2026-10-23T01:13</td>
+<td>https://booster-precision.com/files/pdf/investor-relations/2026-09-02-</td>
+<td>kturierungsrahmen für Unternehmen – StaRUG). To procure sufficient liquidity during the Restructuring, the Ad-hoc Group has agreed to provide the Issuer with a EUR 3,000,000 super senior interim facility, which, if utilised, may b</td>
+</tr>
+<tr>
+<td>WD06</td>
+<td>PRIMARY</td>
+<td>StaRUG</td>
+<td>2026-10-23T01:13</td>
+<td>https://booster-precision.com/files/pdf/investor-relations/2026-09-02-</td>
+<td>the German Act on the Stabilisation and Restructuring Framework for Companies (Gesetz über den Stabi- lisierungs- und Restrukturierungsrahmen für Unternehmen – StaRUG). To procure sufficient liquidity during the Restructuring, the</td>
+</tr>
+<tr>
+<td>WD06</td>
+<td>PRIMARY</td>
+<td>until 1 November 2026</td>
+<td>2026-10-23T01:15</td>
+<td>https://stamdata.com/news/api/pdf/77c0e62e-9892-4a36-9863-8225674aa371</td>
+<td>dholders (“Ad-hoc Group”) of its Bonds. Against this background, the Ad-hoc Group has agreed to extend the standstill agreement concluded with the Ad-hoc Group until 1 November 2026. The Issuer will keep the market informed on the</td>
+</tr>
+<tr>
+<td>WD07</td>
+<td>SECONDARY</td>
+<td>November 4, 2026</td>
+<td>2026-10-23T01:19</td>
+<td>https://elevenflo.com/cases/grupo-antolin-irausa-s-a-u-17379</td>
+<td>quest remains pending, with provisional relief extended and discovery stayed during the agreed standstill under the September 16 order Dkt. 51 . That order set November 4, 2026, for the recognition hearing and related disputes, wi</td>
+</tr>
+<tr>
+<td>WD08</td>
+<td>PRIMARY</td>
+<td>until 21 November 2026</td>
+<td>2026-10-23T01:12</td>
+<td>https://links.sgx.com/1.0.0/corporate-announcements/OIE6XIYRP79E1JZM/9</td>
+<td>ium Order was heard today. To facilitate the consideration of the Schemes, the Court has granted, amongst others, (i) an extension of the mm2A Moratorium Order until 21 November 2026 or until such further order (“3rd Extended mm2A</td>
+</tr>
+<tr>
+<td>WD08</td>
+<td>PRIMARY</td>
+<td>on 4 November 2026 at 10AM</td>
+<td>2026-10-23T01:11</td>
+<td>https://www.sgpbusiness.com/get-pdf/eg/4cded5e3-bd75-11f1-8da4-f8bc125</td>
+<td>the “Order”) the Court has directed that mm2 Asia Ltd (the “Company”) do convene meetings (the “Meetings”) at 1002 Jalan Bukit Merah, #07-08, Singapore 159456, on 4 November 2026 at 10AM of certain creditors of the Company (the “S</td>
+</tr>
+<tr>
+<td>WD08</td>
+<td>PRIMARY</td>
+<td>three-fourths in value</td>
+<td>2026-10-23T01:11</td>
+<td>https://www.sgpbusiness.com/get-pdf/eg/4cded5e3-bd75-11f1-8da4-f8bc125</td>
+<td>t as Chairpersons of the Meetings and has directed the Chairpersons to report the results of the Meetings to the Court. 6. If a majority in number representing three-fourths in value of the Scheme Creditors in each of the classes</td>
+</tr>
+<tr>
+<td>WD09</td>
+<td>PRIMARY</td>
+<td>9 November 2026</td>
+<td>2026-10-23T01:15</td>
+<td>https://www1.hkexnews.hk/listedco/listconews/sehk/2026/1020/2026102000</td>
+<td>g Kong on 20 October 2026. At the adjourned hearing, the High Court of Hong Kong ordered that the hearing for the Petition be further adjourned to 9:30 a.m. on 9 November 2026. The Company is currently in negotiations with the Gro</td>
+</tr>
+<tr>
+<td>WD10</td>
+<td>PRIMARY</td>
+<td>Accession Letters</td>
+<td>2026-10-23T01:15</td>
+<td>https://www1.hkexnews.hk/listedco/listconews/sehk/2026/0928/2026092801</td>
+<td>RSA as soon as possible and to accede to the RSA as an Additional Participating Creditor by delivering to the Information Agent validly completed and executed Accession Letters (as defined in the RSA) via the Accession Portal (ht</td>
+</tr>
+<tr>
+<td>WD11</td>
+<td>PRIMARY</td>
+<td>16 October 2026</td>
+<td>2026-10-23T01:15</td>
+<td>https://www1.hkexnews.hk/listedco/listconews/sehk/2026/1016/2026101601</td>
+<td>he support from the requisite statutory majorities of the Scheme Creditors to approve the Schemes at the Scheme Meeting convened at 5:00 p.m. Hong Kong time on 16 October 2026. Further information and documents regarding the Schem</td>
+</tr>
+<tr>
+<td>WD12</td>
+<td>PRIMARY</td>
+<td>On 21 October 2026</td>
+<td>2026-10-23T01:15</td>
+<td>https://www1.hkexnews.hk/listedco/listconews/sehk/2026/1021/2026102100</td>
+<td>Unless otherwise defined, capitalised terms used in this announcement shall have the same meaning as those defined in the Announcements. SCHEME CONVENING ORDER On 21 October 2026, the High Court of the Hong Kong Special Administra</td>
+</tr>
+<tr>
+<td>WD13</td>
+<td>PRIMARY</td>
+<td>30 November 2026</td>
+<td>2026-10-23T01:15</td>
+<td>https://stamdata.com/news/api/pdf/3b50cc62-9dff-4033-9e71-766cefd50e8e</td>
+<td>indicate deletions (i.e., deletions)). The definition of “Final Redemption Date” shall be amended to read as follows: “Final Redemption Date” means 15 October 30 November 2026. Interest shall continue to accrue during the current</td>
+</tr>
+<tr>
+<td>WD13</td>
+<td>PRIMARY</td>
+<td>SE0015556535</td>
+<td>2026-10-23T01:15</td>
+<td>https://stamdata.com/news/api/pdf/3b50cc62-9dff-4033-9e71-766cefd50e8e</td>
+<td>Denna kallelse till obligationsinnehavarna är endast utformad på engelska. Stockholm, 25 September 2026 To the bondholders in: ISIN: SE0015556535 – Point Properties Portfolio 1 AB (publ) maximum SEK 800,000,000 senior secured call</td>
+</tr>
+<tr>
+<td>WD14</td>
+<td>PRIMARY</td>
+<td>99% of the votes cast</td>
+<td>2026-10-23T01:15</td>
+<td>https://branicks.com/en/branicks-group-ag-creditors-vote-to-extend-mat</td>
+<td>ders of the corporate bond in the amount of 400 million euros, originally due in 2026, have voted in favor of a restructuring of the Company’s liabilities with 99% of the votes cast. In doing so, they have also endorsed the financ</td>
+</tr>
+<tr>
+<td>WD14</td>
+<td>PRIMARY</td>
+<td>March 31, 2027</td>
+<td>2026-10-23T01:15</td>
+<td>https://branicks.com/en/branicks-group-ag-creditors-vote-to-extend-mat</td>
+<td>ation still need to be clarified in the coming weeks. The goal is for the company’s restructuring plan to take effect by the end of the 2026 fiscal year, or by March 31, 2027, at the latest. The Company further announces that it h</td>
+</tr>
+<tr>
+<td>WD15</td>
+<td>PRIMARY</td>
+<td>entro il 4 novembre 2026</td>
+<td>2026-10-23T01:15</td>
+<td>https://euroborsa.it/public/euroborsa/Comunicati_Stampa/Clabo/20261009</td>
+<td>ioni di Agenzia delle Entrate, Agenzia delle Entrate‐Riscossione e INPS e deposito del ricorso per l'omologazione ex art. 48 CCII presso il Tribunale di Ancona entro il 4 novembre 2026. Jesi (AN), 9 ottobre 2026 – Clabo S.p.A. (“C</td>
+</tr>
+<tr>
+<td>WD16</td>
+<td>PRIMARY</td>
+<td>On August 5, 2026, Goodfood Market Corp.</td>
+<td>2026-10-23T01:15</td>
+<td>https://www.raymondchabot.com/en/public-records/goodfood-market-corp/</td>
+<td>section: All records Reports of the Monitor Service List Application to Court Questions and answers Orders Notice to creditors List of creditors Sales Process On August 5, 2026, Goodfood Market Corp. sought protection under the C</td>
+</tr>
+<tr>
+<td>WD17</td>
+<td>PRIMARY</td>
+<td>A202601541654</td>
+<td>2026-10-23</td>
+<td>https://bodacc-datadila.opendatasoft.com (API, annonces-commerciales)</td>
+<td>mmerciales/records?where=registre+like+%22%25491608642%25%22&amp;limit=10&amp;order_by=dateparution+desc", "fetched": "2026-10-23T01:17:20.554962", "results": [{"id": "A202601541654", "dateparution": "2026-08-14", "familleavis_lib": "Proc</td>
+</tr>
+<tr>
+<td>WD18</td>
+<td>PRIMARY</td>
+<td>sauvegarde accélérée</td>
+<td>2026-10-23</td>
+<td>https://bodacc-datadila.opendatasoft.com (API, annonces-commerciales)</td>
+<td>ommercant": "POSEIDON BIDCO", "jugement": "{\"type\": \"initial\", \"famille\": \"Jugement d'ouverture\", \"nature\": \"Jugement d'ouverture d'une procédure de sauvegarde accélérée\", \"date\": \"2026-08-13\", \"complementJugement</td>
+</tr>
+<tr>
+<td>WD19</td>
+<td>PRIMARY</td>
+<td>A202601443260</td>
+<td>2026-10-23</td>
+<td>https://bodacc-datadila.opendatasoft.com (API, annonces-commerciales)</td>
+<td>mmerciales/records?where=registre+like+%22%25414442558%25%22&amp;limit=10&amp;order_by=dateparution+desc", "fetched": "2026-10-23T01:17:23.069848", "results": [{"id": "A202601443260", "dateparution": "2026-07-31", "familleavis_lib": "Proc</td>
+</tr>
+<tr>
+<td>WD20</td>
+<td>PRIMARY</td>
+<td>joint and several receivers</td>
+<td>2026-10-23T01:15</td>
+<td>https://www1.hkexnews.hk/listedco/listconews/sehk/2026/1002/2026100203</td>
+<td>ruary 2026 (the “27 February Announcement”) in relation to the appointment of Fok Hei Yu and Chow Wai Shing Daniel of FTI Consulting (Hong Kong) Limited as the joint and several receivers and managers (the “Receivers”) over the as</td>
+</tr>
+<tr>
+<td>WD21</td>
+<td>PRIMARY</td>
+<td>289億5361万円</td>
+<td>2026-10-23T01:15</td>
+<td>https://www.tdb.co.jp/report/bankruptcy/flash/5264/</td>
+<td>リー TDB電子認証サービスTypeA JA EN トップ レポート 株式会社絆ホールディングス レポート 株式会社絆ホールディングス 2026/10/01 倒産速報 TDB企業コード:515005633 法人番号:5120001168349 大阪府大阪市中央区 障がい者向け就労支援事業 続報、負債はグループ5社合計約289億5361万円 更生手続き棄却、保全管理命令受ける TDB企業コード:515005633 ｜ 法人番号:5120001168349 ｜</td>
+</tr>
+<tr>
+<td>WD22</td>
+<td>PRIMARY</td>
+<td>負債60億4535万円</td>
+<td>2026-10-23T01:15</td>
+<td>https://www.tdb.co.jp/report/bankruptcy/flash/5268/</td>
+<td>スTypeA JA EN トップ レポート ガイアファンディング株式会社 レポート ガイアファンディング株式会社 2026/10/21 倒産速報 TDB企業コード:642016207 法人番号:8010601048215 東京都港区 ソーシャルレンディングサービス 投資家2700名以上に被害 破産手続き開始決定受ける 負債60億4535万円 TDB企業コード:642016207 ｜ 法人番号:8010601048215 ｜ 東京都港区 ｜ ソーシャルレンデ</td>
+</tr>
+<tr>
+<td>WD23</td>
+<td>SECONDARY</td>
+<td>76.14/76.39</td>
+<td>2026-10-23T01:19</td>
+<td>https://octus.com/resources/articles/e1-38b-of-clo-holdings-across-50-</td>
+<td>Global Ratings and B3 with a negative outlook by Moody’s Ratings. In the secondary market, Stark Group’s €1.345 billion term loan B due 2028 was last quoted at 76.14/76.39, down about 12 points from 88 in late February. Octus’ CLO</td>
+</tr>
+<tr>
+<td>WD24</td>
+<td>SECONDARY</td>
+<td>53 millones</td>
+<td>2026-10-23T01:19</td>
+<td>https://www.economiadigital.es/empresas/fondo-rs-lender-insta-declarac</td>
+<td>El fondo RS Lender insta la declaración de concurso de una filial de Urbas a la que reclama 53 millones Skip to content « Correos gana un megacontrato Santander ficha a Santiago Bau Marc Murtra pone el foco de Telefónica en defen</td>
+</tr>
+<tr>
+<td>WD25</td>
+<td>SECONDARY</td>
+<td>Punjab National Bank</td>
+<td>2026-10-23T01:19</td>
+<td>https://www.livelawbiz.com/nclt/nclt-delhi-admits-svogl-into-cirp-desp</td>
+<td>quidator to take possession of its assets. On July 25, 2023, the High Court transferred the winding-up proceedings to the NCLT for consideration under the IBC. Punjab National Bank (PNB) and State Bank of India had approached the</td>
+</tr>
+<tr>
+<td>FS</td>
+<td>SECONDARY</td>
+<td>3410亿元</td>
+<td>2026-10-23T01:12</td>
+<td>https://www.cnfin.com/jyzfb-lb/detail/20261016/4482907_1.html</td>
+<td>金融机构加快不良贷款转让力度 前三季转让本息总额约3410亿元 信用卡不良处置放量 - 中国金融信息网 中国经济信息社 主办 --&gt; 首页 资讯 研报 数据 行情 工具 直播 快看 金融超市 投教 指数 产品与服务 聚财 登录 个人中心 退出账号 --&gt; 主题 要闻 快讯 政策 --&gt; 企业 --&gt; 宏观 股市 债市 汇市 货币 大宗 科创 --&gt; 区域 同业 产业 视频 --&gt;</td>
+</tr>
+<tr>
+<td>FS</td>
+<td>PRIMARY</td>
+<td class='r'>1.82%</td>
+<td>2026-10-23T01:13</td>
+<td>https://www.hkma.gov.hk/media/eng/publication-and-research/bulletin/20</td>
+<td>anageable, with signs of improvement observed % change over 6 months in the first half of 2026. The gross classified loan 15 ratio (CLR) of all AIs declined to 1.82% in the 10 second quarter of 2026 f</td>
+</tr>
+<tr>
+<td>FS</td>
+<td>PRIMARY</td>
+<td class='r'>51%</td>
+<td>2026-10-23T01:13</td>
+<td>https://www.standardlifeplc.com/news-and-views/press-releases/article-</td>
+<td>dary market sales top for trustees tackling illiquid assets at buyout 16 April 2026 News and Views Press releases Illiquid asset planning id More than half of (51%) trustees considering buyout explore</td>
+</tr>
+<tr>
+<td>FS</td>
+<td>SECONDARY</td>
+<td>end of their reinvestment period</td>
+<td>2026-10-23T01:13</td>
+<td>https://www.twentyfouram.com/insights/as-reinvestment-ends-the-2021-an</td>
+<td>rs TwentyFour Blog Read 4 min 4 Jun 2026 Subscribe In 2026, we are at a crucial juncture for European CLO managers. The 2021 and 2022 vintages are reaching the end of their reinvestment period. Unders</td>
+</tr>
+<tr>
+<td>FS</td>
+<td>PRIMARY</td>
+<td class='r'>44.8</td>
+<td>2026-10-23T01:13</td>
+<td>https://www.j-re.co.jp/en_cms/finance/index.html</td>
+<td>s with fixed interest rate 75.7 % Debts (includes Investment corporation bonds) JPY 503,193 million Ratio of long-term loans 90.1 % LTV (based on total assets) 44.8 % Average maturity (long-term loans</td>
+</tr>
+<tr>
+<td>WP01</td>
+<td>PRIMARY</td>
+<td>£118,818.24</td>
+<td>2026-10-23T01:11</td>
+<td>https://www.contractsfinder.service.gov.uk/Notice/9c891106-cdd2-4122-9</td>
+<td>notice Closing: 21 June 2023, 12am Contract summary Industry Financial market regulatory services - 66152000 Location of contract South East Value of contract £118,818.24 Procurement reference STA001</td>
+</tr>
+<tr>
+<td>WP01</td>
+<td>PRIMARY</td>
+<td>25 June 2026</td>
+<td>2026-10-23T01:11</td>
+<td>https://www.contractsfinder.service.gov.uk/Notice/9c891106-cdd2-4122-9</td>
+<td>818.24 Procurement reference STA0013 Published date 29 June 2023 Closing date 21 June 2023 Closing time 12am Contract start date 26 June 2023 Contract end date 25 June 2026 Contract type Service contr</td>
+</tr>
+<tr>
+<td>WB</td>
+<td>PRIMARY</td>
+<td>Backing the future of global credit mark</td>
+<td>2026-10-23T01:17</td>
+<td>https://www.fitchventures.com/</td>
+<td>Fitch Ventures — Backing the future of global credit markets . Env-specific src (prod vs staging) via VITE_ADOBE_LAUNCH_SRC in properties/env. ; default is the</td>
+</tr>
+<tr>
+<td>WB</td>
+<td>PRIMARY</td>
+<td>We support founders solving critical cha</td>
+<td>2026-10-23T01:17</td>
+<td>https://www.illuminatefinancial.com/portfolio</td>
+<td>our newsletter Name Email Address Thank you! Your submission has been received! Oops! Something went wrong while submitting the form. + Potential, illuminated</td>
+</tr>
+<tr>
+<td>WB</td>
+<td>PRIMARY</td>
+<td>AI-Powered Credit Rating Platform</td>
+<td>2026-10-23T01:17</td>
+<td>https://www.work-bench.com/portfolio</td>
+<td>rtical AI AI Infrastructure &amp; Developer Tools Thank you! Your submission has been received! Oops! Something went wrong while submitting the form. AIR Platforms</td>
+</tr>
+<tr>
+<td>WB</td>
+<td>PRIMARY</td>
+<td>9fin</td>
+<td>2026-10-23T01:17</td>
+<td>https://seedcamp.com/</td>
+<td>By Your Side from Day One × Our Companies Our Team Seedcamp Nation Talent News &amp; Views By Your Side from Day One Synthesia Revolut UiPath Wise Fluidstack Dust</td>
+</tr>
+<tr>
+<td>WB</td>
+<td>PRIMARY</td>
+<td>Simetrik</td>
+<td>2026-10-23T01:17</td>
+<td>https://www.fintech.io/</td>
+<td>1m+ savers, 50k+ businesses and over $30b of Assets Under Administration today. Visit Website Industry: Payments CEO: Alejandro Casas Investor Since: Series A</td>
+</tr>
+<tr>
+<td>WB</td>
+<td>PRIMARY</td>
+<td>22 fintech</td>
+<td>2026-10-23T01:17</td>
+<td>https://www.vertexventures.sg/</td>
+<td>ventual goal to accelerate Asia’s growth and transformation. $1.5b under management 90+ companies 6 unicorns Our Portfolio Close All 106 consumer 37 enterprise</td>
+</tr>
+<tr>
+<td>WB</td>
+<td>PRIMARY</td>
+<td>European</td>
+<td>2026-10-23T01:17</td>
+<td>https://www.balderton.com/</td>
+<td>Europe’s leading venture firm focused exclusively on backing European-founded tech companies × About Us Wellbeing &amp; Performance Platform Our Values Sustainable</td>
+</tr>
+<tr>
+<td>WB</td>
+<td>PRIMARY</td>
+<td>Index Ventures</td>
+<td>2026-10-23T01:17</td>
+<td>https://www.indexventures.com/</td>
+<td>Index Ventures Skip to main content Team Philosophy Companies Perspectives Resources Team Philosophy Companies Perspectives Resources Find a team member, compa</td>
+</tr>
+</tbody>
+</table><div class='disc avoid'><h3>Disclaimer and publisher's exclusion</h3><p>Published by TRIAGE for general information. Impersonal; not investment advice, a recommendation, or an offer or solicitation to buy or sell any security. Not tailored to any reader; intended to fall within the publisher's exclusion of section 202(a)(11)(D) of the US Investment Advisers Act of 1940. Facts are drawn from public filings and registries linked in the text; statements by parties are allegations; scenario figures are labelled assumptions. Companies only; no personal data.</p></div></body></html>
