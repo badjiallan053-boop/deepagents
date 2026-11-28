@@ -1,0 +1,1010 @@
+<!doctype html><html><head><meta charset='utf-8'><title>Control bottleneck: who decides, and what a seat costs</title><style>
+@page { size: Letter; margin: 18mm 15mm 16mm 15mm;
+  @top-left { content: "TRIAGE  |  Special Situations Research"; font: 600 7pt 'Inter'; letter-spacing: .14em; color: #8a929c; }
+  @top-right { content: string(doctitle); font: 500 7pt 'Inter'; color: #8a929c; }
+  @bottom-left { content: "Not investment advice. See disclaimer on the final page."; font: 400 6.5pt 'Inter'; color: #8a929c; }
+  @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 500 7pt 'JetBrains Mono'; color: #8a929c; } }
+@page :first { @top-left { content: none } @top-right { content: none } }
+:root { --ink:#0d1218; --mute:#5b6570; --dim:#8a929c; --line:#d9dde2; --amber:#c97d06; --amberbg:#fff6e5; --navy:#0b0f14; --up:#1d8a52; --down:#c53340; --info:#1f6fd1; --violet:#6d4fd8; }
+* { box-sizing: border-box; }
+html { font-family: 'Inter', 'IBM Plex Sans', Arial, sans-serif; font-size: 9pt; color: var(--ink); line-height: 1.45; font-feature-settings: "tnum" 1; }
+body { margin: 0; }
+h1,h2,h3 { font-family: 'Inter Tight','Inter',sans-serif; letter-spacing: -.01em; margin: 0; }
+.doctitle { string-set: doctitle content(); }
+h2 { font-size: 13pt; margin: 14pt 0 5pt; padding-top: 6pt; border-top: 2px solid var(--navy); }
+h2 .n { color: var(--amber); font-family: 'JetBrains Mono', monospace; font-size: 9pt; margin-right: 6pt; vertical-align: 1pt; }
+h3 { font-size: 9.5pt; margin: 9pt 0 3pt; text-transform: uppercase; letter-spacing: .08em; color: var(--mute); }
+p { margin: 0 0 5pt; text-align: left; }
+.wm { display: inline-flex; align-items: center; gap: 6px; } .wm b { font: 700 11pt 'JetBrains Mono', monospace; letter-spacing: .32em; }
+.cover { background: var(--navy); color: #e8ecf0; margin: 0 0 4pt; padding: 9mm 10mm 7mm; border-radius: 2px; } .cover .wm b { color: #fff; }
+.cover .kick { color: #f5a524; font: 600 7.5pt 'Inter'; letter-spacing: .16em; text-transform: uppercase; margin-top: 7mm; }
+.cover h1 { font-size: 22pt; line-height: 1.12; margin: 4pt 0 6pt; color: #fff; max-width: 165mm; }
+.cover .sub { color: #aab3bd; font-size: 10pt; max-width: 160mm; }
+.cover .meta { display: flex; gap: 18pt; margin-top: 10pt; padding-top: 8pt; border-top: 1px solid #26303b; font-size: 7.5pt; color: #8f99a4; }
+.cover .meta b { display: block; color: #e8ecf0; font: 600 8.5pt 'JetBrains Mono', monospace; margin-top: 1pt; }
+.view { border-left: 3px solid var(--amber); background: var(--amberbg); padding: 7pt 9pt; margin: 9pt 0; }
+.view .lbl { font: 700 7pt 'Inter'; letter-spacing: .14em; color: var(--amber); text-transform: uppercase; }
+.view p { font-size: 10pt; margin: 2pt 0 0; }
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12pt; } .cols3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10pt; }
+.kpis { display: grid; grid-template-columns: repeat(5, 1fr); border: 1px solid var(--line); margin: 8pt 0; }
+.kpi { padding: 5pt 7pt; border-right: 1px solid var(--line); } .kpi:last-child { border-right: 0; }
+.kpi .l { font: 600 6.5pt 'Inter'; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); }
+.kpi .v { font: 600 13pt 'JetBrains Mono', monospace; margin-top: 2pt; } .kpi .s { font-size: 7pt; color: var(--mute); }
+table { width: 100%; border-collapse: collapse; margin: 4pt 0 8pt; font-size: 8pt; page-break-inside: auto; }
+thead th { font: 600 6.8pt 'Inter'; text-transform: uppercase; letter-spacing: .07em; color: var(--mute); text-align: left; border-bottom: 1.2px solid var(--navy); padding: 3pt 4pt; }
+td { padding: 3pt 4pt; border-bottom: .5px solid var(--line); vertical-align: top; } tr { page-break-inside: avoid; }
+td.r, th.r { text-align: right; } .num, td.r { font-family: 'JetBrains Mono', monospace; font-size: 7.6pt; }
+tr.tot td { font-weight: 700; border-top: 1px solid var(--navy); border-bottom: 0; }
+.fn { font-size: 6.8pt; color: var(--mute); } sup.f { font: 600 6pt 'JetBrains Mono'; color: var(--info); }
+.badge { display: inline-block; font: 700 6pt 'Inter'; letter-spacing: .08em; padding: 1pt 3pt; border-radius: 2px; text-transform: uppercase; border: .6px solid; white-space: nowrap; }
+.b-VERIFIED { color: var(--up); border-color: var(--up); } .b-CORRECTED { color: var(--amber); border-color: var(--amber); }
+.b-ALLEGATION { color: var(--violet); border-color: var(--violet); } .b-ASSUMPTION { color: var(--info); border-color: var(--info); } .b-UNVERIFIABLE { color: var(--dim); border-color: var(--dim); }
+.chart { margin: 4pt 0 2pt; page-break-inside: avoid; } h2, h3, .cap { page-break-after: avoid; } .chart svg { width: 100%; height: auto; display: block; }
+.cap { font: 600 7pt 'Inter'; color: var(--mute); text-transform: uppercase; letter-spacing: .08em; margin-top: 6pt; }
+.src { font-size: 6.6pt; color: var(--dim); margin-bottom: 6pt; }
+.box { border: 1px solid var(--line); padding: 6pt 8pt; margin: 6pt 0; } .box h3 { margin-top: 0; }
+ul { margin: 2pt 0 6pt; padding-left: 12pt; } li { margin: 1.5pt 0; }
+.pb { page-break-before: always; } .avoid { page-break-inside: avoid; }
+a { color: var(--info); text-decoration: none; word-break: break-all; }
+.disc { font-size: 6.8pt; color: var(--mute); line-height: 1.4; } .disc h3 { color: var(--ink); }
+.tl { position: relative; margin: 4pt 0 6pt 4pt; border-left: 1.2px solid var(--line); }
+.tl .e { position: relative; padding: 0 0 4.5pt 10pt; } .tl .e:before { content: ""; position: absolute; left: -4px; top: 3pt; width: 7px; height: 7px; border-radius: 50%; background: var(--navy); }
+.tl .e.f:before { background: #fff; border: 1.5px solid var(--amber); }
+.tl .d { font: 600 7.5pt 'JetBrains Mono', monospace; color: var(--mute); } .tl .e.f .d { color: var(--amber); }
+ table { font-size: 7pt; } td { word-break: break-word; } img { max-width: 100%; }</style></head><body><div class='cover'><span class="wm"><svg width="18" height="18" viewBox="0 0 32 32"><rect width="32" height="32" rx="5" fill="#f5a524"/><path d="M8 9h16v3h-6.5v12h-3V12H8z" fill="#0b0f14"/></svg><b>TRIAGE</b></span><div class='kick'>Special situations · control analysis · 22 Oct 2026</div><h1 class='doctitle'>Control bottleneck: who decides, and what a seat costs</h1><div class='sub'>Hughes 26-90739 voting math, paths to control and five capital playbooks; Fresno CMBS, Loparex, BayWa and Branicks chokepoints; CMBS directing holders.</div><div class='meta'><div>As of<b>22 Oct 2026</b></div><div>Facts verified<b>25/25</b></div><div>Directing holders<b>50/102</b></div><div>Next date<b>1 Dec 2026</b></div></div></div>
+<h2><span class="n">01</span>The answer in one page</h2>
+<p><strong>Hughes (26-90739) has one chokepoint, and it is already owned.</strong> The Noteholder Group's disclosed positions (more than 61.6% of the secured notes, more than 84.37% of the unsecured notes) give it, simultaneously:</p>
+<ul>
+<li>the <strong>blocking and carrying vote in both note classes</strong> under §1126(c)[CB01][CB02];</li>
+<li>the <strong>cash-collateral trigger</strong>: the "Required Prepetition Secured Parties" are the majority of secured notes, and EchoStar XXIV is named without a vote[CB05]. The order runs only through <strong>23 Oct 2026</strong>[CB06], so the Group re-prices the Debtors' liquidity every few weeks;</li>
+<li>a <strong>veto on any new EchoStar/Debtor transaction</strong> and on settling estate claims outside mediation, under the 20 Sep stipulated order[CB11][CB12].</li>
+</ul>
+<p>The float the Group does not own is too small to block either class. Non-Group third parties hold at most <strong>$165.3m of the secured notes</strong> and <strong>$117.2m of the unsecured notes</strong>. Blocking needs more than $209.1m and $250.0m respectively. <strong>An outsider cannot buy a blocking position in the market. It can only buy one from Group members, or join the Group.</strong></p>
+<p>The counter-chokepoint belongs to <strong>EchoStar (the parent)</strong>. It owns the J3 satellite through non-debtor EchoStar XXIV, holds $172.7m of secured claims, and controls the Debtors' board until exclusivity ends. Its claims are the target of the examiner's equitable-subordination brief[CB08][CB10]. As of 16 Oct, though, the order recites that <strong>no examiner had yet been appointed</strong>[CB07]. The three dates that decide control are <strong>23 Oct</strong> (cash collateral), <strong>1 Dec</strong> (exclusivity hearing) and the <strong>lien-challenge deadline</strong>.</p>
+<p><strong>What a billionaire would do (judgement):</strong> not fight the Group. Instead, (1) buy into it through a member's position, or (2) take the one seat it does not hold: <strong>litigation-trust funder</strong> or <strong>bidder for the post-exit equity / sale process</strong>. In the side situations the same logic gives:
+- <strong>Fresno</strong>: about $11.2m of CMBS class F controls the directing seat on a $325m loan.
+- <strong>Branicks</strong>: more than 50% of a €400m bond can waive the broken shareholder condition.
+- <strong>BayWa</strong>: more than 25% of the votes cast blocks the hybrid.
+- <strong>Loparex</strong>: the lenders who led the out-of-court recapitalisation already own the outcome.</p>
+<h2><span class="n">02</span>Hughes: voting math, class by class</h2>
+<p>The rule is §1126(c): a class accepts if creditors holding <strong>at least two-thirds in amount and more than half in number of the claims that actually vote</strong> accept. Votes designated under §1126(e) are excluded (<a href="https://www.law.cornell.edu/uscode/text/11/1126">law.cornell.edu/uscode/text/11/1126</a>). A plan also needs one impaired accepting class, <strong>counted without insider votes</strong>[CB14].</p>
+<p>Prices are the issuer's reported fair values at 30 Jun 2026: <strong>85.6</strong> secured, <strong>58.0</strong> unsecured[CB03][CB04]. These are Level-2 estimates, not trades. Group holdings are the disclosed minimums.</p>
+<table>
+<thead>
+<tr>
+<th>Class</th>
+<th>Amount voting ($m, assumes 100% turnout)</th>
+<th>Block threshold (&gt;1/3)</th>
+<th>Cost of block at FV</th>
+<th>Group holding (min)</th>
+<th>Group blocks?</th>
+<th>Group carries alone?</th>
+<th>Max float outside Group/insider</th>
+<th>Outside float can block?</th>
+<th>Likely blocker</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Secured Notes, all holders vote (EchoStar not designated)</td>
+<td class='r'>750.0</td>
+<td class='r'>$250.0m</td>
+<td class='r'>$213.9m</td>
+<td class='r'>$462.0m</td>
+<td>yes</td>
+<td>no</td>
+<td class='r'>$165.3m</td>
+<td>no</td>
+<td>Noteholder Group</td>
+</tr>
+<tr>
+<td>Secured Notes, EchoStar votes designated/separately classed</td>
+<td class='r'>627.3</td>
+<td class='r'>$209.1m</td>
+<td class='r'>$178.9m</td>
+<td class='r'>$462.0m</td>
+<td>yes</td>
+<td>yes</td>
+<td class='r'>$165.3m</td>
+<td>no</td>
+<td>Noteholder Group</td>
+</tr>
+<tr>
+<td>6.625% Senior Notes (unsecured)</td>
+<td class='r'>750.0</td>
+<td class='r'>$250.0m</td>
+<td class='r'>$145.0m</td>
+<td class='r'>$632.8m</td>
+<td>yes</td>
+<td>yes</td>
+<td class='r'>$117.2m</td>
+<td>no</td>
+<td>Noteholder Group</td>
+</tr>
+<tr>
+<td>EchoStar intercompany (J3 $50m secured + $1m unsecured)</td>
+<td class='r'>51.0</td>
+<td class='r'>$17.0m</td>
+<td>n/a (single insider holder)</td>
+<td class='r'>$0.0m</td>
+<td>no</td>
+<td>no</td>
+<td class='r'>$0.0m</td>
+<td>no</td>
+<td>EchoStar (insider)</td>
+</tr>
+<tr>
+<td>Trade / general unsecured</td>
+<td>not disclosed in documents retrieved</td>
+<td>–</td>
+<td>–</td>
+<td>–</td>
+<td>–</td>
+<td>–</td>
+<td>–</td>
+<td>–</td>
+<td>Gap: schedules not retrieved. The Group term sheet keeps trade claims unimpaired up to a cap, and an unimpaired class is deemed to accept (§1126(f)), so it <strong>does not vote</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>How to read it.</strong>
+- <strong>Secured class.</strong> EchoStar's $122.7m is 16.4% of the class and cannot block alone in amount. If EchoStar is designated, as DISH was in DBSD (below), the class shrinks to $627.3m. The Group then holds 73.71% and carries the class by itself[CB02]. <strong>But if EchoStar is <em>not</em> designated, the Group (≥$462.0m) falls short of the $500m needed to carry the full class alone. EchoStar ($122.7m) plus at least about $127.3m of the ≤$165.3m non-Group float (more than $250m in total) could block. That makes designation of EchoStar's vote the real swing in the secured class, and makes the remaining non-Group secured holders the kingmakers (judgement).</strong>
+- <strong>Numerosity is the only soft spot.</strong> "More than half in number" counts holders, not dollars. The member count on Exhibit A of ECF 154 was <strong>not retrievable</strong> (not on RECAP; the Epiq site needs JavaScript)[CB13]. A plan sponsor facing a Group of fewer than about 10 funds could in theory be out-voted by number if many small holders voted against it. Judgement: this is unlikely for institutional 144A notes, where holders vote through DTC participants and turnout among small holders is low.
+- <strong>Turnout lowers every threshold.</strong> If only 70% of the secured class votes, blocking needs just $175.0m. The Group's position only gets more dominant.
+- <strong>EchoStar intercompany class.</strong> EchoStar can make this class reject (cost: nothing, it owns the claim). But its acceptance cannot satisfy §1129(a)(10)[CB14], and a rejecting class can be crammed down if the plan is fair and equitable. Its real leverage is economic, not legal: <strong>J3</strong>. The satellite sits outside the estate. The Group plan rejects the lease unless EchoStar XXIV modifies it, so Hughes needs replacement capacity or a renegotiated lease.</p>
+<h2><span class="n">03</span>Paths to control (likelihoods are judgement, not forecasts)</h2>
+<table>
+<thead>
+<tr>
+<th>Path</th>
+<th>Who benefits</th>
+<th>Likelihood (judgement)</th>
+<th>Cost</th>
+<th>Timeline</th>
+<th>Precedent / authority</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Exclusivity terminated at the 1 Dec hearing</td>
+<td>Noteholder Group</td>
+<td>45–60%</td>
+<td>Legal fees only; the Group already filed a term sheet (Dkt 320)</td>
+<td>Ruling at or after 1 Dec 2026</td>
+<td>§1121(d) "for cause"[CB18]; the stay of exclusivity litigation was negotiated, not imposed[CB11]</td>
+</tr>
+<tr>
+<td>Competing Group plan confirmed (debt-for-equity + litigation trust)</td>
+<td>Group</td>
+<td>35–50% conditional on termination</td>
+<td>Bridge DIP + exit ABL (sizes not disclosed)</td>
+<td>Group milestones: file in 20 days, disclosure statement in 40 days, confirmation 30 days after that, so about Q1–Q2 2027</td>
+<td>Group controls both note classes (section 2); cramdown of EchoStar classes</td>
+</tr>
+<tr>
+<td>Credit bid of secured collateral</td>
+<td>Secured holders (Group-directed)</td>
+<td>15–25%</td>
+<td>Up to ~$800m of All-Asset Secured Claims can be bid; cash only for senior costs</td>
+<td>3–6 months + FCC</td>
+<td>§363(k)[CB16]. The $50m J3 advance shares the collateral[CB09], so who credit-bids first is itself a fight</td>
+</tr>
+<tr>
+<td>Buying EchoStar's intercompany claims</td>
+<td>Third party</td>
+<td>&lt;10%</td>
+<td>~$172.7m face; price unknowable</td>
+<td>–</td>
+<td>DBSD: buying debt for strategic control risks designation</td>
+</tr>
+<tr>
+<td>Equitable subordination / recharacterization of the $172.7m</td>
+<td>Third-party secured, then unsecured</td>
+<td>30–50% (any portion subordinated)</td>
+<td>Litigation cost; examiner budget</td>
+<td>Examiner interim reports every 45 days once appointed</td>
+<td>§510(c)[CB15]; examiner scope[CB10]; LightSquared (affiliate claim subordinated <strong>to the extent of harm</strong>, not disallowed)</td>
+</tr>
+<tr>
+<td>Examiner findings move the negotiation</td>
+<td>Committee + Group</td>
+<td>High influence, low direct control</td>
+<td>Estate-funded</td>
+<td>Examiner not yet appointed as of 16 Oct[CB07]</td>
+<td>Order defining scope, Dkt 339</td>
+</tr>
+<tr>
+<td>DIP roll-up</td>
+<td>DIP lender (a Group member)</td>
+<td>30–45% if exclusivity ends</td>
+<td>DIP size undisclosed; illustrative $100–200m</td>
+<td>With plan filing</td>
+<td>Serta (5th Cir. 2024): a non-pro-rata uptier was not an "open market purchase", and the indemnity was struck. Incora/Wesco: liens restored where the 2/3 vote was lacking. Mitel: an NY uptier was upheld. <strong>Any in-court roll-up is court-supervised, so these cases set the fairness bar, not the mechanics</strong></td>
+</tr>
+<tr>
+<td>363 sale of spectrum / satellite assets</td>
+<td>Highest bidder, often the secured credit bid</td>
+<td>20–35%</td>
+<td>Market price (illustrative EV $350–900m, Hughes note A2)</td>
+<td>6–12 months; FCC licence transfer approval needed</td>
+<td>Group plan builds in a one-year post-effective sale process (Dkt 320). DISH DBS (sister subsidiary) emerged on 1 Oct 2026 via its own Chapter 11</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Precedents (primary).</strong>
+- <strong>DBSD</strong> (2d Cir. 2011): DISH's vote was designated after it bought the first-lien class to obtain strategic assets. <a href="https://law.justia.com/cases/federal/appellate-courts/ca2/4104292/634-f3d-79.html">law.justia.com/cases/federal/a…-f3d-79.html</a>
+- <strong>LightSquared</strong> (Bankr. S.D.N.Y., 10 Jun 2014): SPSO, the controlling shareholder's vehicle, bought about $844m of debt. The claim was not disallowed, but was subordinated to the extent of injury. <a href="https://www.nysb.uscourts.gov/sites/default/files/opinions/241628_165_opinion.pdf">nysb.uscourts.gov/sites/defaul…_opinion.pdf</a>
+- <strong>Serta</strong> (5th Cir., 31 Dec 2024). <a href="https://www.ca5.uscourts.gov/opinions/pub/23/23-20181-CV0.pdf">ca5.uscourts.gov/opinions/pub/…0181-CV0.pdf</a>
+- <strong>Mitel</strong> (App. Div. 1st Dept, 31 Dec 2024). <a href="https://law.justia.com/cases/new-york/appellate-division-first-department/2024/index-no-651327-23-appeal-no-2918-case-no-2024-00169.html">law.justia.com/cases/new-york/…4-00169.html</a>
+- <strong>Incora/Wesco</strong> (S.D. Tex.). <a href="https://caselaw.findlaw.com/court/us-ban-crt-s-d-tex-hou-div/116894389.html">caselaw.findlaw.com/court/us-b…6894389.html</a>
+- <strong>DISH DBS emergence</strong> (8-K, 1 Oct 2026). <a href="https://www.sec.gov/Archives/edgar/data/1415404/000141540426000048/sats-20261001x8k.htm">sec.gov/Archives/edgar/data/14…61001x8k.htm</a></p>
+<p>The DBSD and LightSquared lessons point both ways in this case. EchoStar's group has itself been on the buying side of these tactics. That raises the probability (judgement) that its own $122.7m note purchase is designated or subordinated.</p>
+<h2><span class="n">04</span>Five billionaire playbooks</h2>
+<p>Every number in this section is an <strong>assumption</strong> unless it carries a CB reference. Returns are gross, before fees and financing, and illustrative.</p>
+<h3>(a) Blocking position in the secured notes</h3>
+<table>
+<thead>
+<tr>
+<th>Capital needed</th>
+<th>Return range</th>
+<th>Risks and legal constraints</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Needs &gt;$209.1m face (EchoStar designated) ≈ <strong>$178.9m</strong> at 85.6. The available non-Group float is at most $165.3m, so the block <strong>must include bonds bought from Group members</strong></td>
+<td>Buy at 85.6. Low 41 / base 84 / high 100 cents (Hughes note model) gives <strong>−52% / −2% / +17%</strong>. The block itself pays only if it extracts consideration, and that is exactly what §1126(e) punishes</td>
+<td>Bad-faith designation (DBSD). Rule 2019 disclosure if acting as a group{f('CB17')}. MNPI if the bonds are bought from restricted Group members (cleansing needed)</td>
+</tr>
+</tbody>
+</table>
+<h3>(b) Fund the litigation trust</h3>
+<table>
+<thead>
+<tr>
+<th>Capital needed</th>
+<th>Return range</th>
+<th>Risks and legal constraints</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>$25–50m</strong> commitment (assumption) for 20–35% of net proceeds (assumption, market-typical)</td>
+<td>Claims in examiner scope: $1.029bn dividends + ~$196m tax payments, <strong>alleged</strong>{f('CB08')}. Net trust proceeds low 0 / base 150 / high 400 ($m, Hughes note A3) → funder at 30% earns <strong>0 / $45m / $120m</strong> on $35m, i.e. <strong>−100% / 1.3x / 3.4x</strong> over 2–4 years</td>
+<td>Funding terms need court and plan approval. Settlement of EchoStar claims outside mediation is frozen{f('CB11')}. LightSquared shows partial, not total, subordination</td>
+</tr>
+</tbody>
+</table>
+<h3>(c) Bridge DIP</h3>
+<table>
+<thead>
+<tr>
+<th>Capital needed</th>
+<th>Return range</th>
+<th>Risks and legal constraints</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>$100–200m</strong> (assumption; Group alleges ~$91m of deferred J3 payments and fees and no unencumbered cash, Dkt 534)</td>
+<td>Coupon 12–15% + 2–4% fees (assumption) → <strong>14–19% annualised</strong>, super-priority. Roll-up optionality only if the lender also holds secured notes</td>
+<td>Priming requires adequate protection or consent of the Required Prepetition Secured Parties, i.e. the Group{f('CB05')}. <strong>A third-party DIP is not executable without the Group.</strong> Serta/Incora fairness scrutiny of any roll-up</td>
+</tr>
+</tbody>
+</table>
+<h3>(d) Buy trade / admin claims</h3>
+<table>
+<thead>
+<tr>
+<th>Capital needed</th>
+<th>Return range</th>
+<th>Risks and legal constraints</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Trade pool size <strong>unknown</strong> (gap). Admin claims are mostly professionals' fees and EchoStar XXIV's deferred J3 rent, which is not tradable at scale</td>
+<td>If trade stays unimpaired up to the Group's cap: buy at 60–85 (assumption), receive par → <strong>+18% to +67%</strong>. Above the cap, recovery falls to the unsecured waterfall</td>
+<td>Near-zero control value: an unimpaired class does not vote. Bankruptcy Rule 3001(e) transfer notices; claim-objection risk travels with the claim</td>
+</tr>
+</tbody>
+</table>
+<h3>(e) Bid for the assets</h3>
+<table>
+<thead>
+<tr>
+<th>Capital needed</th>
+<th>Return range</th>
+<th>Risks and legal constraints</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Enterprise value <strong>$350–900m</strong> (Hughes note A2). A cash bid must beat a credit bid of up to ~$800m secured face{f('CB16')}</td>
+<td>Equity upside only if bought below base EV ($600m). Subscriber base −21.7% YoY (Hughes note), so the case is distressed-operating, not a spectrum arbitrage</td>
+<td>FCC licence-transfer approval. J3 is owned by <strong>non-debtor</strong> EchoStar XXIV, so a buyer must also deal with the parent. §363(k) credit-bid priority</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Legal constraints common to all five.</strong>
+- <strong>MNPI.</strong> Group members sign NDAs and trade behind walls; an outsider buying from them must get them "cleansed". Trading on Debtor or EchoStar MNPI violates Rule 10b-5.
+- <strong>Rule 2019.</strong> Anyone acting in concert must disclose every "disclosable economic interest", including derivatives[CB17].
+- <strong>§1126(e).</strong> Votes bought to obtain a non-creditor advantage can be designated (DBSD).
+- <strong>Insider status.</strong> Anyone affiliated with EchoStar cannot supply the impaired accepting class[CB14].</p>
+<p><strong>Ranking (judgement).</strong> Highest risk-adjusted control: <strong>(b) the litigation trust</strong>, because it is the one valuable seat the Group does not already own. Next is <strong>(e)</strong>, but only as a partner of the Group's sale process. <strong>(c)</strong> works only through a Group member. <strong>(a)</strong> is effectively unavailable. <strong>(d)</strong> is yield, not control.</p>
+<h2><span class="n">05</span>Fresno Fashion Fair (CMBS): the B-piece holds the pen</h2>
+<ul>
+<li><strong>The loan.</strong> Fresno Fashion Fair is a $325m whole loan; the $60m A-1-A note sits in JPMDB 2016-C4 at 3.587% and matures 1 Nov 2026[CB19]. It moved to special servicing on 29 Jul 2026 for imminent monetary default. Rialto, the special servicer, is finalising a Pre-Negotiation Letter with the sponsor, Macerich[CB20].</li>
+<li><strong>Who controls.</strong></li>
+<li>The trust is the controlling noteholder for the whole loan.</li>
+<li>The <strong>Directing Certificateholder is Cytium Investment Management</strong>[CB21]. At issuance it was BlackRock Realty Advisors, which bought Classes E, F and NR and appointed the special servicer[CB22].</li>
+<li>The controlling class is <strong>F: $11.244m face, now receiving zero interest</strong>.</li>
+<li><strong>The chokepoint math.</strong> About <strong>$11.2m of face directs workout, extension or foreclosure consent on a $325m loan: a 29x lever</strong>. The holder can also replace the special servicer, subject to appraisal-reduction control-shift tests. Judgement: if appraisal reductions erase class F, control shifts up to class E ($22.5m), so a buyer must model the appraisal.</li>
+<li><strong>Billionaire move (assumption).</strong> Buy class F + E (about $34m face) at deep discount from the current holder, then drive a negotiated extension with Macerich. The alternative is to buy the companion notes held in other trusts, which carry no control.</li>
+</ul>
+<h2><span class="n">06</span>Loparex: control already exercised out of court</h2>
+<ul>
+<li><strong>The lender's position.</strong> OBDC holds second-lien positions of $112m and $21m, marked 61 → 5. Its first-lien pieces are small: $4.12m at 21.5 and $0.78m at 102.6 (30 Jun 2026).</li>
+<li><strong>The recap.</strong> Loparex announced a recapitalisation on 8 Sep 2026, <strong>led by Monarch Alternative Capital and Atlantic Park</strong>, expected to close in Q4 2026. <a href="https://loparex.com/loparex-announces-comprehensive-recapitalization-and-strategic-capital-support-to-advance-next-stage-of-growth/">loparex.com/loparex-announces-…e-of-growth/</a></li>
+<li><strong>Second-lien and first-lien treatment.</strong> Secondary press reports the second lien goes to zero and about half of the first lien converts to equity. <strong>This is not confirmed by a primary source.</strong></li>
+<li><strong>No WHOA filing was found.</strong> The chokepoint was the majority-lender consent under the first-lien credit agreement. It has been used, and the BDC 2L holders were not on the deciding side.</li>
+<li><strong>Lesson.</strong> In private credit, control sits with whoever holds the required-lender percentage of the senior tranche, not with the largest BDC mark.</li>
+</ul>
+<h2><span class="n">07</span>BayWa (Kronos EKS €100m hybrid): the 25% blocker</h2>
+<ul>
+<li><strong>The rule.</strong> Under §5(4) SchVG, material amendments need <strong>75% of votes cast</strong>. The first vote needs a quorum of 50% of outstanding notes (§15(3)); the second meeting needs 25%. <a href="https://www.gesetze-im-internet.de/schvg/__5.html">gesetze-im-internet.de/schvg/__5.html</a> <a href="https://www.gesetze-im-internet.de/schvg/__15.html">gesetze-im-internet.de/schvg/__15.html</a></li>
+<li><strong>The October vote.</strong> The 12–14 Oct vote was <strong>quorate, yet neither the issuer's resolutions nor the countermotions passed</strong>[CB23].</li>
+<li><strong>Minimum blocking stake.</strong> At minimum participation (50 of €100m), more than <strong>€12.5m</strong> blocks. At full participation, more than €25m.</li>
+<li><strong>Second meeting.</strong> At its 25% quorum, as little as <strong>€6.25m</strong> can block.</li>
+<li><strong>Judgement.</strong> A €6–15m holder, buying hybrids at distressed prices, has a veto on a €100m write-down. That is the cheapest control seat in this set.</li>
+</ul>
+<h2><span class="n">08</span>Branicks: the 50% waiver and the shareholder veto</h2>
+<ul>
+<li><strong>What creditors approved.</strong> Creditors approved the restructuring of the €400m 2.25% bond (M05: 99% of votes cast).</li>
+<li><strong>What shareholders blocked.</strong> The 9 Oct EGM <strong>did not approve</strong> the consultancy agreements (agenda item 4), so Implementation Condition 2 failed[CB24].</li>
+<li><strong>The way around it.</strong> Holders of <strong>more than 50% of the outstanding principal (&gt;€200m)</strong> can instruct MR Treuhand to waive any condition except 6 and 7[CB25].</li>
+<li><strong>Where the chokepoint sits.</strong> It is a <strong>€200m+ coalition of noteholders</strong>, not the shareholders.</li>
+<li><strong>Judgement.</strong> The anchor holders who negotiated the deal (not named in the primary text) already sit close to that line. An outsider with 10–15% can bargain for consideration but cannot stop a waiver.</li>
+</ul>
+<h2><span class="n">09</span>CMBS directing holders found in the filings</h2>
+<p>Source: the latest 10-D Exhibit 99.1 for each trust, parsed by cmbs_control.py. <strong>50 of 102 trusts named a directing holder or controlling class representative.</strong> Computershare-format BMO and several other trusts print no name in the 10-D. Names are entities as printed; "Pacific Design Center" (Benchmark 2023-B38) looks like a loan label, not a holder, and is flagged.</p>
+<table>
+<thead>
+<tr>
+<th>Trust</th>
+<th>Label</th>
+<th>Directing holder / CCR</th>
+<th>Special servicer</th>
+<th>Controlling class</th>
+<th>Class balance ($m)</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>JPMDB Commercial Mortgage Securities Trust 2016-C4</td>
+<td>Directing Certificateholder</td>
+<td>Cytium Investment Management</td>
+<td>Rialto Capital Advisors, LLC</td>
+<td>F</td>
+<td class='r'>11.2</td>
+<td>https://www.sec.gov/Archives/edgar/data/1687202/000188852426017398/jpc16c04_ex991-202609.htm</td>
+</tr>
+<tr>
+<td>Benchmark 2025-V17 Mortgage Trust</td>
+<td>Directing Holder</td>
+<td>400 Capital Management LLC</td>
+<td>Torchlight Loan Services, LLC</td>
+<td>J-RR</td>
+<td class='r'>29.1</td>
+<td>https://www.sec.gov/Archives/edgar/data/2063065/000188852426018265/bmk25v17_ex991-202609.htm</td>
+</tr>
+<tr>
+<td>DBGS 2018-C1 Mortgage Trust</td>
+<td>Directing Holder</td>
+<td>RREF III-D AIV RR, LLC</td>
+<td>Rialto Capital Advisors, LLC</td>
+<td></td>
+<td>–</td>
+<td>https://www.sec.gov/Archives/edgar/data/1752363/000188852426018213/dma18001_ex991-202609.htm</td>
+</tr>
+<tr>
+<td>BMO 2025-5C10 Mortgage Trust</td>
+<td>Controlling Class Representative</td>
+<td>RREF V - D AIV RR L, LLC</td>
+<td>Rialto Capital Advisors, LLC</td>
+<td>J-RR</td>
+<td>–</td>
+<td>https://www.sec.gov/Archives/edgar/data/2057363/000162829726000885/ex99_1.htm</td>
+</tr>
+<tr>
+<td>BENCHMARK 2021-B27 MORTGAGE TRUST</td>
+<td>Controlling Class Representative</td>
+<td>KKR Real Estate Credit Opportunity Partners II L.P</td>
+<td>Midland Loan Services, a Division of PNC Bank N.A.</td>
+<td></td>
+<td>–</td>
+<td>https://www.sec.gov/Archives/edgar/data/1862080/000162829726000795/ex99_1.htm</td>
+</tr>
+<tr>
+<td>Benchmark 2018-B7 Mortgage Trust</td>
+<td>Directing Holder</td>
+<td>Eightfold Real Estate Capital, L.P</td>
+<td>LNR Partners, LLC</td>
+<td>H-RR</td>
+<td class='r'>11.3</td>
+<td>https://www.sec.gov/Archives/edgar/data/1757018/000188852426018251/dma18b07_ex991-202609.htm</td>
+</tr>
+<tr>
+<td>BMO 2025-C12 Mortgage Trust</td>
+<td>Controlling Class Representative</td>
+<td>RREF V - D AIV RR L, LLC</td>
+<td>Rialto Capital Advisors, LLC</td>
+<td>J-RR</td>
+<td>–</td>
+<td>https://www.sec.gov/Archives/edgar/data/2061839/000162829726000887/ex99_1.htm</td>
+</tr>
+<tr>
+<td>Benchmark 2019-B10 Mortgage Trust</td>
+<td>Directing Holder</td>
+<td>ES Ventures Holding, Inc</td>
+<td>Argentic Services Company LP</td>
+<td>H</td>
+<td class='r'>35.6</td>
+<td>https://www.sec.gov/Archives/edgar/data/1766367/000188852426018209/dma19b10_ex991-202609.htm</td>
+</tr>
+<tr>
+<td>CD 2018-CD7 Mortgage Trust</td>
+<td>Directing Holder</td>
+<td>RREF III-D AIV RR H, LLC</td>
+<td>Rialto Capital Advisors, LLC</td>
+<td>H-RR</td>
+<td class='r'>30.5</td>
+<td>https://www.sec.gov/Archives/edgar/data/1746406/000188852426018207/cdd18cd7_ex991-202609.htm</td>
+</tr>
+<tr>
+<td>CITIGROUP COMMERCIAL MORTGAGE TRUST 2020-GC46</td>
+<td>Controlling Class Representative</td>
+<td>Eightfold Real Estate Capital, L.P</td>
+<td>CWCapital</td>
+<td>J-RR</td>
+<td>–</td>
+<td>https://www.sec.gov/Archives/edgar/data/1800294/000162829726000789/ex99_1.htm</td>
+</tr>
+<tr>
+<td>BENCHMARK 2019-B9 MORTGAGE TRUST</td>
+<td>Controlling Class Representative</td>
+<td>Prime Finance Long Duration (B-Piece) II, L.P</td>
+<td>LNR Partners, LLC</td>
+<td>H</td>
+<td>–</td>
+<td>https://www.sec.gov/Archives/edgar/data/1764759/000162829726000781/ex99_1.htm</td>
+</tr>
+<tr>
+<td>CD 2017-CD5 MORTGAGE TRUST</td>
+<td>Controlling Class Representative</td>
+<td>RREF III-D AIV RR, LLC</td>
+<td>Rialto Capital Advisors, LLC</td>
+<td>G</td>
+<td>–</td>
+<td>https://www.sec.gov/Archives/edgar/data/1710360/000162829726000779/ex99_1.htm</td>
+</tr>
+<tr>
+<td>CITIGROUP COMMERCIAL MORTGAGE TRUST 2017-P8</td>
+<td>Controlling Class Representative</td>
+<td>Prime Finance CMBS B-Piece Holdco X, L.P</td>
+<td>KeyBank National Association</td>
+<td>G</td>
+<td>–</td>
+<td>https://www.sec.gov/Archives/edgar/data/1715824/000162829726000775/ex99_1.htm</td>
+</tr>
+<tr>
+<td>Benchmark 2019-B13 Mortgage Trust</td>
+<td>Directing Holder</td>
+<td>Eightfold Real Estate Capital, L.P</td>
+<td></td>
+<td>H-RR</td>
+<td class='r'>24.5</td>
+<td>https://www.sec.gov/Archives/edgar/data/1785881/000188852426018287/dma19b13_ex991-202609.htm</td>
+</tr>
+<tr>
+<td>Benchmark 2020-B16 Mortgage Trust</td>
+<td>Directing Holder</td>
+<td>ECMBS LLC</td>
+<td>Argentic Services Company LP</td>
+<td>H</td>
+<td class='r'>26.7</td>
+<td>https://www.sec.gov/Archives/edgar/data/1797288/000188852426018307/dma20b16_ex991-202609.htm</td>
+</tr>
+<tr>
+<td>CD 2019-CD8 Mortgage Trust</td>
+<td>Directing Holder</td>
+<td>Eightfold Real Estate Capital, L.P</td>
+<td></td>
+<td>H-RR</td>
+<td class='r'>16.7</td>
+<td>https://www.sec.gov/Archives/edgar/data/1782003/000188852426018277/dma19cd8_ex991-202609.htm</td>
+</tr>
+<tr>
+<td>BBCMS Mortgage Trust 2024-C26</td>
+<td>Directing Certificateholder</td>
+<td>RREF V-D AIV RR H, LLC</td>
+<td>Rialto Capital Advisors, LLC</td>
+<td>H-RR</td>
+<td class='r'>36.5</td>
+<td>https://www.sec.gov/Archives/edgar/data/2020017/000188852426018177/bcr24c26_ex991-202609.htm</td>
+</tr>
+<tr>
+<td>CFCRE 2017-C8 Mortgage Trust</td>
+<td>Controlling Class Representative</td>
+<td>RREF III-D CF 2017-C8, LLC</td>
+<td>Rialto Capital Advisors, LLC</td>
+<td></td>
+<td>–</td>
+<td>https://www.sec.gov/Archives/edgar/data/1703075/000188852426018097/ccr17c08_ex991-202609.htm</td>
+</tr>
+<tr>
+<td>Benchmark 2021-B30 Mortgage Trust</td>
+<td>Directing Holder</td>
+<td>LMCG Investments, LLC</td>
+<td>Torchlight Loan Services, LLC</td>
+<td>G</td>
+<td class='r'>9.0</td>
+<td>https://www.sec.gov/Archives/edgar/data/1885855/000188852426018227/bmk21b30_ex991-202609.htm</td>
+</tr>
+<tr>
+<td>BENCHMARK 2021-B23 MORTGAGE TRUST</td>
+<td>Controlling Class Representative</td>
+<td>LD II Holdco XV, LLC</td>
+<td>CWCapital</td>
+<td></td>
+<td>–</td>
+<td>https://www.sec.gov/Archives/edgar/data/1840644/000162829726000793/ex99_1.htm</td>
+</tr>
+<tr>
+<td>BBCMS Mortgage Trust 2021-C12</td>
+<td>Directing Certificateholder</td>
+<td>LD III Sub III, LLC</td>
+<td>LNR Partners, Inc.</td>
+<td>H-RR</td>
+<td class='r'>10.4</td>
+<td>https://www.sec.gov/Archives/edgar/data/1891818/000188852426017590/bcr21c12_ex991-202609.htm</td>
+</tr>
+<tr>
+<td>CITIGROUP COMMERCIAL MORTGAGE TRUST 2017-B1</td>
+<td>Controlling Class Representative</td>
+<td>Investin Pro RED Holdings, LLC</td>
+<td>LNR Partners, LLC</td>
+<td>H</td>
+<td>–</td>
+<td>https://www.sec.gov/Archives/edgar/data/1713393/000162829726000773/ex99_1.htm</td>
+</tr>
+<tr>
+<td>Benchmark 2021-B26 Mortgage Trust</td>
+<td>Directing Holder</td>
+<td>ES Ventures Holding, Inc</td>
+<td>Argentic Services Company LP</td>
+<td>J</td>
+<td class='r'>23.4</td>
+<td>https://www.sec.gov/Archives/edgar/data/1858289/000188852426018231/dma21b26_ex991-202609.htm</td>
+</tr>
+<tr>
+<td>BENCHMARK 2020-B19 MORTGAGE TRUST</td>
+<td>Controlling Class Representative</td>
+<td>RREF IV Debt AIV, L.P</td>
+<td>Fees. Reports Available at sf.citidirect.com v. 21.09.28 Page</td>
+<td></td>
+<td>–</td>
+<td>https://www.sec.gov/Archives/edgar/data/1821946/000162829726000791/ex99_1.htm</td>
+</tr>
+<tr>
+<td>BENCHMARK 2021-B31 MORTGAGE TRUST</td>
+<td>Controlling Class Representative</td>
+<td>RREF IV Debt AIV, LP</td>
+<td>Rialto Capital Advisors, LLC</td>
+<td>H</td>
+<td>–</td>
+<td>https://www.sec.gov/Archives/edgar/data/1894714/000162829726000797/ex99_1.htm</td>
+</tr>
+<tr>
+<td>BBCMS Mortgage Trust 2018-C2</td>
+<td>Directing Certificateholder</td>
+<td>LNR Securities Holdings, LLC</td>
+<td></td>
+<td>J-RR</td>
+<td class='r'>23.4</td>
+<td>https://www.sec.gov/Archives/edgar/data/1754913/000188852426017568/bcr18c02_ex991-202609.htm</td>
+</tr>
+<tr>
+<td>BENCHMARK 2019-B15 MORTGAGE TRUST</td>
+<td>Controlling Class Representative</td>
+<td>Eightfold Real Estate Capital, L.P</td>
+<td>Fees. Reports Available at sf.citidirect.com v. 21.09.28 Page</td>
+<td>J-RR</td>
+<td>–</td>
+<td>https://www.sec.gov/Archives/edgar/data/1793651/000162829726000785/ex99_1.htm</td>
+</tr>
+<tr>
+<td>Benchmark 2023-B38 Mortgage Trust</td>
+<td>Directing Holder</td>
+<td>Pacific Design Center ⚑ suspect</td>
+<td>LNR Partners, Inc.</td>
+<td>H</td>
+<td class='r'>17.9</td>
+<td>https://www.sec.gov/Archives/edgar/data/1966002/000188852426018249/bmk23b38_ex991-202609.htm</td>
+</tr>
+<tr>
+<td>Benchmark 2020-B18 Mortgage Trust</td>
+<td>Directing Holder</td>
+<td>Eightfold Real Estate Capital, L.P</td>
+<td>LNR Partners,LLC</td>
+<td>H-RR</td>
+<td class='r'>29.0</td>
+<td>https://www.sec.gov/Archives/edgar/data/1816147/000188852426018275/dma20b18_ex991-202609.htm</td>
+</tr>
+<tr>
+<td>BMO 2024-C8 Mortgage Trust</td>
+<td>Controlling Class Representative</td>
+<td>RREF V - D AIV RR H, LLC</td>
+<td>Rialto Capital Advisors, LLC</td>
+<td>J-RR</td>
+<td>–</td>
+<td>https://www.sec.gov/Archives/edgar/data/2012263/000162829726000883/ex99_1.htm</td>
+</tr>
+<tr>
+<td>Benchmark 2025-V14 Mortgage Trust</td>
+<td>Directing Holder</td>
+<td>400 Capital Management LLC</td>
+<td>C-IV Asset Management LLC</td>
+<td>J-RR</td>
+<td class='r'>35.2</td>
+<td>https://www.sec.gov/Archives/edgar/data/2056663/000188852426018233/bmk25v14_ex991-202609.htm</td>
+</tr>
+<tr>
+<td>BMO 2022-C1 Mortgage Trust</td>
+<td>Controlling Class Representative</td>
+<td>Sabal Strategic Opportunities Fund, L.P</td>
+<td>CWCapital Asset Management LLC</td>
+<td>J</td>
+<td class='r'>24.8</td>
+<td>https://www.sec.gov/Archives/edgar/data/1903688/000188852426018331/bmo22c01_ex991-202609.htm</td>
+</tr>
+<tr>
+<td>DBJPM 2020-C9 Mortgage Trust</td>
+<td>Directing Holder</td>
+<td>BSPRT 2020-C9 Owner, LLC</td>
+<td>CWCapital Asset Management LLC</td>
+<td>G</td>
+<td class='r'>6.0</td>
+<td>https://www.sec.gov/Archives/edgar/data/1818254/000188852426018303/dma20c09_ex991-202609.htm</td>
+</tr>
+<tr>
+<td>Benchmark 2024-V11 Mortgage Trust</td>
+<td>Directing Holder</td>
+<td>Eightfold Real Estate Capital Fund VI, L.P</td>
+<td>LNR Partners, LLC</td>
+<td>J-RR</td>
+<td class='r'>39.1</td>
+<td>https://www.sec.gov/Archives/edgar/data/2039535/000188852426018279/bmk24v11_ex991-202609.htm</td>
+</tr>
+<tr>
+<td>Benchmark 2020-B22 Mortgage Trust</td>
+<td>Directing Holder</td>
+<td>RREF IV Debt AIV, LP, c/o Rialto Capital Management LLC</td>
+<td>Rialto Capital Advisors, LLC</td>
+<td>H</td>
+<td class='r'>28.0</td>
+<td>https://www.sec.gov/Archives/edgar/data/1833563/000188852426018293/dma20b22_ex991-202609.htm</td>
+</tr>
+<tr>
+<td>Benchmark 2024-V10 Mortgage Trust</td>
+<td>Controlling Class Representative</td>
+<td>RREF V - D AIV RR H, LLC</td>
+<td>Situs Holdings, LLC</td>
+<td>J-RR</td>
+<td>–</td>
+<td>https://www.sec.gov/Archives/edgar/data/2034418/000162829726000799/ex99_1.htm</td>
+</tr>
+<tr>
+<td>Benchmark 2025-V16 Mortgage Trust</td>
+<td>Controlling Class Representative</td>
+<td>V13 B-Piece Grand Avenue Partners, LLC</td>
+<td>LNR Partners, LLC</td>
+<td>G-RR</td>
+<td>–</td>
+<td>https://www.sec.gov/Archives/edgar/data/2060845/000162829726000803/ex99_1.htm</td>
+</tr>
+<tr>
+<td>Benchmark 2024-V8 Mortgage Trust</td>
+<td>Directing Holder</td>
+<td>Eightfold Real Estate Capital, L.P</td>
+<td>LNR Partners, LLC</td>
+<td>J-RR</td>
+<td class='r'>44.2</td>
+<td>https://www.sec.gov/Archives/edgar/data/2024274/000188852426018273/bmk24v08_ex991-202609.htm</td>
+</tr>
+<tr>
+<td>BMO 2025-5C9 Mortgage Trust</td>
+<td>Controlling Class Representative</td>
+<td>3650 Real Estate Investment Trust 2 LLC</td>
+<td>3650 REIT Loan Servicing LLC</td>
+<td>J-RR</td>
+<td class='r'>28.1</td>
+<td>https://www.sec.gov/Archives/edgar/data/2048804/000188852426018367/bmo255c9_ex991-202609.htm</td>
+</tr>
+<tr>
+<td>BMO 2025-C13 Mortgage Trust</td>
+<td>Controlling Class Representative</td>
+<td>RREF V - D AIV RR L, LLC</td>
+<td>Rialto Capital Advisors, LLC</td>
+<td>J-RR</td>
+<td>–</td>
+<td>https://www.sec.gov/Archives/edgar/data/2061838/000162829726000889/ex99_1.htm</td>
+</tr>
+<tr>
+<td>BMO 2026-5C16 Mortgage Trust</td>
+<td>Controlling Class Representative</td>
+<td>3650 Real Estate Investment Trust 2 LLC</td>
+<td>3650 REIT Loan Servicing LLC</td>
+<td>J-RR</td>
+<td class='r'>43.5</td>
+<td>https://www.sec.gov/Archives/edgar/data/2136643/000188852426018391/bmo26c16_ex991-202609.htm</td>
+</tr>
+<tr>
+<td>BMO 2026-C14 Mortgage Trust</td>
+<td>Controlling Class Representative</td>
+<td>RREF V - D AIV RR L, LLC</td>
+<td>Rialto Capital Advisors, LLC</td>
+<td>J-RR</td>
+<td>–</td>
+<td>https://www.sec.gov/Archives/edgar/data/2061932/000162829726000892/ex99_1.htm</td>
+</tr>
+<tr>
+<td>BMO 2026-C15 Mortgage Trust</td>
+<td>Controlling Class Representative</td>
+<td>RREF V - D AIV RR L, LLC</td>
+<td>Rialto Capital Advisors, LLC</td>
+<td>J-RR</td>
+<td>–</td>
+<td>https://www.sec.gov/Archives/edgar/data/2063009/000162829726000894/ex99_1.htm</td>
+</tr>
+<tr>
+<td>Benchmark 2022-B34 Mortgage Trust</td>
+<td>Directing Holder</td>
+<td>Eightfold Real Estate Capital Fund, L.P</td>
+<td>LNR Partners, LLC</td>
+<td>H</td>
+<td class='r'>24.5</td>
+<td>https://www.sec.gov/Archives/edgar/data/1912509/000188852426018223/bmk22b34_ex991-202609.htm</td>
+</tr>
+<tr>
+<td>Benchmark 2025-V13 Mortgage Trust</td>
+<td>Controlling Class Representative</td>
+<td>V13 B-Piece Grand Avenue Partners, LLC</td>
+<td>LNR Partners, LLC</td>
+<td>J-RR</td>
+<td>–</td>
+<td>https://www.sec.gov/Archives/edgar/data/2049534/000162829726000801/ex99_1.htm</td>
+</tr>
+<tr>
+<td>Benchmark 2025-V19 Mortgage Trust</td>
+<td>Controlling Class Representative</td>
+<td>Eightfold Real Estate Capital, L.P</td>
+<td>Midland Loan Services, a Division of PNC Bank N.A.</td>
+<td>G-RR</td>
+<td>–</td>
+<td>https://www.sec.gov/Archives/edgar/data/2093117/000162829726000805/ex99_1.htm</td>
+</tr>
+<tr>
+<td>Benchmark 2026-B42 Mortgage Trust</td>
+<td>Directing Holder</td>
+<td>KREF Securities Holdings, LLC</td>
+<td>K-Star Asset Management LLC</td>
+<td>K-RR</td>
+<td class='r'>7.1</td>
+<td>https://www.sec.gov/Archives/edgar/data/2110410/000188852426018235/bmk26b42_ex991-202609.htm</td>
+</tr>
+<tr>
+<td>Benchmark 2026-V20 Mortgage Trust</td>
+<td>Directing Holder</td>
+<td>RREF V – D AIV RR L, LLC</td>
+<td>Rialto Capital Advisors, LLC</td>
+<td>G-RR</td>
+<td class='r'>36.9</td>
+<td>https://www.sec.gov/Archives/edgar/data/2106400/000188852426018283/bmk26v20_ex991-202609.htm</td>
+</tr>
+<tr>
+<td>Benchmark 2026-V22 Mortgage Trust</td>
+<td>Controlling Class Representative</td>
+<td>V13 B-Piece Grand Avenue Partners, LLC</td>
+<td>LNR Partners, LLC</td>
+<td>G-RR</td>
+<td>–</td>
+<td>https://www.sec.gov/Archives/edgar/data/2126766/000162829726000807/ex99_1.htm</td>
+</tr>
+<tr>
+<td>Benchmark 2026-V23 Mortgage Trust</td>
+<td>Directing Holder</td>
+<td>ROX III CMBS HoldCo (C) Category 2B LP</td>
+<td></td>
+<td>L-RR</td>
+<td class='r'>24.9</td>
+<td>https://www.sec.gov/Archives/edgar/data/2148615/000188852426018255/bmk26v23_ex991-202609.htm</td>
+</tr>
+</tbody>
+</table>
+<h2><span class="n">10</span>Verification ledger</h2>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Claim</th>
+<th>Status</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CB01</td>
+<td>Noteholder Group holds &gt;61.6% of 5.25% Secured Notes and &gt;84.37% of 6.625% Senior Notes</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>https://storage.courtlistener.com/recap/gov.uscourts.txsb.498986/gov.uscourts.txsb.498986.320.0.pdf</td>
+</tr>
+<tr>
+<td>CB02</td>
+<td>Excluding EchoStar's $123m insider position the Group holds 73.71% of the Secured Notes</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>https://storage.courtlistener.com/recap/gov.uscourts.txsb.498986/gov.uscourts.txsb.498986.320.0.pdf</td>
+</tr>
+<tr>
+<td>CB03</td>
+<td>Third-party Secured Notes carrying $627.3m, fair value $536.8m (30 Jun 2026)</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>https://www.sec.gov/Archives/edgar/data/1415404/000110465926089370/sats-20260630x10q.htm</td>
+</tr>
+<tr>
+<td>CB04</td>
+<td>6.625% Senior Notes $750.0m, fair value $435.0m (30 Jun 2026)</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>https://www.sec.gov/Archives/edgar/data/1415404/000110465926089370/sats-20260630x10q.htm</td>
+</tr>
+<tr>
+<td>CB05</td>
+<td>Cash collateral: 'Required Prepetition Secured Parties' = majority in principal of Senior Secured Notes (EchoStar XXIV included but without vote) control waivers and remedies</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>https://storage.courtlistener.com/recap/gov.uscourts.txsb.498986/gov.uscourts.txsb.498986.561.0.pdf</td>
+</tr>
+<tr>
+<td>CB06</td>
+<td>Amended Third Interim cash collateral order runs through 23 Oct 2026; final hearing set 20 Oct 2026</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>https://storage.courtlistener.com/recap/gov.uscourts.txsb.498986/gov.uscourts.txsb.498986.561.0.pdf</td>
+</tr>
+<tr>
+<td>CB07</td>
+<td>Order recital (16 Oct 2026): no trustee or examiner has been appointed</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>https://storage.courtlistener.com/recap/gov.uscourts.txsb.498986/gov.uscourts.txsb.498986.561.0.pdf</td>
+</tr>
+<tr>
+<td>CB08</td>
+<td>Examiner scope (16 Sep 2026): J3 lease, $529m + $500m 2024 dividends, ~$196m tax payments, SpaceX transaction, EchoStar's $123m note purchase and the $50m/$1m 2026 financings</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>https://storage.courtlistener.com/recap/gov.uscourts.txsb.498986/gov.uscourts.txsb.498986.339.0.pdf</td>
+</tr>
+<tr>
+<td>CB09</td>
+<td>The $50m EchoStar XXIV financing was added as an additional secured obligation under the security agreement for the Secured Notes</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>https://storage.courtlistener.com/recap/gov.uscourts.txsb.498986/gov.uscourts.txsb.498986.339.0.pdf</td>
+</tr>
+<tr>
+<td>CB10</td>
+<td>Examiner to report on equitable subordination and fiduciary-duty claims against EchoStar as controlling shareholder</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>https://storage.courtlistener.com/recap/gov.uscourts.txsb.498986/gov.uscourts.txsb.498986.339.0.pdf</td>
+</tr>
+<tr>
+<td>CB11</td>
+<td>Stipulated stay (20 Sep 2026) of exclusivity litigation, investigations and any settlement of estate claims against EchoStar unless via mediation</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>https://storage.courtlistener.com/recap/gov.uscourts.txsb.498986/gov.uscourts.txsb.498986.369.0.pdf</td>
+</tr>
+<tr>
+<td>CB12</td>
+<td>New non-ordinary-course EchoStar/Debtor transactions need prior written approval of the Committee and the Noteholder Group</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>https://storage.courtlistener.com/recap/gov.uscourts.txsb.498986/gov.uscourts.txsb.498986.369.0.pdf</td>
+</tr>
+<tr>
+<td>CB13</td>
+<td>Group membership is listed on Exhibit A of the Rule 2019 Verified Statement, ECF No. 154</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>https://storage.courtlistener.com/recap/gov.uscourts.txsb.498986/gov.uscourts.txsb.498986.369.0.pdf</td>
+</tr>
+<tr>
+<td>CB14</td>
+<td>§1129(a)(10): an impaired accepting class is counted without insider acceptances</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>https://www.law.cornell.edu/uscode/text/11/1129</td>
+</tr>
+<tr>
+<td>CB15</td>
+<td>§510(c): court may equitably subordinate all or part of an allowed claim</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>https://www.law.cornell.edu/uscode/text/11/510</td>
+</tr>
+<tr>
+<td>CB16</td>
+<td>§363(k): a secured creditor may credit bid at a sale of its collateral unless the court for cause orders otherwise</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>https://www.law.cornell.edu/uscode/text/11/363</td>
+</tr>
+<tr>
+<td>CB17</td>
+<td>Rule 2019 'disclosable economic interest' includes derivatives and any economic interest affected by a claim's value</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>https://www.law.cornell.edu/rules/frbp/rule_2019</td>
+</tr>
+<tr>
+<td>CB18</td>
+<td>§1121(d): court may reduce or increase exclusivity for cause; 18-month outer limit</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>https://www.law.cornell.edu/uscode/text/11/1121</td>
+</tr>
+<tr>
+<td>CB19</td>
+<td>Fresno Fashion Fair: $60m note in JPMDB 2016-C4, 3.587%, maturity 1 Nov 2026</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>https://www.sec.gov/Archives/edgar/data/1687202/000188852426017398/jpc16c04_ex991-202609.htm</td>
+</tr>
+<tr>
+<td>CB20</td>
+<td>Fresno: special servicer finalising a Pre-Negotiation Letter with the borrower and sponsor Macerich</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>https://www.sec.gov/Archives/edgar/data/1687202/000188852426017398/jpc16c04_ex991-202609.htm</td>
+</tr>
+<tr>
+<td>CB21</td>
+<td>JPMDB 2016-C4 Directing Certificateholder (Sep 2026 10-D): Cytium Investment Management</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>https://www.sec.gov/Archives/edgar/data/1687202/000188852426017398/jpc16c04_ex991-202609.htm</td>
+</tr>
+<tr>
+<td>CB22</td>
+<td>At issuance BlackRock Realty Advisors (agent for a managed account) bought Classes E, F and NR and appointed the special servicer</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>https://www.sec.gov/Archives/edgar/data/1013611/000153949716004038/n770_424b2-x10.htm</td>
+</tr>
+<tr>
+<td>CB23</td>
+<td>Kronos EKS (BayWa) hybrid: vote without meeting 12–14 Oct 2026 was quorate but no resolution adopted</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>https://www.baywa.com/binaries/pdf/content/documents/baywacms-en/downloadcenter/other-ir/kronos-publication-of-the-results-of-the-vote-without-meeting/kronos-publication-of-the-results-of-the-vote-without-meeting/baywacms%3Adownloadpdf/Kronos+EKS+AG+%26+Co.+KG+-+Vote+without+Meeting+-+Publication+of+Results+-+261016.pdf</td>
+</tr>
+<tr>
+<td>CB24</td>
+<td>Branicks: shareholders' EGM (9 Oct) did not approve agenda item 4 consultancy agreements</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>https://branicks.com/wp-content/uploads/2026/10/Update-on-Implementation-Conditions-EN-15-Oct-2026.pdf</td>
+</tr>
+<tr>
+<td>CB25</td>
+<td>Branicks: holders of &gt;50% of outstanding principal can instruct MR Treuhand to waive Implementation Conditions (other than 6 and 7)</td>
+<td><span class="badge b-VERIFIED">Verified</span><span class='fn'></span></td>
+<td>https://branicks.com/wp-content/uploads/2026/10/Update-on-Implementation-Conditions-EN-15-Oct-2026.pdf</td>
+</tr>
+</tbody>
+</table>
+<h2><span class="n">11</span>Gaps (stated, not papered over)</h2>
+<ul>
+<li><strong>Rule 2019 Exhibit A (ECF 154).</strong> Group membership and member count are not on RECAP, and the Epiq page is JavaScript-only. <strong>Numerosity analysis is therefore incomplete.</strong> Dkt 93 is the examiner motion, not a 2019 statement, and returns 404 on RECAP. No amended 2019 statement was found on RECAP.</li>
+<li><strong>Trade claims.</strong> The size of the trade pool and the trade cap were not retrieved (schedules and SOFAs not on RECAP).</li>
+<li><strong>Final cash-collateral order (20 Oct hearing) and the lien-challenge deadline.</strong> Neither date was confirmed from a primary source.</li>
+<li><strong>Prices.</strong> Fair values are issuer Level-2 estimates at 30 Jun 2026, not trades. TRACE prints were not used.</li>
+<li><strong>Loparex.</strong> Recap terms beyond the press release are secondary-source only.</li>
+<li><strong>Branicks anchor holders.</strong> Not named in primary text.</li>
+<li><strong>BayWa.</strong> Actual participation and the vote split were not published.</li>
+<li><strong>CMBS.</strong> 52 of 102 trusts print no directing holder in the 10-D. PSA designation notices would be needed.</li>
+<li><strong>PACER</strong> was declined by the user. No account was created, and paywalled dockets were not accessed.</li>
+</ul><div class='disc avoid'><h3>Disclaimer and publisher's exclusion</h3><p>Published by TRIAGE for general information. Impersonal; not investment advice, a recommendation, or an offer or solicitation to buy or sell any security. Not tailored to any reader; intended to fall within the publisher's exclusion of section 202(a)(11)(D) of the US Investment Advisers Act of 1940. Facts are drawn from public filings and registries linked in the text; statements by parties are allegations; scenario figures are labelled assumptions. Companies only; no personal data.</p></div></body></html>

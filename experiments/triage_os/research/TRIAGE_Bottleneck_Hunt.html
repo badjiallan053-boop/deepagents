@@ -1,0 +1,471 @@
+<!doctype html><html><head><meta charset='utf-8'><title>TRIAGE Bottleneck Hunt</title><style>
+@page { size: Letter; margin: 18mm 15mm 16mm 15mm;
+  @top-left { content: "TRIAGE  |  Special Situations Research"; font: 600 7pt 'Inter'; letter-spacing: .14em; color: #8a929c; }
+  @top-right { content: string(doctitle); font: 500 7pt 'Inter'; color: #8a929c; }
+  @bottom-left { content: "Not investment advice. See disclaimer on the final page."; font: 400 6.5pt 'Inter'; color: #8a929c; }
+  @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 500 7pt 'JetBrains Mono'; color: #8a929c; } }
+@page :first { @top-left { content: none } @top-right { content: none } }
+:root { --ink:#0d1218; --mute:#5b6570; --dim:#8a929c; --line:#d9dde2; --amber:#c97d06; --amberbg:#fff6e5; --navy:#0b0f14; --up:#1d8a52; --down:#c53340; --info:#1f6fd1; --violet:#6d4fd8; }
+* { box-sizing: border-box; }
+html { font-family: 'Inter', 'IBM Plex Sans', Arial, sans-serif; font-size: 9pt; color: var(--ink); line-height: 1.45; font-feature-settings: "tnum" 1; }
+body { margin: 0; }
+h1,h2,h3 { font-family: 'Inter Tight','Inter',sans-serif; letter-spacing: -.01em; margin: 0; }
+.doctitle { string-set: doctitle content(); }
+h2 { font-size: 13pt; margin: 14pt 0 5pt; padding-top: 6pt; border-top: 2px solid var(--navy); }
+h2 .n { color: var(--amber); font-family: 'JetBrains Mono', monospace; font-size: 9pt; margin-right: 6pt; vertical-align: 1pt; }
+h3 { font-size: 9.5pt; margin: 9pt 0 3pt; text-transform: uppercase; letter-spacing: .08em; color: var(--mute); }
+p { margin: 0 0 5pt; text-align: left; }
+.wm { display: inline-flex; align-items: center; gap: 6px; } .wm b { font: 700 11pt 'JetBrains Mono', monospace; letter-spacing: .32em; }
+.cover { background: var(--navy); color: #e8ecf0; margin: 0 0 4pt; padding: 9mm 10mm 7mm; border-radius: 2px; } .cover .wm b { color: #fff; }
+.cover .kick { color: #f5a524; font: 600 7.5pt 'Inter'; letter-spacing: .16em; text-transform: uppercase; margin-top: 7mm; }
+.cover h1 { font-size: 22pt; line-height: 1.12; margin: 4pt 0 6pt; color: #fff; max-width: 165mm; }
+.cover .sub { color: #aab3bd; font-size: 10pt; max-width: 160mm; }
+.cover .meta { display: flex; gap: 18pt; margin-top: 10pt; padding-top: 8pt; border-top: 1px solid #26303b; font-size: 7.5pt; color: #8f99a4; }
+.cover .meta b { display: block; color: #e8ecf0; font: 600 8.5pt 'JetBrains Mono', monospace; margin-top: 1pt; }
+.view { border-left: 3px solid var(--amber); background: var(--amberbg); padding: 7pt 9pt; margin: 9pt 0; }
+.view .lbl { font: 700 7pt 'Inter'; letter-spacing: .14em; color: var(--amber); text-transform: uppercase; }
+.view p { font-size: 10pt; margin: 2pt 0 0; }
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12pt; } .cols3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10pt; }
+.kpis { display: grid; grid-template-columns: repeat(5, 1fr); border: 1px solid var(--line); margin: 8pt 0; }
+.kpi { padding: 5pt 7pt; border-right: 1px solid var(--line); } .kpi:last-child { border-right: 0; }
+.kpi .l { font: 600 6.5pt 'Inter'; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); }
+.kpi .v { font: 600 13pt 'JetBrains Mono', monospace; margin-top: 2pt; } .kpi .s { font-size: 7pt; color: var(--mute); }
+table { width: 100%; border-collapse: collapse; margin: 4pt 0 8pt; font-size: 8pt; page-break-inside: auto; }
+thead th { font: 600 6.8pt 'Inter'; text-transform: uppercase; letter-spacing: .07em; color: var(--mute); text-align: left; border-bottom: 1.2px solid var(--navy); padding: 3pt 4pt; }
+td { padding: 3pt 4pt; border-bottom: .5px solid var(--line); vertical-align: top; } tr { page-break-inside: avoid; }
+td.r, th.r { text-align: right; } .num, td.r { font-family: 'JetBrains Mono', monospace; font-size: 7.6pt; }
+tr.tot td { font-weight: 700; border-top: 1px solid var(--navy); border-bottom: 0; }
+.fn { font-size: 6.8pt; color: var(--mute); } sup.f { font: 600 6pt 'JetBrains Mono'; color: var(--info); }
+.badge { display: inline-block; font: 700 6pt 'Inter'; letter-spacing: .08em; padding: 1pt 3pt; border-radius: 2px; text-transform: uppercase; border: .6px solid; white-space: nowrap; }
+.b-VERIFIED { color: var(--up); border-color: var(--up); } .b-CORRECTED { color: var(--amber); border-color: var(--amber); }
+.b-ALLEGATION { color: var(--violet); border-color: var(--violet); } .b-ASSUMPTION { color: var(--info); border-color: var(--info); } .b-UNVERIFIABLE { color: var(--dim); border-color: var(--dim); }
+.chart { margin: 4pt 0 2pt; page-break-inside: avoid; } h2, h3, .cap { page-break-after: avoid; } .chart svg { width: 100%; height: auto; display: block; }
+.cap { font: 600 7pt 'Inter'; color: var(--mute); text-transform: uppercase; letter-spacing: .08em; margin-top: 6pt; }
+.src { font-size: 6.6pt; color: var(--dim); margin-bottom: 6pt; }
+.box { border: 1px solid var(--line); padding: 6pt 8pt; margin: 6pt 0; } .box h3 { margin-top: 0; }
+ul { margin: 2pt 0 6pt; padding-left: 12pt; } li { margin: 1.5pt 0; }
+.pb { page-break-before: always; } .avoid { page-break-inside: avoid; }
+a { color: var(--info); text-decoration: none; word-break: break-all; }
+.disc { font-size: 6.8pt; color: var(--mute); line-height: 1.4; } .disc h3 { color: var(--ink); }
+.tl { position: relative; margin: 4pt 0 6pt 4pt; border-left: 1.2px solid var(--line); }
+.tl .e { position: relative; padding: 0 0 4.5pt 10pt; } .tl .e:before { content: ""; position: absolute; left: -4px; top: 3pt; width: 7px; height: 7px; border-radius: 50%; background: var(--navy); }
+.tl .e.f:before { background: #fff; border: 1.5px solid var(--amber); }
+.tl .d { font: 600 7.5pt 'JetBrains Mono', monospace; color: var(--mute); } .tl .e.f .d { color: var(--amber); }
+ table { font-size: 7pt; } td { word-break: break-word; } img { max-width: 100%; }</style></head><body><div class='cover'><span class="wm"><svg width="18" height="18" viewBox="0 0 32 32"><rect width="32" height="32" rx="5" fill="#f5a524"/><path d="M8 9h16v3h-6.5v12h-3V12H8z" fill="#0b0f14"/></svg><b>TRIAGE</b></span><div class='kick'>Research · 23 Oct 2026</div><h1 class='doctitle'>TRIAGE Bottleneck Hunt</h1><div class='sub'>Small listed companies inside supply chokepoints: asymmetric setups, base rates and kill conditions</div><div class='meta'><div>Setups<b>15 WATCH calls, hash-chained</b></div><div>Base rate<b>7.0% of sub-$300m entries touched 10x in 12m</b></div><div>Rules<b>public data · research only · not advice</b></div></div></div>
+<p><em>As of 23 Oct 2026 (SGT). Research only, not investment advice, paper ledger only. These are asymmetric setups, not promises. We do not claim 100x for anything.</em></p>
+<h2><span class="n">01</span>The honest base rate first</h2>
+<p>Universe: 45 chokepoint-adjacent small and micro caps (antimony, tungsten, rare earths, graphite, scandium, helium, InP/optics, isotopes, probe cards, lithium) with prices back to Jan 2023. Each month from Jan 2023 to Oct 2025 is an entry; we look 12 months ahead.</p>
+<table>
+<thead>
+<tr>
+<th>Bucket</th>
+<th>Entries</th>
+<th>Names</th>
+<th>Touched 2x</th>
+<th>Touched 5x</th>
+<th>Touched 10x</th>
+<th>Still ≥10x at 12m</th>
+<th>Ended ≥2x</th>
+<th>Lost ≥50%</th>
+<th>Median 12m return</th>
+<th>Median max drawdown</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Entry cap &lt; $300m (approx.)</td>
+<td class='r'>985</td>
+<td class='r'>36</td>
+<td class='r'>44.1%</td>
+<td class='r'>16.4%</td>
+<td class='r'>7.0%</td>
+<td class='r'>3.2%</td>
+<td class='r'>27.9%</td>
+<td class='r'>13.8%</td>
+<td class='r'>8.7%</td>
+<td class='r'>-54.4%</td>
+</tr>
+<tr>
+<td>All entries</td>
+<td class='r'>1530</td>
+<td class='r'>45</td>
+<td class='r'>46.1%</td>
+<td class='r'>14.2%</td>
+<td class='r'>4.9%</td>
+<td class='r'>2.3%</td>
+<td class='r'>27.1%</td>
+<td class='r'>15.2%</td>
+<td class='r'>12.1%</td>
+<td class='r'>-55.0%</td>
+</tr>
+</tbody>
+</table>
+<p>Best 12-month peak multiple per name (sub-$300m entries): TLO.TO 108.9x, AXTI 89.7x, KULR 32.0x, UAMY 28.6x, UCU.V 20.9x, ASPI 16.3x, EQR.AX 16.1x, AREC 15.7x, LRV.AX 14.9x, AAOI 12.7x, TUN.L 11.9x, ARA.TO 10.5x.</p>
+<p><strong>Read this before anything else.</strong> The universe was chosen in 2026 from names we remember, so it is biased towards names that moved (survivorship and recall bias). Delisted and failed names are under-represented. Entry market caps are approximated using today's share count, which understates the true small-cap count for heavy diluters. The true base rate is lower than this table. A 100x in months is not in the distribution we can measure.</p>
+<h2><span class="n">02</span>Method</h2>
+<p>Top-down chokepoints (MOFCOM export controls, DoD DPA Title III/DLA awards, NWF/EXIM finance, NDAA sourcing rules) → small listed firms that hold the scarce asset, permit or qualification → evidence graded A (government document), B (company primary filing) or C (company claim or trade press, not re-verified) → score.</p>
+<p>Score (0–5) = 25% chokepoint share + 20% revenue sensitivity + 15% size + 15% evidence grade + 10% liquidity + 15% not-crowded. The weights are judgement. Contrarian check: 12-month return &gt;200%, top 20% of 52-week range, 3-month return &gt;60%. Quant Validation: every name is VETOED as recommendation-grade because no backtested KEPT signal underlies it, so all are paper WATCH calls.</p>
+<p><strong>The dated catalyst for the whole metals cluster:</strong> MOFCOM Announcement 72/2025 suspends the US-specific ban on gallium, germanium, antimony and superhard materials (Ann. 46/2024 Art. 2) <strong>only until 27 Nov 2026</strong>. Art. 1 (no dual-use items to US military end users) stays in force. Source: <a href="https://www.mofcom.gov.cn/zcfb/blgg/gg/2025/art/2025/art_bc4513421bb24faaa84e44c2e4f36dc5.html">mofcom.gov.cn/zcfb/blgg/gg/202…4f36dc5.html</a></p>
+<h2><span class="n">03</span>Top 15</h2>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Company</th>
+<th>Chokepoint</th>
+<th>Mcap $m</th>
+<th>ADV $k</th>
+<th>12m</th>
+<th>Score</th>
+<th>Grade</th>
+<th>Crowding</th>
+<th>Catalyst</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class='r'>1</td>
+<td>United States Antimony (UAMY)</td>
+<td>Antimony (defence: primers, munitions; flame retardants)</td>
+<td class='r'>465.5</td>
+<td class='r'>19624</td>
+<td class='r'>-76%</td>
+<td class='r'>4.25</td>
+<td>A</td>
+<td>Not crowded on price</td>
+<td>2026-11-27: MOFCOM suspension of the US-specific antimony/gallium/germanium ban expires unless renewed</td>
+</tr>
+<tr>
+<td class='r'>2</td>
+<td>Larvotto Resources (LRV.AX)</td>
+<td>Antimony concentrate (non-China mine supply)</td>
+<td class='r'>290.4</td>
+<td class='r'>1067</td>
+<td class='r'>-25%</td>
+<td class='r'>4.2</td>
+<td>B</td>
+<td>Not crowded on price</td>
+<td>2026-11-27: MOFCOM suspension expiry; first quarterly production report (Jan 2027)</td>
+</tr>
+<tr>
+<td class='r'>3</td>
+<td>NioCorp Developments (NB)</td>
+<td>Scandium (Al-Sc alloys; China-controlled since Apr 2025) + niobium</td>
+<td class='r'>431.0</td>
+<td class='r'>8914</td>
+<td class='r'>-65%</td>
+<td class='r'>4.2</td>
+<td>A</td>
+<td>Not crowded on price</td>
+<td>2027-06-30: EXIM final commitment decision (judgement: H1 2027)</td>
+</tr>
+<tr>
+<td class='r'>4</td>
+<td>Ucore Rare Metals (UCU.V)</td>
+<td>Rare-earth separation (Dy/Tb/Sm outside China)</td>
+<td class='r'>210.6</td>
+<td class='r'>506</td>
+<td class='r'>-70%</td>
+<td class='r'>4.0</td>
+<td>B</td>
+<td>Not crowded on price</td>
+<td>2026-12-31: H2-2026 Early Production readiness deadline in Louisiana</td>
+</tr>
+<tr>
+<td class='r'>5</td>
+<td>Guardian Metal Resources (GMET.L)</td>
+<td>Tungsten (US domestic mine supply)</td>
+<td class='r'>211.5</td>
+<td class='r'>274</td>
+<td class='r'>-26%</td>
+<td class='r'>3.9</td>
+<td>A</td>
+<td>Not crowded on price</td>
+<td>2026-11-27: MOFCOM step; Pilot Mountain permitting milestones 2027</td>
+</tr>
+<tr>
+<td class='r'>6</td>
+<td>Graphite One (GPH.V)</td>
+<td>Natural graphite + anode material (China export controls since Dec 2023)</td>
+<td class='r'>111.9</td>
+<td class='r'>29</td>
+<td class='r'>-35%</td>
+<td class='r'>3.85</td>
+<td>A</td>
+<td>Not crowded on price</td>
+<td>2026-11-27: MOFCOM graphite end-use review suspension expiry; EXIM application 2026</td>
+</tr>
+<tr>
+<td class='r'>7</td>
+<td>LightPath Technologies (LPTH)</td>
+<td>Germanium-free infrared optics (BlackDiamond chalcogenide glass)</td>
+<td class='r'>485.7</td>
+<td class='r'>20838</td>
+<td class='r'>-6%</td>
+<td class='r'>3.85</td>
+<td>B</td>
+<td>Not crowded on price</td>
+<td>2027-12-31: NDAA germanium sourcing restriction takes effect (Dec 2027)</td>
+</tr>
+<tr>
+<td class='r'>8</td>
+<td>Aclara Resources (ARA.TO)</td>
+<td>Heavy rare earths (Dy/Tb) from ionic clays, US separation</td>
+<td class='r'>460.4</td>
+<td class='r'>163</td>
+<td class='r'>-3%</td>
+<td class='r'>3.8</td>
+<td>A</td>
+<td>Not crowded on price</td>
+<td>2026-12-31: Q4-2026 Dy/Tb pilot specification results</td>
+</tr>
+<tr>
+<td class='r'>9</td>
+<td>Pulsar Helium (PLSR.V)</td>
+<td>Helium (US federal reserve sold; Qatar/Russia concentration)</td>
+<td class='r'>190.5</td>
+<td class='r'>156</td>
+<td class='r'>40%</td>
+<td class='r'>3.75</td>
+<td>B</td>
+<td>Not crowded on price</td>
+<td>2027-06-30: Up to six more wells Q1–Q2 2027</td>
+</tr>
+<tr>
+<td class='r'>10</td>
+<td>Japan Electronic Materials (6855.T)</td>
+<td>Probe cards for DRAM/HBM wafer test</td>
+<td class='r'>580.0</td>
+<td class='r'>26038</td>
+<td class='r'>69%</td>
+<td class='r'>3.6</td>
+<td>B</td>
+<td>Not crowded on price</td>
+<td>2026-11-10: 1H FY3/27 results (judgement: early Nov, check TDnet calendar)</td>
+</tr>
+<tr>
+<td class='r'>11</td>
+<td>American Resources (ReElement) (AREC)</td>
+<td>Rare-earth refining (chromatographic) in the US</td>
+<td class='r'>118.7</td>
+<td class='r'>2201</td>
+<td class='r'>-70%</td>
+<td class='r'>3.55</td>
+<td>C</td>
+<td>Not crowded on price</td>
+<td>2027-03-31: ReElement financing (judgement)</td>
+</tr>
+<tr>
+<td class='r'>12</td>
+<td>ASP Isotopes (ASPI)</td>
+<td>Isotope enrichment (Mo-100, Yb-176; HALEU ambition)</td>
+<td class='r'>316.6</td>
+<td class='r'>8458</td>
+<td class='r'>-77%</td>
+<td class='r'>3.5</td>
+<td>C</td>
+<td>Not crowded on price</td>
+<td>2027-06-30: Commercial isotope deliveries (judgement)</td>
+</tr>
+<tr>
+<td class='r'>13</td>
+<td>Tungsten West (TUN.L)</td>
+<td>Tungsten (APT for tooling, armour, munitions)</td>
+<td class='r'>767.2</td>
+<td class='r'>1903</td>
+<td class='r'>235%</td>
+<td class='r'>3.48</td>
+<td>A</td>
+<td>Partly crowded</td>
+<td>2027-03-31: Hemerdon full commissioning target (Q1 2027)</td>
+</tr>
+<tr>
+<td class='r'>14</td>
+<td>Tri Chemical Laboratories (4369.T)</td>
+<td>Hafnium high-k ALD precursors for DRAM</td>
+<td class='r'>617.9</td>
+<td class='r'>9934</td>
+<td class='r'>0%</td>
+<td class='r'>3.45</td>
+<td>C</td>
+<td>Not crowded on price</td>
+<td>2026-12-12: Q3 FY1/27 results (judgement: mid-Dec)</td>
+</tr>
+<tr>
+<td class='r'>15</td>
+<td>Ionic Rare Earths (IXR.AX)</td>
+<td>Magnet recycling + Uganda ionic clay (Makuutu)</td>
+<td class='r'>101.2</td>
+<td class='r'>295</td>
+<td class='r'>17%</td>
+<td class='r'>3.41</td>
+<td>C</td>
+<td>Not crowded on price</td>
+<td>2027-03-31: Belfast scale-up (judgement)</td>
+</tr>
+</tbody>
+</table>
+<h3>1. United States Antimony (UAMY)</h3>
+<ul>
+<li><strong>Chain:</strong> US DoD National Defense Stockpile → antimony metal ingots → USAC, operator of North America's only two antimony smelters</li>
+<li><strong>Verified fact:</strong> DLA sole-source 5-yr IDIQ SP8000-25-D-0007, max $245m (no obligation beyond $5k minimum); first delivery order ~$10m (315,000 lb). China's US antimony ban (MOFCOM Ann. 46/2024 Art. 2) is suspended only until 27 Nov 2026 (Ann. 72/2025).</li>
+<li><strong>Catalyst:</strong> 2026-11-27: MOFCOM suspension of the US-specific antimony/gallium/germanium ban expires unless renewed</li>
+<li><strong>Key risks:</strong> IDIQ max is not revenue; feed-ore sourcing (Mexico/Bolivia); China renews the suspension → price normalises. Dilution risk: MEDIUM.</li>
+<li><strong>Kill condition:</strong> MOFCOM renews the suspension AND antimony price (Rotterdam) falls &gt;30% from 23 Oct 2026; or no second DLA delivery order by 30 Jun 2027</li>
+<li><strong>Contrarian:</strong> Not crowded on price. <strong>Quant Validation:</strong> VETO for recommendation-grade (no backtested KEPT signal; WATCH only).</li>
+<li><strong>Evidence:</strong> <a href="https://www.sec.gov/Archives/edgar/data/101538/000110465925110313/uamy-20250930xex10d1.htm">sec.gov/Archives/edgar/data/10…0xex10d1.htm</a> · <a href="https://www.sec.gov/Archives/edgar/data/101538/000165495425011011/uamy_8k.htm">sec.gov/Archives/edgar/data/10…/uamy_8k.htm</a> · <a href="https://www.mofcom.gov.cn/zcfb/blgg/gg/2025/art/2025/art_bc4513421bb24faaa84e44c2e4f36dc5.html">mofcom.gov.cn/zcfb/blgg/gg/202…4f36dc5.html</a></li>
+</ul>
+<h3>2. Larvotto Resources (LRV.AX)</h3>
+<ul>
+<li><strong>Chain:</strong> Western antimony smelters/trader Wogen → Sb concentrate → Hillgrove (NSW), production started Aug 2026</li>
+<li><strong>Verified fact:</strong> Production commenced Aug 2026; first concentrate shipped Oct 2026; Wogen exclusive offtake for 7 years with US$4m prepayment.</li>
+<li><strong>Catalyst:</strong> 2026-11-27: MOFCOM suspension expiry; first quarterly production report (Jan 2027)</li>
+<li><strong>Key risks:</strong> ramp-up recoveries; single offtaker sets terms; antimony price mean-reversion. Dilution risk: MEDIUM.</li>
+<li><strong>Kill condition:</strong> Quarterly report shows concentrate output &lt;50% of nameplate two quarters running</li>
+<li><strong>Contrarian:</strong> Not crowded on price. <strong>Quant Validation:</strong> VETO for recommendation-grade (no backtested KEPT signal; WATCH only).</li>
+<li><strong>Evidence:</strong> <a href="https://www.larvottoresources.com/wp-content/uploads/2026/08/61341464.pdf">larvottoresources.com/wp-conte…61341464.pdf</a> · <a href="https://www.larvottoresources.com/wp-content/uploads/2026/10/61349174.pdf">larvottoresources.com/wp-conte…61349174.pdf</a> · <a href="https://www.larvottoresources.com/wp-content/uploads/2024/12/61241120.pdf">larvottoresources.com/wp-conte…61241120.pdf</a></li>
+</ul>
+<h3>3. NioCorp Developments (NB)</h3>
+<ul>
+<li><strong>Chain:</strong> Defence prime (Al-Sc aerospace alloys) → scandium oxide → Elk Creek, Nebraska</li>
+<li><strong>Verified fact:</strong> DoD DPA Title III up to $10m (Aug 2025); pursuing up to $800m EXIM debt (not committed).</li>
+<li><strong>Catalyst:</strong> 2027-06-30: EXIM final commitment decision (judgement: H1 2027)</li>
+<li><strong>Key risks:</strong> ~$1bn+ capex; financing not committed; history of delays and dilution. Dilution risk: HIGH.</li>
+<li><strong>Kill condition:</strong> EXIM declines or no final commitment by end-2027</li>
+<li><strong>Contrarian:</strong> Not crowded on price. <strong>Quant Validation:</strong> VETO for recommendation-grade (no backtested KEPT signal; WATCH only).</li>
+<li><strong>Evidence:</strong> <a href="https://www.war.gov/News/Releases/Release/Article/4264389/department-of-defense-awards-10-million-to-develop-a-domestic-mine-to-master-al/">war.gov/News/Releases/Release/…o-master-al/</a> · <a href="https://niocorp.com/u-s-department-of-defense-awards-up-to-10-million-to-niocorps-subsidiary-elk-creek-resources-corp/">niocorp.com/u-s-department-of-…ources-corp/</a></li>
+</ul>
+<h3>4. Ucore Rare Metals (UCU.V)</h3>
+<ul>
+<li><strong>Chain:</strong> US DoD magnet supply chain → separated REE oxides → RapidSX plant, Alexandria, Louisiana</li>
+<li><strong>Verified fact:</strong> DoD OT Agreement total US$22.4m (non-repayable); target 'Early Production' readiness in Louisiana in H2 2026; DPAS DO-B8 rating.</li>
+<li><strong>Catalyst:</strong> 2026-12-31: H2-2026 Early Production readiness deadline in Louisiana</li>
+<li><strong>Key risks:</strong> RapidSX unproven at commercial scale; feedstock sourcing; deadline slip. Dilution risk: HIGH.</li>
+<li><strong>Kill condition:</strong> No early-production announcement by 31 Mar 2027</li>
+<li><strong>Contrarian:</strong> Not crowded on price. <strong>Quant Validation:</strong> VETO for recommendation-grade (no backtested KEPT signal; WATCH only).</li>
+<li><strong>Evidence:</strong> <a href="https://ucore.com/ucore-executes-us18-4m-award-with-u-s-dod-for-rare-earth-processing/">ucore.com/ucore-executes-us18-…-processing/</a> · <a href="https://ucore.com/FinancialStatements/Ucore_MDA_Q2_2025.pdf">ucore.com/FinancialStatements/…_Q2_2025.pdf</a></li>
+</ul>
+<h3>5. Guardian Metal Resources (GMET.L)</h3>
+<ul>
+<li><strong>Chain:</strong> US DoD (DPA Title III) → WO3 → Pilot Mountain, Nevada</li>
+<li><strong>Verified fact:</strong> DoD DPA Title III $6.2m award (Jul 2025); PFS June 2026: 8-year mine, 15,916 t WO3, first production targeted late 2028 subject to permitting.</li>
+<li><strong>Catalyst:</strong> 2026-11-27: MOFCOM step; Pilot Mountain permitting milestones 2027</li>
+<li><strong>Key risks:</strong> pre-production, 2028 at earliest; financing dilution; permitting. Dilution risk: HIGH.</li>
+<li><strong>Kill condition:</strong> Permitting timeline slips beyond 2029 or equity raise below 50% of 23 Oct 2026 price</li>
+<li><strong>Contrarian:</strong> Not crowded on price. <strong>Quant Validation:</strong> VETO for recommendation-grade (no backtested KEPT signal; WATCH only).</li>
+<li><strong>Evidence:</strong> <a href="https://www.war.gov/News/Releases/Release/Article/4252264/department-of-defense-awards-62-million-to-sustain-critical-production-of-tungs/">war.gov/News/Releases/Release/…on-of-tungs/</a> · <a href="https://www.sec.gov/Archives/edgar/data/2039972/000165495426006317/a2026-0630_pfsresultsfina.htm">sec.gov/Archives/edgar/data/20…ultsfina.htm</a></li>
+</ul>
+<h3>6. Graphite One (GPH.V)</h3>
+<ul>
+<li><strong>Chain:</strong> US battery and defence users → anode active material → Graphite Creek (Alaska) + Ohio anode plant</li>
+<li><strong>Verified fact:</strong> DoD DPA Title III $37.5m (Jul 2023); EXIM non-binding LoIs total $2.07bn; formal application expected 2026.</li>
+<li><strong>Catalyst:</strong> 2026-11-27: MOFCOM graphite end-use review suspension expiry; EXIM application 2026</li>
+<li><strong>Key risks:</strong> LoIs non-binding; Arctic mine capex; EV demand. Dilution risk: HIGH.</li>
+<li><strong>Kill condition:</strong> No EXIM application filed by 30 Jun 2027</li>
+<li><strong>Contrarian:</strong> Not crowded on price. <strong>Quant Validation:</strong> VETO for recommendation-grade (no backtested KEPT signal; WATCH only).</li>
+<li><strong>Evidence:</strong> <a href="https://www.defense.gov/News/Releases/Release/Article/3459556/dod-enters-agreement-to-expand-capabilities-for-domestic-graphite-mining-and-pr/">defense.gov/News/Releases/Rele…ning-and-pr/</a> · <a href="https://www.graphiteoneinc.com/exim-bank-increases-letters-of-interest-for-the-graphite-one-supply-chain-to-2-07-billion/">graphiteoneinc.com/exim-bank-i…-07-billion/</a></li>
+</ul>
+<h3>7. LightPath Technologies (LPTH)</h3>
+<ul>
+<li><strong>Chain:</strong> US DoW EO/IR &amp; counter-UAS systems → IR lenses → BlackDiamond (licensed from the US Naval Research Lab)</li>
+<li><strong>Verified fact:</strong> Funded DoW CLEAR prototype agreement (Sep 2026); 2026 NDAA adds germanium to covered-material restrictions with a Dec 2027 sourcing deadline; &gt;$19m orders from one C-UAS customer since 1 Jul 2026.</li>
+<li><strong>Catalyst:</strong> 2027-12-31: NDAA germanium sourcing restriction takes effect (Dec 2027)</li>
+<li><strong>Key risks:</strong> customer concentration; already re-rated; CLEAR value undisclosed. Dilution risk: MEDIUM.</li>
+<li><strong>Kill condition:</strong> No production follow-on from CLEAR by end-2027</li>
+<li><strong>Contrarian:</strong> Not crowded on price. <strong>Quant Validation:</strong> VETO for recommendation-grade (no backtested KEPT signal; WATCH only).</li>
+<li><strong>Evidence:</strong> <a href="https://finance.yahoo.com/technology/articles/lightpath-technologies-wins-department-war-123100543.html">finance.yahoo.com/technology/a…3100543.html</a> · <a href="https://www.newswire.com/news/lightpath-technologies-receives-additional-6-3-million-follow-on-optical">newswire.com/news/lightpath-te…w-on-optical</a></li>
+</ul>
+<h3>8. Aclara Resources (ARA.TO)</h3>
+<ul>
+<li><strong>Chain:</strong> Magnet makers → Dy/Tb oxide → Project Dynamo, Vinton LA ($494m) fed by Chile/Brazil clays</li>
+<li><strong>Verified fact:</strong> Basic engineering complete; ~200 t/yr Dy oxide and 35 t/yr Tb oxide planned; Dy/Tb spec results from the Virginia Tech pilot expected Q4 2026; construction to H2 2028.</li>
+<li><strong>Catalyst:</strong> 2026-12-31: Q4-2026 Dy/Tb pilot specification results</li>
+<li><strong>Key risks:</strong> $494m capex vs ~C$645m cap → large financing; Chile permitting history. Dilution risk: HIGH.</li>
+<li><strong>Kill condition:</strong> Pilot misses Dy/Tb spec or the Q1-2027 site prep slips</li>
+<li><strong>Contrarian:</strong> Not crowded on price. <strong>Quant Validation:</strong> VETO for recommendation-grade (no backtested KEPT signal; WATCH only).</li>
+<li><strong>Evidence:</strong> <a href="https://www.opportunitylouisiana.gov/news/aclara-completes-basic-engineering-for-its-u-s-heavy-rare-earths-separation-facility-in-louisiana">opportunitylouisiana.gov/news/…in-louisiana</a> · <a href="https://www.enr.com/articles/63926-494m-rare-earth-processing-plant-in-louisiana-advances-toward-construction">enr.com/articles/63926-494m-ra…construction</a></li>
+</ul>
+<h3>9. Pulsar Helium (PLSR.V)</h3>
+<ul>
+<li><strong>Chain:</strong> Semiconductor fabs / MRI / space → liquid helium → Topaz, Minnesota (high-grade primary helium)</li>
+<li><strong>Verified fact:</strong> Accepted Chart Industries $85.5m firm proposal for a helium liquefaction plant (Oct 2026); first production targeted Q4 2027; no helium sales agreement disclosed.</li>
+<li><strong>Catalyst:</strong> 2027-06-30: Up to six more wells Q1–Q2 2027</li>
+<li><strong>Key risks:</strong> no offtake yet; $85.5m plant vs ~C$267m cap → dilution; helium price has softened. Dilution risk: HIGH.</li>
+<li><strong>Kill condition:</strong> Appraisal wells fail to confirm flow rates</li>
+<li><strong>Contrarian:</strong> Not crowded on price. <strong>Quant Validation:</strong> VETO for recommendation-grade (no backtested KEPT signal; WATCH only).</li>
+<li><strong>Evidence:</strong> <a href="https://pulsarhelium.com/wp-content/uploads/2026/10/PLSRNR2026-70_Chart-RNS.pdf">pulsarhelium.com/wp-content/up…hart-RNS.pdf</a> · <a href="https://pulsarhelium.com/projects/topaz/">pulsarhelium.com/projects/topaz/</a></li>
+</ul>
+<h3>10. Japan Electronic Materials (6855.T)</h3>
+<ul>
+<li><strong>Chain:</strong> Micron (HBM/DRAM) → memory probe cards → JEM (Micron entities ~31% of FY3/26 sales)</li>
+<li><strong>Verified fact:</strong> Annual securities report FY3/26: Micron Memory Japan ¥4.567bn (15.6%) and Micron Memory Taiwan ¥4.495bn (15.3%) of sales.</li>
+<li><strong>Catalyst:</strong> 2026-11-10: 1H FY3/27 results (judgement: early Nov, check TDnet calendar)</li>
+<li><strong>Key risks:</strong> FormFactor/MJC competition; memory cycle; Micron dependence. Dilution risk: MEDIUM.</li>
+<li><strong>Kill condition:</strong> Micron share of sales falls below 20% or 1H order book declines y/y</li>
+<li><strong>Contrarian:</strong> Not crowded on price. <strong>Quant Validation:</strong> VETO for recommendation-grade (no backtested KEPT signal; WATCH only).</li>
+<li><strong>Evidence:</strong> <a href="https://www.jem-net.co.jp/images/top/pdf/2026/260624_yukashokenhokokusho.pdf">jem-net.co.jp/images/top/pdf/2…okokusho.pdf</a> · <a href="https://edinetdb.jp/company/E02043/main-customers">edinetdb.jp/company/E02043/main-customers</a></li>
+</ul>
+<h3>11. American Resources (ReElement) (AREC)</h3>
+<ul>
+<li><strong>Chain:</strong> Magnet makers → separated oxides → ReElement Technologies (Indiana)</li>
+<li><strong>Verified fact:</strong> Company claims (not re-verified this pass): ReElement refining capacity and offtake MOUs.</li>
+<li><strong>Catalyst:</strong> 2027-03-31: ReElement financing (judgement)</li>
+<li><strong>Key risks:</strong> going-concern history, coal legacy liabilities, related-party complexity. Dilution risk: HIGH.</li>
+<li><strong>Kill condition:</strong> Going-concern qualification in the next 10-K</li>
+<li><strong>Contrarian:</strong> Not crowded on price. <strong>Quant Validation:</strong> VETO for recommendation-grade (no backtested KEPT signal; WATCH only).</li>
+<li><strong>Evidence:</strong> <a href="https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&amp;CIK=0001590715&amp;type=10-K">sec.gov/cgi-bin/browse-edgar?a…mp;type=10-K</a></li>
+</ul>
+<h3>12. ASP Isotopes (ASPI)</h3>
+<ul>
+<li><strong>Chain:</strong> Nuclear medicine and advanced reactors → enriched isotopes / HALEU → ASPI aerodynamic separation (South Africa)</li>
+<li><strong>Verified fact:</strong> Company claims (10-K, not re-read this pass): isotope enrichment plants in Pretoria; HALEU via QLE.</li>
+<li><strong>Catalyst:</strong> 2027-06-30: Commercial isotope deliveries (judgement)</li>
+<li><strong>Key risks:</strong> technology claims, short-seller reports in 2025, dilution. Dilution risk: HIGH.</li>
+<li><strong>Kill condition:</strong> No audited isotope revenue growth in FY2026 10-K</li>
+<li><strong>Contrarian:</strong> Not crowded on price. <strong>Quant Validation:</strong> VETO for recommendation-grade (no backtested KEPT signal; WATCH only).</li>
+<li><strong>Evidence:</strong> <a href="https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&amp;CIK=0001921865&amp;type=10-K">sec.gov/cgi-bin/browse-edgar?a…mp;type=10-K</a></li>
+</ul>
+<h3>13. Tungsten West (TUN.L)</h3>
+<ul>
+<li><strong>Chain:</strong> EU/UK tungsten processors → WO3 concentrate → Hemerdon (Devon), one of the few large Western tungsten deposits</li>
+<li><strong>Verified fact:</strong> UK National Wealth Fund £71m package (£36m equity, £25m loan, £10m accordion); processing started Sep 2026; full production targeted Q1 2027.</li>
+<li><strong>Catalyst:</strong> 2027-03-31: Hemerdon full commissioning target (Q1 2027)</li>
+<li><strong>Key risks:</strong> Hemerdon failed once before (Wolf Minerals, 2018) on recoveries and noise permits; NWF holds heavy equity → dilution overhang. Dilution risk: HIGH.</li>
+<li><strong>Kill condition:</strong> Commissioning slips past Q2 2027 or recoveries below plan in two consecutive updates</li>
+<li><strong>Contrarian:</strong> Partly crowded. <strong>Quant Validation:</strong> VETO for recommendation-grade (no backtested KEPT signal; WATCH only).</li>
+<li><strong>Evidence:</strong> <a href="https://www.nationalwealthfund.org.uk/news-and-publications/news/national-wealth-fund-backs-tungsten-west-to-unlock-critical-uk-tungsten-supply/">nationalwealthfund.org.uk/news…sten-supply/</a> · <a href="https://www.investormeetcompany.com/companies/tungsten-west-plc/rns/4876733/view">investormeetcompany.com/compan…4876733/view</a></li>
+</ul>
+<h3>14. Tri Chemical Laboratories (4369.T)</h3>
+<ul>
+<li><strong>Chain:</strong> SK hynix (~80% of Hf precursor via SK Tri Chem JV) and Samsung (~20% since 2025) → high-k precursor → Tri Chemical</li>
+<li><strong>Verified fact:</strong> High-k revenue ¥9.42bn (FY1/25); SK hynix diversifying Hf precursor suppliers (The Elec, trade press, not primary).</li>
+<li><strong>Catalyst:</strong> 2026-12-12: Q3 FY1/27 results (judgement: mid-Dec)</li>
+<li><strong>Key risks:</strong> SK hynix dual-sourcing erodes share; customer split not disclosed by the company. Dilution risk: MEDIUM.</li>
+<li><strong>Kill condition:</strong> SK hynix share for SK Tri Chem reported below 60%</li>
+<li><strong>Contrarian:</strong> Not crowded on price. <strong>Quant Validation:</strong> VETO for recommendation-grade (no backtested KEPT signal; WATCH only).</li>
+<li><strong>Evidence:</strong> <a href="https://www.thelec.net/news/articleView.html?idxno=12207">thelec.net/news/articleView.html?idxno=12207</a> · <a href="https://www.trichemical.com/english/ir/pdf/2025031402.pdf">trichemical.com/english/ir/pdf/2025031402.pdf</a></li>
+</ul>
+<h3>15. Ionic Rare Earths (IXR.AX)</h3>
+<ul>
+<li><strong>Chain:</strong> EU/UK magnet users → recycled NdPr/Dy/Tb oxides → Belfast plant; Makuutu feed</li>
+<li><strong>Verified fact:</strong> Company claims (not re-verified this pass): Belfast magnet recycling demonstration; Makuutu mining licence.</li>
+<li><strong>Catalyst:</strong> 2027-03-31: Belfast scale-up (judgement)</li>
+<li><strong>Key risks:</strong> tiny scale; serial dilution; Uganda jurisdiction. Dilution risk: HIGH.</li>
+<li><strong>Kill condition:</strong> No commercial-scale funding by end-2027</li>
+<li><strong>Contrarian:</strong> Not crowded on price. <strong>Quant Validation:</strong> VETO for recommendation-grade (no backtested KEPT signal; WATCH only).</li>
+<li><strong>Evidence:</strong> <a href="https://ionicre.com/">ionicre.com/</a></li>
+</ul>
+<h2><span class="n">04</span>Kills and exclusions</h2>
+<ul>
+<li><strong>Already re-rated past the size filter (excluded, but they show the pattern):</strong> AXT (InP substrates, $3.4bn), USA Rare Earth ($3.6bn), MP Materials ($6.8bn), Centrus ($2.1bn), Perpetua ($2.2bn), 5N Plus (C$2.4bn), ACM Research. The bottleneck trade in these names is mostly done; they are context, not candidates.</li>
+<li><strong>Killed on evidence:</strong> Pioneer Power (no chokepoint), KULR (no chokepoint), Standard Lithium and Sigma (lithium is in surplus), Westwater (no customer, serial dilution), Altech/Aruma/Krakatoa (sub-cent, no asset under a dated catalyst).</li>
+<li><strong>Chokepoints with no small listed pure play found:</strong> HBM itself, CoWoS/ABF substrates (Ajinomoto, Ibiden and Unimicron are large caps), glass substrates (private), photomasks (Photronics is mid-cap), high-purity quartz (Sibelco and The Quartz Corp are private), neon, GOES electrical steel, gas turbines, shipyards, solid rocket motors and energetics, BIOSECURE-driven CDMO.</li>
+</ul>
+<h2><span class="n">05</span>Gaps</h2>
+<ul>
+<li>No 13F/large-holder crowding pull this pass (Crustdata and Apify not used, $0 spent); crowding is price-based only. Analyst coverage counts not pulled. Google Trends and X mention checks not run.</li>
+<li>Japan EDINET API needs a key; JEM's customer data came from the published yuho PDF.</li>
+<li>Grade C names (Tri Chemical, Ionic, ASP Isotopes, American Resources) need primary re-verification before they move up.</li>
+<li>UN Comtrade monthly China exports (antimony, Ga/Ge, graphite, rare earths, tungsten) are being ingested; not yet joined to the catalysts.</li>
+<li>Ledger: 15 WATCH calls appended (hash chain verified = (True, 56)). They are scored forward from 23 Oct 2026 and anchored daily.</li>
+</ul><div class='disc avoid'><h3>Disclaimer and publisher's exclusion</h3><p>Published by TRIAGE for general information. Impersonal; not investment advice, a recommendation, or an offer or solicitation to buy or sell any security. Not tailored to any reader; intended to fall within the publisher's exclusion of section 202(a)(11)(D) of the US Investment Advisers Act of 1940. Facts are drawn from public filings and registries linked in the text; statements by parties are allegations; scenario figures are labelled assumptions. Companies only; no personal data.</p></div></body></html>

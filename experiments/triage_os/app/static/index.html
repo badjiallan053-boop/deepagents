@@ -1,0 +1,53 @@
+<!doctype html><html><head><meta charset="utf-8"><title>TRIAGE OS</title>
+<style>
+body{margin:0;font:13px/1.4 -apple-system,Segoe UI,Helvetica,Arial;background:#0f1720;color:#e2e8f0}
+header{display:flex;align-items:center;gap:18px;padding:10px 18px;background:#111c2b;border-bottom:1px solid #1f2d40}
+header h1{font-size:16px;margin:0;color:#7dd3fc}nav button{background:none;border:0;color:#94a3b8;padding:6px 10px;cursor:pointer;font-size:13px}
+nav button.on{color:#fff;border-bottom:2px solid #38bdf8}main{padding:14px 18px}
+.card{background:#111c2b;border:1px solid #1f2d40;border-radius:8px;padding:12px;margin-bottom:12px}
+table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid #1f2d40;padding:4px 6px;text-align:left;vertical-align:top}th{color:#94a3b8;font-weight:600}
+a{color:#7dd3fc}.b{display:inline-block;padding:1px 6px;border-radius:9px;font-size:11px;font-weight:600}
+.VERIFIED{background:#064e3b;color:#6ee7b7}.CORRECTED{background:#78350f;color:#fcd34d}.UNVERIFIABLE{background:#3f3f46;color:#d4d4d8}.UNVERIFIED{background:#1e293b;color:#94a3b8}.FALSE_POSITIVE{background:#7f1d1d;color:#fca5a5}
+input{background:#0b1320;border:1px solid #334155;color:#e2e8f0;padding:6px 8px;border-radius:6px;width:320px}
+#svg{width:100%;height:640px;background:#0b1320;border-radius:8px}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.k{font-size:22px;color:#fff}.s{color:#94a3b8;font-size:11px}.tl{border-left:2px solid #334155;margin-left:6px;padding-left:12px}.tl div{margin:4px 0}.mono{font-family:ui-monospace,Menlo,monospace;font-size:11px}
+</style></head><body>
+<header><h1>TRIAGE OS</h1><nav id="nav"></nav><span class="s" style="margin-left:auto">local · read-only · public data · companies only</span></header>
+<main id="main"></main>
+<script>
+const $=s=>document.querySelector(s), J=u=>fetch(u).then(r=>r.json()), esc=s=>String(s??'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const badge=s=>`<span class="b ${esc((s||'UNVERIFIED').split(' ')[0])}">${esc((s||'UNVERIFIED').split(' ')[0])}</span>`;
+const link=u=>u&&u.startsWith('http')?`<a href="${esc(u)}" target="_blank">source</a>`:esc(u||'');
+const TABS={Overview,Graph,Situations,Edges,Verification,'Hit log':Hits};
+function go(t){document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.textContent==t));if(decodeURIComponent(location.hash.slice(1).split('?')[0])!==t)location.hash=t;TABS[t]()}
+$('#nav').innerHTML=Object.keys(TABS).map(t=>`<button onclick="go('${t}')">${t}</button>`).join('');
+async function Overview(){const s=await J('/api/stats');const v=s.verification_status;
+ $('#main').innerHTML=`<div class="grid">${Object.entries(s).filter(([k])=>k!='verification_status').map(([k,n])=>`<div class="card"><div class="k">${(n??'—').toLocaleString()}</div><div class="s">${k}</div></div>`).join('')}</div>
+ <div class="card">Verification ledger: ${Object.entries(v).map(([k,n])=>badge(k)+' '+n).join(' &nbsp; ')}</div>`}
+async function Graph(){const q=window._ge||new URLSearchParams(location.hash.split('?')[1]||'').get('e')||'EchoStar Corp';window._ge=null;
+ $('#main').innerHTML=`<div class="card"><input id="q" value="${esc(q)}" placeholder="company…"> <button onclick="draw($('#q').value)">Explore</button> <span id="sr" class="s"></span>
+ <div class="s" style="margin-top:6px">● company ● tranche ● lender/holder ● owner ● pension/contract/liability ● gap</div></div><svg id="svg"></svg><div id="det" class="card"></div>`;
+ $('#q').oninput=async e=>{const r=await J('/api/search?q='+encodeURIComponent(e.target.value));$('#sr').innerHTML=r.slice(0,8).map(x=>`<a href="#" onclick="draw('${esc(x.name).replace(/'/g,"")}');return false">${esc(x.name)}</a>`).join(' · ')};draw(q)}
+const COL={company:'#38bdf8',tranche:'#a78bfa',holder:'#34d399',lender:'#34d399',owner:'#f472b6',pension:'#fbbf24',contract:'#fbbf24',liability:'#fb923c',offshore:'#f87171',sanction:'#ef4444',asset:'#fde68a',gap:'#475569',other:'#94a3b8'};
+async function draw(name){$('#q').value=name;const g=await J('/api/graph?entity='+encodeURIComponent(name));const W=$('#svg').clientWidth,H=640;
+ const N=g.nodes.map((n,i)=>({...n,x:W/2+Math.cos(i)*200*Math.random()+1,y:H/2+Math.sin(i)*200*Math.random()+1}));const idx=Object.fromEntries(N.map((n,i)=>[n.id,i]));
+ const E=g.edges.filter(e=>e.s in idx&&e.t in idx).map(e=>({...e,a:idx[e.s],b:idx[e.t]}));N[0].fx=true;N[0].x=W/2;N[0].y=H/2;
+ for(let it=0;it<400;it++){for(let i=0;i<N.length;i++)for(let j=i+1;j<N.length;j++){let dx=N[i].x-N[j].x,dy=N[i].y-N[j].y,d=Math.max(Math.hypot(dx,dy),1),f=2500/(d*d);dx*=f/d;dy*=f/d;if(!N[i].fx){N[i].x+=dx;N[i].y+=dy}if(!N[j].fx){N[j].x-=dx;N[j].y-=dy}}
+  for(const e of E){const A=N[e.a],B=N[e.b];let dx=B.x-A.x,dy=B.y-A.y,d=Math.hypot(dx,dy)||1,f=(d-140)*0.02;dx*=f/d;dy*=f/d;if(!A.fx){A.x+=dx;A.y+=dy}if(!B.fx){B.x-=dx;B.y-=dy}}
+  for(const n of N){n.x=Math.min(W-20,Math.max(20,n.x));n.y=Math.min(H-20,Math.max(20,n.y))}}
+ $('#svg').innerHTML=E.map(e=>`<line x1="${N[e.a].x}" y1="${N[e.a].y}" x2="${N[e.b].x}" y2="${N[e.b].y}" stroke="#334155"/><text x="${(N[e.a].x+N[e.b].x)/2}" y="${(N[e.a].y+N[e.b].y)/2}" fill="#64748b" font-size="9">${esc(e.label)}</text>`).join('')+
+  N.map((n,i)=>`<g onclick="det(${i})" style="cursor:pointer"><circle cx="${n.x}" cy="${n.y}" r="${i==0?12:7}" fill="${COL[n.kind]||'#94a3b8'}" stroke="${n.status=='VERIFIED'?'#6ee7b7':n.status=='CORRECTED'?'#fcd34d':'none'}" stroke-width="2"/><text x="${n.x+10}" y="${n.y+4}" fill="#cbd5e1" font-size="10">${esc(n.label.slice(0,48))}</text></g>`).join('');
+ window._N=N;$('#det').innerHTML=`<b>${esc(name)}</b>: ${N.length} nodes, ${E.length} edges. Click a node for evidence.`}
+function det(i){const n=_N[i];$('#det').innerHTML=`<b>${esc(n.label)}</b> <span class="s">${n.kind}</span> ${n.status?badge(n.status):''} ${link(n.url)}`}
+async function Situations(){const S=await J('/api/situations');
+ $('#main').innerHTML=S.map(s=>`<div class="card"><b style="font-size:14px">${esc(s.title)}</b> <a href="#" onclick="window._ge='${esc(s.title.split(' ')[0])}';go('Graph');return false">graph →</a>
+ <div style="display:grid;grid-template-columns:1fr 2fr;gap:14px;margin-top:8px"><div class="tl">${s.timeline.map(e=>`<div><span class="mono">${esc(e.date)}</span> ${esc(e.what)} ${badge(e.status)} ${link(e.url)}</div>`).join('')||'<span class=s>no dated events</span>'}</div>
+ <table>${s.facts.map(f=>`<tr><td>${badge(f.status)}</td><td>${esc(f.claim)}${f.fix?`<div class="s">→ ${esc(f.fix)}</div>`:''}</td><td>${link(f.primary_url)}<div class="s">${esc(f.checked)}</div></td></tr>`).join('')}</table></div></div>`).join('')}
+async function Edges(){const E=await J('/api/edges'),C=await J('/api/concentration');
+ $('#main').innerHTML=`<div class="card"><b>New edges</b><table><tr><th>Status</th><th>Type</th><th>Distressed entity</th><th>Linked</th><th>Detail</th><th>Match</th><th></th></tr>${E.map(e=>`<tr><td>${badge(e.status)}</td><td>${esc(e.type)}</td><td>${esc(e.src)}</td><td>${esc(e.dst)}</td><td class="s">${esc(e.detail)}</td><td>${esc(e.match)}</td><td>${link(e.source_url)}</td></tr>`).join('')}</table></div>
+ <div class="card"><b>Fund service-provider concentration (Form ADV 7.B.1)</b><table><tr><th>Adviser</th><th>Kind</th><th>Provider</th><th>Share of GAV</th><th>GAV $bn</th><th>Filed</th></tr>${C.map(c=>`<tr><td>${esc(c.adviser)}</td><td>${c.kind}</td><td>${esc(c.provider)}</td><td>${(c.share_of_gav*100).toFixed(1)}%</td><td>${c.gav_bn}</td><td>${c.filed}</td></tr>`).join('')}</table></div>`}
+async function Verification(){const V=await J('/api/verification');$('#main').innerHTML=`<div class="card"><table><tr><th>ID</th><th>Status</th><th>Claim</th><th>Fix</th><th>Source</th><th>Checked</th></tr>${V.map(v=>`<tr><td class="mono">${v.claim_id}</td><td>${badge(v.status)}</td><td>${esc(v.claim)}</td><td class="s">${esc(v.fix)}</td><td>${link(v.primary_url)}</td><td class="mono">${esc(v.checked)}</td></tr>`).join('')}</table></div>`}
+async function Hits(){const h=await J('/api/hitlog');$('#main').innerHTML=`<div class="card">Entries: <b>${h.count}</b> · hash chain ${h.chain_ok?'<span class="b VERIFIED">INTACT</span>':'<span class="b FALSE_POSITIVE">BROKEN at '+h.broken_at+'</span>'}</div>
+ <div class="card"><table><tr><th>#</th><th>UTC</th><th>Kind</th><th>Entity</th><th>Prediction</th><th>Hash</th><th></th></tr>${h.entries.map(e=>`<tr><td>${e.seq}</td><td class="mono">${e.ts_utc}</td><td>${esc(e.kind)}</td><td>${esc(e.entity)}</td><td>${esc(e.prediction||e.outcome||'')}</td><td class="mono">${e.hash.slice(0,12)}…</td><td>${link(e.source_url||e.url)}</td></tr>`).join('')}</table></div>`}
+go(decodeURIComponent(location.hash.slice(1).split('?')[0])||'Overview');
+</script></body></html>

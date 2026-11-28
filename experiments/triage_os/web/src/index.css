@@ -1,0 +1,8 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+html, body, #root { height: 100%; }
+body { @apply bg-bg text-ink font-sans antialiased; font-size: 12.5px; font-feature-settings: "tnum" 1, "cv11" 1; }
+.num { font-variant-numeric: tabular-nums; @apply font-mono; }
+::-webkit-scrollbar { width: 8px; height: 8px; } ::-webkit-scrollbar-thumb { background: #262f3a; border-radius: 4px; } ::-webkit-scrollbar-track { background: transparent; }
+[cmdk-item][data-selected="true"] { @apply bg-line2 text-ink; }
